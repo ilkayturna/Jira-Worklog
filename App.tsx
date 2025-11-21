@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { Settings, Moon, Sun, Calendar as CalendarIcon, RefreshCw, CheckCircle2, AlertCircle, Info, ChevronLeft, ChevronRight, Copy, Sparkles, Clock } from 'lucide-react';
 import { AppSettings, Worklog, LoadingState, Notification, DEFAULT_SYSTEM_PROMPT } from './types';
@@ -13,7 +14,6 @@ const initialSettings: AppSettings = {
   jiraUrl: localStorage.getItem(`${APP_NAME}_jiraUrl`) || '',
   jiraEmail: localStorage.getItem(`${APP_NAME}_jiraEmail`) || '',
   jiraToken: localStorage.getItem(`${APP_NAME}_jiraToken`) || '',
-  corsProxy: localStorage.getItem(`${APP_NAME}_corsProxy`) || 'https://corsproxy.io/?',
   groqApiKey: localStorage.getItem(`${APP_NAME}_groqApiKey`) || '',
   groqModel: localStorage.getItem(`${APP_NAME}_groqModel`) || 'llama-3.3-70b-versatile',
   targetDailyHours: parseFloat(localStorage.getItem(`${APP_NAME}_targetDailyHours`) || '8'),
@@ -86,7 +86,7 @@ export default function App() {
       console.error(e);
       setLoadingState(LoadingState.ERROR);
       notify('Error Loading Data', e.message, 'error');
-      if(e.message.includes('credentials') || e.message.includes('Missing') || e.message.includes('CORS')) {
+      if(e.message.includes('credentials') || e.message.includes('Missing')) {
           setIsSettingsOpen(true);
       }
     }
@@ -283,9 +283,6 @@ export default function App() {
                             className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-center font-mono text-sm font-bold"
                         />
                         <button onClick={() => changeDate(1)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"><ChevronRight size={18}/></button>
-                    </div>
-                    <div className="grid grid-cols-5 gap-1">
-                         {/* Weekday shortcut generator could go here */}
                     </div>
                 </div>
 

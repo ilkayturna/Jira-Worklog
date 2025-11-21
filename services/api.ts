@@ -1,3 +1,4 @@
+
 import { AppSettings, Worklog } from '../types';
 import { plainTextToADF, parseJiraComment, secondsToHours } from '../utils/adf';
 
@@ -17,17 +18,9 @@ const normalizeUrl = (url: string) => {
     return normalized;
 }
 
-const buildUrl = (jiraUrl: string, endpoint: string, proxy?: string) => {
+const buildUrl = (jiraUrl: string, endpoint: string) => {
     const normalizedJira = normalizeUrl(jiraUrl);
-    const fullUrl = `${normalizedJira}${endpoint}`;
-    
-    if (proxy) {
-        // Ensure proxy ends with slash if needed, usually proxies just concatenate
-        // But let's be safe: if proxy doesn't end in slash and fullUrl doesn't start with http (it does), handled.
-        // Standard pattern: PROXY_URL + TARGET_URL
-        return `${proxy}${fullUrl}`;
-    }
-    return fullUrl;
+    return `${normalizedJira}${endpoint}`;
 };
 
 export const fetchWorklogs = async (date: string, settings: AppSettings): Promise<Worklog[]> => {
@@ -36,7 +29,7 @@ export const fetchWorklogs = async (date: string, settings: AppSettings): Promis
   }
 
   const jql = `worklogDate = "${date}" AND worklogAuthor = currentUser()`;
-  const requestUrl = buildUrl(settings.jiraUrl, `/rest/api/3/search?jql=${encodeURIComponent(jql)}&fields=worklog,key,summary&maxResults=100`, settings.corsProxy);
+  const requestUrl = buildUrl(settings.jiraUrl, `/rest/api/3/search?jql=${encodeURIComponent(jql)}&fields=worklog,key,summary&maxResults=100`);
   
   let response;
   try {
@@ -45,14 +38,13 @@ export const fetchWorklogs = async (date: string, settings: AppSettings): Promis
         headers: {
           'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
           'Accept': 'application/json',
-          'Content-Type': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest' // Required by some CORS proxies
+          'Content-Type': 'application/json'
         }
       });
   } catch (error) {
       if (error instanceof TypeError) {
           // Fetch failure (often CORS or Network)
-          throw new Error("Network Request Failed. If using in browser, ensure you have configured a CORS Proxy in settings (e.g., https://corsproxy.io/?).");
+          throw new Error("Network Request Failed. Check your URL or Internet connection.");
       }
       throw error;
   }
@@ -70,12 +62,11 @@ export const fetchWorklogs = async (date: string, settings: AppSettings): Promis
 
   const promises = data.issues.map(async (issue: any) => {
     try {
-      const wlRequestUrl = buildUrl(settings.jiraUrl, `/rest/api/3/issue/${issue.key}/worklog`, settings.corsProxy);
+      const wlRequestUrl = buildUrl(settings.jiraUrl, `/rest/api/3/issue/${issue.key}/worklog`);
       const wlResponse = await fetch(wlRequestUrl, {
          headers: {
             'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
-            'Accept': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest'
+            'Accept': 'application/json'
          }
       });
       
@@ -125,14 +116,13 @@ export const updateWorklog = async (wl: Worklog, settings: AppSettings, newComme
     }
 
     try {
-        const requestUrl = buildUrl(settings.jiraUrl, `/rest/api/3/issue/${wl.issueKey}/worklog/${wl.id}`, settings.corsProxy);
+        const requestUrl = buildUrl(settings.jiraUrl, `/rest/api/3/issue/${wl.issueKey}/worklog/${wl.id}`);
         const response = await fetch(requestUrl, {
             method: 'PUT',
             headers: {
                 'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
                 'Accept': 'application/json',
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
+                'Content-Type': 'application/json'
             },
             body: JSON.stringify(body)
         });
@@ -141,7 +131,7 @@ export const updateWorklog = async (wl: Worklog, settings: AppSettings, newComme
             throw new Error(`Failed to update worklog (${response.status})`);
         }
     } catch (error) {
-        if (error instanceof TypeError) throw new Error("Network Error during update (Check CORS/Proxy)");
+        if (error instanceof TypeError) throw new Error("Network Error during update");
         throw error;
     }
 };
@@ -155,14 +145,13 @@ export const createWorklog = async (issueKey: string, dateStr: string, seconds: 
         comment: plainTextToADF(comment)
     };
 
-    const requestUrl = buildUrl(settings.jiraUrl, `/rest/api/3/issue/${issueKey}/worklog`, settings.corsProxy);
+    const requestUrl = buildUrl(settings.jiraUrl, `/rest/api/3/issue/${issueKey}/worklog`);
     const response = await fetch(requestUrl, {
         method: 'POST',
         headers: {
             'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
             'Accept': 'application/json',
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest'
+            'Content-Type': 'application/json'
         },
         body: JSON.stringify(body)
     });

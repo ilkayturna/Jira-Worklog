@@ -1,7 +1,8 @@
+
 import React, { useState } from 'react';
 import { AppSettings, DEFAULT_SYSTEM_PROMPT } from '../types';
 import { Modal } from './ui/Modal';
-import { Save, RefreshCw, Globe } from 'lucide-react';
+import { Save, RefreshCw } from 'lucide-react';
 
 interface Props {
   isOpen: boolean;
@@ -64,20 +65,6 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose, settings, onSa
                 className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-sm focus:ring-2 focus:ring-jira-blue focus:border-transparent"
               />
               <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noreferrer" className="text-xs text-jira-blue hover:underline mt-1 inline-block">Create API Token &rarr;</a>
-            </div>
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <Globe size={12} className="text-slate-500"/>
-                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400">CORS Proxy URL (Optional)</label>
-              </div>
-              <input 
-                name="corsProxy"
-                value={formData.corsProxy}
-                onChange={handleChange}
-                placeholder="e.g. https://cors-anywhere.herokuapp.com/"
-                className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-sm focus:ring-2 focus:ring-jira-blue focus:border-transparent"
-              />
-              <p className="text-[10px] text-slate-400 mt-1">Required for browser-based apps to access Jira API directly. Use a trusted proxy or host your own.</p>
             </div>
           </div>
         </section>

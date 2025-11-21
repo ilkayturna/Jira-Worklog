@@ -1,3 +1,4 @@
+
 export interface Worklog {
   id: string;
   issueKey: string;
@@ -14,7 +15,6 @@ export interface AppSettings {
   jiraUrl: string;
   jiraEmail: string;
   jiraToken: string;
-  corsProxy: string;
   groqApiKey: string;
   groqModel: string;
   targetDailyHours: number;

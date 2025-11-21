@@ -1,3 +1,4 @@
+
 // ==UserScript==
 // @name         Jira Worklog Manager Pro (React Edition)
 // @namespace    http://tampermonkey.net/
@@ -205,11 +206,9 @@
                 return normalized;
             }
 
-            const buildUrl = (jiraUrl, endpoint, proxy) => {
+            const buildUrl = (jiraUrl, endpoint) => {
                 const normalizedJira = normalizeUrl(jiraUrl);
-                const fullUrl = normalizedJira + endpoint;
-                if (proxy) return proxy + fullUrl;
-                return fullUrl;
+                return normalizedJira + endpoint;
             };
 
             const fetchWorklogs = async (date, settings) => {
@@ -217,7 +216,7 @@
                     throw new Error("Missing Jira Credentials: Check Settings");
                 }
                 const jql = 'worklogDate = "' + date + '" AND worklogAuthor = currentUser()';
-                const requestUrl = buildUrl(settings.jiraUrl, '/rest/api/3/search?jql=' + encodeURIComponent(jql) + '&fields=worklog,key,summary&maxResults=100', settings.corsProxy);
+                const requestUrl = buildUrl(settings.jiraUrl, '/rest/api/3/search?jql=' + encodeURIComponent(jql) + '&fields=worklog,key,summary&maxResults=100');
                 let response;
                 try {
                     response = await fetch(requestUrl, {
@@ -225,12 +224,11 @@
                         headers: {
                             'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
                             'Accept': 'application/json',
-                            'Content-Type': 'application/json',
-                            'X-Requested-With': 'XMLHttpRequest'
+                            'Content-Type': 'application/json'
                         }
                     });
                 } catch (error) {
-                    if (error instanceof TypeError) throw new Error("Network Request Failed. Ensure you have configured a CORS Proxy in settings (e.g., https://corsproxy.io/?).");
+                    if (error instanceof TypeError) throw new Error("Network Request Failed. Check your URL or Internet connection.");
                     throw error;
                 }
                 if (!response.ok) {
@@ -242,12 +240,11 @@
                 const allWorklogs = [];
                 const promises = data.issues.map(async (issue) => {
                     try {
-                        const wlRequestUrl = buildUrl(settings.jiraUrl, '/rest/api/3/issue/' + issue.key + '/worklog', settings.corsProxy);
+                        const wlRequestUrl = buildUrl(settings.jiraUrl, '/rest/api/3/issue/' + issue.key + '/worklog');
                         const wlResponse = await fetch(wlRequestUrl, {
                             headers: {
                                 'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
-                                'Accept': 'application/json',
-                                'X-Requested-With': 'XMLHttpRequest'
+                                'Accept': 'application/json'
                             }
                         });
                         if (!wlResponse.ok) return;
@@ -285,14 +282,13 @@
                 } else if (wl.originalADF) {
                     body.comment = wl.originalADF;
                 }
-                const requestUrl = buildUrl(settings.jiraUrl, '/rest/api/3/issue/' + wl.issueKey + '/worklog/' + wl.id, settings.corsProxy);
+                const requestUrl = buildUrl(settings.jiraUrl, '/rest/api/3/issue/' + wl.issueKey + '/worklog/' + wl.id);
                 const response = await fetch(requestUrl, {
                     method: 'PUT',
                     headers: {
                         'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
                         'Accept': 'application/json',
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(body)
                 });
@@ -306,14 +302,13 @@
                     started: started,
                     comment: plainTextToADF(comment)
                 };
-                const requestUrl = buildUrl(settings.jiraUrl, '/rest/api/3/issue/' + issueKey + '/worklog', settings.corsProxy);
+                const requestUrl = buildUrl(settings.jiraUrl, '/rest/api/3/issue/' + issueKey + '/worklog');
                 const response = await fetch(requestUrl, {
                     method: 'POST',
                     headers: {
                         'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
                         'Accept': 'application/json',
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify(body)
                 });
@@ -384,11 +379,6 @@
                                     <div><label className="text-xs font-medium text-slate-500">Jira URL</label><input name="jiraUrl" value={formData.jiraUrl} onChange={handleChange} placeholder="https://company.atlassian.net" className="w-full px-3 py-2 bg-white dark:bg-slate-800 border rounded-md text-sm"/></div>
                                     <div><label className="text-xs font-medium text-slate-500">Email</label><input name="jiraEmail" value={formData.jiraEmail} onChange={handleChange} placeholder="you@company.com" className="w-full px-3 py-2 bg-white dark:bg-slate-800 border rounded-md text-sm"/></div>
                                     <div><label className="text-xs font-medium text-slate-500">Token</label><input name="jiraToken" type="password" value={formData.jiraToken} onChange={handleChange} className="w-full px-3 py-2 bg-white dark:bg-slate-800 border rounded-md text-sm"/></div>
-                                    <div>
-                                        <div className="flex items-center gap-2 mb-1"><Globe size={12}/><label className="text-xs font-medium text-slate-500">CORS Proxy</label></div>
-                                        <input name="corsProxy" value={formData.corsProxy} onChange={handleChange} placeholder="e.g. https://corsproxy.io/?" className="w-full px-3 py-2 bg-white dark:bg-slate-800 border rounded-md text-sm"/>
-                                        <p className="text-[10px] text-slate-400 mt-1">Required for direct API access.</p>
-                                    </div>
                                 </div>
                             </section>
                             <section className="space-y-4 p-4 bg-slate-100 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
@@ -491,7 +481,6 @@
                     jiraUrl: localStorage.getItem(APP_NAME + '_jiraUrl') || '',
                     jiraEmail: localStorage.getItem(APP_NAME + '_jiraEmail') || '',
                     jiraToken: localStorage.getItem(APP_NAME + '_jiraToken') || '',
-                    corsProxy: localStorage.getItem(APP_NAME + '_corsProxy') || '',
                     groqApiKey: localStorage.getItem(APP_NAME + '_groqApiKey') || '',
                     groqModel: localStorage.getItem(APP_NAME + '_groqModel') || 'llama-3.3-70b-versatile',
                     targetDailyHours: parseFloat(localStorage.getItem(APP_NAME + '_targetDailyHours') || '8'),
