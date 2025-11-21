@@ -21,23 +21,6 @@ const buildUrl = (jiraUrl: string, endpoint: string) => {
     return `${normalizedJira}${endpoint}`;
 };
 
-// Transparently handles CORS errors by falling back to a proxy if direct fetch fails
-const smartFetch = async (url: string, options: RequestInit): Promise<Response> => {
-    try {
-        // 1. Try Direct Fetch
-        const response = await fetch(url, options);
-        return response;
-    } catch (error) {
-        // 2. If Network/CORS Error, try via Proxy
-        if (error instanceof TypeError) {
-            console.warn("Direct fetch failed, retrying via proxy...");
-            const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-            return await fetch(proxyUrl, options);
-        }
-        throw error;
-    }
-};
-
 // --- JIRA API ---
 
 export const fetchWorklogs = async (date: string, settings: AppSettings): Promise<Worklog[]> => {
@@ -50,7 +33,7 @@ export const fetchWorklogs = async (date: string, settings: AppSettings): Promis
   
   let response;
   try {
-      response = await smartFetch(requestUrl, {
+      response = await fetch(requestUrl, {
         method: 'GET',
         headers: {
           'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
@@ -59,6 +42,7 @@ export const fetchWorklogs = async (date: string, settings: AppSettings): Promis
         }
       });
   } catch (error) {
+      // Pass the raw network error (likely CORS or Offline)
       throw new Error("Network Request Failed. Check URL or Internet connection.");
   }
 
@@ -74,7 +58,7 @@ export const fetchWorklogs = async (date: string, settings: AppSettings): Promis
   const promises = data.issues.map(async (issue: any) => {
     try {
       const wlRequestUrl = buildUrl(settings.jiraUrl, `/rest/api/3/issue/${issue.key}/worklog`);
-      const wlResponse = await smartFetch(wlRequestUrl, {
+      const wlResponse = await fetch(wlRequestUrl, {
          headers: {
             'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
             'Accept': 'application/json'
@@ -123,7 +107,7 @@ export const updateWorklog = async (wl: Worklog, settings: AppSettings, newComme
     }
 
     const requestUrl = buildUrl(settings.jiraUrl, `/rest/api/3/issue/${wl.issueKey}/worklog/${wl.id}`);
-    const response = await smartFetch(requestUrl, {
+    const response = await fetch(requestUrl, {
         method: 'PUT',
         headers: {
             'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
@@ -148,7 +132,7 @@ export const createWorklog = async (issueKey: string, dateStr: string, seconds: 
     };
 
     const requestUrl = buildUrl(settings.jiraUrl, `/rest/api/3/issue/${issueKey}/worklog`);
-    const response = await smartFetch(requestUrl, {
+    const response = await fetch(requestUrl, {
         method: 'POST',
         headers: {
             'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
@@ -166,7 +150,7 @@ export const createWorklog = async (issueKey: string, dateStr: string, seconds: 
 export const callGroq = async (prompt: string, settings: AppSettings, maxTokens = 300): Promise<string> => {
     if (!settings.groqApiKey) throw new Error("Groq API Key missing");
 
-    const response = await smartFetch('https://api.groq.com/openai/v1/chat/completions', {
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: {
             'Authorization': `Bearer ${settings.groqApiKey}`,
