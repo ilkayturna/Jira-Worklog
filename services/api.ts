@@ -2,11 +2,9 @@
 import { AppSettings, Worklog } from '../types';
 import { plainTextToADF, parseJiraComment, secondsToHours } from '../utils/adf';
 
-// --- JIRA API ---
+// --- UTILS ---
 
 const getAuthHeader = (email: string, token: string) => {
-  // Standard Basic Auth for Jira Cloud (Email:APIToken)
-  // btoa is sufficient for standard ASCII tokens/emails.
   return 'Basic ' + btoa(`${email}:${token}`);
 };
 
@@ -23,6 +21,25 @@ const buildUrl = (jiraUrl: string, endpoint: string) => {
     return `${normalizedJira}${endpoint}`;
 };
 
+// Transparently handles CORS errors by falling back to a proxy if direct fetch fails
+const smartFetch = async (url: string, options: RequestInit): Promise<Response> => {
+    try {
+        // 1. Try Direct Fetch
+        const response = await fetch(url, options);
+        return response;
+    } catch (error) {
+        // 2. If Network/CORS Error, try via Proxy
+        if (error instanceof TypeError) {
+            console.warn("Direct fetch failed, retrying via proxy...");
+            const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+            return await fetch(proxyUrl, options);
+        }
+        throw error;
+    }
+};
+
+// --- JIRA API ---
+
 export const fetchWorklogs = async (date: string, settings: AppSettings): Promise<Worklog[]> => {
   if (!settings.jiraUrl || !settings.jiraEmail || !settings.jiraToken) {
     throw new Error("Missing Jira Credentials: Check Settings");
@@ -33,7 +50,7 @@ export const fetchWorklogs = async (date: string, settings: AppSettings): Promis
   
   let response;
   try {
-      response = await fetch(requestUrl, {
+      response = await smartFetch(requestUrl, {
         method: 'GET',
         headers: {
           'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
@@ -42,18 +59,12 @@ export const fetchWorklogs = async (date: string, settings: AppSettings): Promis
         }
       });
   } catch (error) {
-      if (error instanceof TypeError) {
-          // Fetch failure (often CORS or Network)
-          throw new Error("Network Request Failed. Check your URL or Internet connection.");
-      }
-      throw error;
+      throw new Error("Network Request Failed. Check URL or Internet connection.");
   }
 
   if (!response.ok) {
     let errText = '';
-    try {
-        errText = await response.text();
-    } catch(e) {}
+    try { errText = await response.text(); } catch(e) {}
     throw new Error(`Jira API Error (${response.status}): ${errText || response.statusText}`);
   }
 
@@ -63,7 +74,7 @@ export const fetchWorklogs = async (date: string, settings: AppSettings): Promis
   const promises = data.issues.map(async (issue: any) => {
     try {
       const wlRequestUrl = buildUrl(settings.jiraUrl, `/rest/api/3/issue/${issue.key}/worklog`);
-      const wlResponse = await fetch(wlRequestUrl, {
+      const wlResponse = await smartFetch(wlRequestUrl, {
          headers: {
             'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
             'Accept': 'application/json'
@@ -75,10 +86,6 @@ export const fetchWorklogs = async (date: string, settings: AppSettings): Promis
       const wlData = await wlResponse.json();
       wlData.worklogs.forEach((wl: any) => {
          const wlStartedDate = wl.started.split('T')[0];
-         // Loose check for author
-         const isAuthor = (wl.author?.emailAddress === settings.jiraEmail) || 
-                          (wl.author?.accountId && settings.jiraEmail); 
-         
          if (wlStartedDate === date) {
              allWorklogs.push({
                  id: wl.id,
@@ -115,24 +122,19 @@ export const updateWorklog = async (wl: Worklog, settings: AppSettings, newComme
         body.comment = wl.originalADF;
     }
 
-    try {
-        const requestUrl = buildUrl(settings.jiraUrl, `/rest/api/3/issue/${wl.issueKey}/worklog/${wl.id}`);
-        const response = await fetch(requestUrl, {
-            method: 'PUT',
-            headers: {
-                'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
-                'Accept': 'application/json',
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(body)
-        });
+    const requestUrl = buildUrl(settings.jiraUrl, `/rest/api/3/issue/${wl.issueKey}/worklog/${wl.id}`);
+    const response = await smartFetch(requestUrl, {
+        method: 'PUT',
+        headers: {
+            'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+    });
 
-        if (!response.ok) {
-            throw new Error(`Failed to update worklog (${response.status})`);
-        }
-    } catch (error) {
-        if (error instanceof TypeError) throw new Error("Network Error during update");
-        throw error;
+    if (!response.ok) {
+        throw new Error(`Failed to update worklog (${response.status})`);
     }
 };
 
@@ -146,7 +148,7 @@ export const createWorklog = async (issueKey: string, dateStr: string, seconds: 
     };
 
     const requestUrl = buildUrl(settings.jiraUrl, `/rest/api/3/issue/${issueKey}/worklog`);
-    const response = await fetch(requestUrl, {
+    const response = await smartFetch(requestUrl, {
         method: 'POST',
         headers: {
             'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
@@ -164,7 +166,7 @@ export const createWorklog = async (issueKey: string, dateStr: string, seconds: 
 export const callGroq = async (prompt: string, settings: AppSettings, maxTokens = 300): Promise<string> => {
     if (!settings.groqApiKey) throw new Error("Groq API Key missing");
 
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    const response = await smartFetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: {
             'Authorization': `Bearer ${settings.groqApiKey}`,

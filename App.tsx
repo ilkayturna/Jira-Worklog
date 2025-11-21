@@ -9,9 +9,19 @@ import { secondsToHours } from './utils/adf';
 
 const APP_NAME = 'WorklogPro';
 
+const detectJiraUrl = () => {
+    const saved = localStorage.getItem(`${APP_NAME}_jiraUrl`);
+    if (saved) return saved;
+    // Auto-detect if running inside Jira
+    if (window.location.hostname.includes('atlassian.net')) {
+        return window.location.origin;
+    }
+    return '';
+};
+
 // Initial State
 const initialSettings: AppSettings = {
-  jiraUrl: localStorage.getItem(`${APP_NAME}_jiraUrl`) || '',
+  jiraUrl: detectJiraUrl(),
   jiraEmail: localStorage.getItem(`${APP_NAME}_jiraEmail`) || '',
   jiraToken: localStorage.getItem(`${APP_NAME}_jiraToken`) || '',
   groqApiKey: localStorage.getItem(`${APP_NAME}_groqApiKey`) || '',
@@ -86,7 +96,7 @@ export default function App() {
       console.error(e);
       setLoadingState(LoadingState.ERROR);
       notify('Error Loading Data', e.message, 'error');
-      if(e.message.includes('credentials') || e.message.includes('Missing')) {
+      if(e.message.includes('Credentials')) {
           setIsSettingsOpen(true);
       }
     }
@@ -170,7 +180,6 @@ export default function App() {
      notify('Distributing', 'Calculating best distribution...', 'info');
      
      // Simple algorithm for now (proportional distribution)
-     // Filter valid worklogs (not locked if we implemented locking)
      const distributable = [...worklogs];
      if(distributable.length === 0) return;
 

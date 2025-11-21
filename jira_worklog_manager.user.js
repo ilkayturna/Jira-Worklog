@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name         Jira Worklog Manager Pro (React Edition)
 // @namespace    http://tampermonkey.net/
-// @version      7.0
+// @version      7.1
 // @description  A modern, standalone React application to manage Jira worklogs with AI-powered improvements.
 // @match        https://*.atlassian.net/*
 // @grant        none
@@ -88,7 +88,7 @@
                 SUCCESS: 'SUCCESS'
             };
 
-            // --- ICON COMPONENTS (Replaces Lucide dependency) ---
+            // --- ICON COMPONENTS ---
             const IconBase = ({ children, size = 24, className = "" }) => (
                 <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{children}</svg>
             );
@@ -101,7 +101,7 @@
             const Wand2 = (p) => <IconBase {...p}><path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72"/><path d="m14 7 3 3"/><path d="M5 6v4"/><path d="M19 14v4"/><path d="M10 2v2"/><path d="M7 8H3"/><path d="M21 16h-4"/><circle cx="11" cy="11" r="1"/></IconBase>;
             const SpellCheck = (p) => <IconBase {...p}><path d="m6 16 6-12 6 12"/><path d="M8 12h8"/><path d="M16 20V4"/><path d="m12 16 4 4"/></IconBase>;
             const Check = (p) => <IconBase {...p}><polyline points="20 6 9 17 4 12"/></IconBase>;
-            const Settings = (p) => <IconBase {...p}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></IconBase>;
+            const Settings = (p) => <IconBase {...p}><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0 .73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></IconBase>;
             const Moon = (p) => <IconBase {...p}><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></IconBase>;
             const Sun = (p) => <IconBase {...p}><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></IconBase>;
             const CalendarIcon = (p) => <IconBase {...p}><rect width="18" height="18" x="3" y="4" rx="2" ry="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></IconBase>;
@@ -211,6 +211,21 @@
                 return normalizedJira + endpoint;
             };
 
+            // Transparent Fallback Proxy Logic
+            const smartFetch = async (url, options) => {
+                try {
+                    const response = await fetch(url, options);
+                    return response;
+                } catch (error) {
+                    if (error instanceof TypeError) {
+                        console.warn("Direct fetch failed, falling back to proxy");
+                        const proxyUrl = "https://corsproxy.io/?" + encodeURIComponent(url);
+                        return await fetch(proxyUrl, options);
+                    }
+                    throw error;
+                }
+            };
+
             const fetchWorklogs = async (date, settings) => {
                 if (!settings.jiraUrl || !settings.jiraEmail || !settings.jiraToken) {
                     throw new Error("Missing Jira Credentials: Check Settings");
@@ -219,7 +234,7 @@
                 const requestUrl = buildUrl(settings.jiraUrl, '/rest/api/3/search?jql=' + encodeURIComponent(jql) + '&fields=worklog,key,summary&maxResults=100');
                 let response;
                 try {
-                    response = await fetch(requestUrl, {
+                    response = await smartFetch(requestUrl, {
                         method: 'GET',
                         headers: {
                             'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
@@ -228,8 +243,7 @@
                         }
                     });
                 } catch (error) {
-                    if (error instanceof TypeError) throw new Error("Network Request Failed. Check your URL or Internet connection.");
-                    throw error;
+                    throw new Error("Network Request Failed. Check your URL or Internet connection.");
                 }
                 if (!response.ok) {
                     let errText = '';
@@ -241,7 +255,7 @@
                 const promises = data.issues.map(async (issue) => {
                     try {
                         const wlRequestUrl = buildUrl(settings.jiraUrl, '/rest/api/3/issue/' + issue.key + '/worklog');
-                        const wlResponse = await fetch(wlRequestUrl, {
+                        const wlResponse = await smartFetch(wlRequestUrl, {
                             headers: {
                                 'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
                                 'Accept': 'application/json'
@@ -283,7 +297,7 @@
                     body.comment = wl.originalADF;
                 }
                 const requestUrl = buildUrl(settings.jiraUrl, '/rest/api/3/issue/' + wl.issueKey + '/worklog/' + wl.id);
-                const response = await fetch(requestUrl, {
+                const response = await smartFetch(requestUrl, {
                     method: 'PUT',
                     headers: {
                         'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
@@ -303,7 +317,7 @@
                     comment: plainTextToADF(comment)
                 };
                 const requestUrl = buildUrl(settings.jiraUrl, '/rest/api/3/issue/' + issueKey + '/worklog');
-                const response = await fetch(requestUrl, {
+                const response = await smartFetch(requestUrl, {
                     method: 'POST',
                     headers: {
                         'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
@@ -317,7 +331,7 @@
 
             const callGroq = async (prompt, settings, maxTokens = 300) => {
                 if (!settings.groqApiKey) throw new Error("Groq API Key missing");
-                const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                const response = await smartFetch('https://api.groq.com/openai/v1/chat/completions', {
                     method: 'POST',
                     headers: {
                         'Authorization': 'Bearer ' + settings.groqApiKey,
@@ -478,7 +492,7 @@
 
             const App = () => {
                 const [settings, setSettings] = useState({
-                    jiraUrl: localStorage.getItem(APP_NAME + '_jiraUrl') || '',
+                    jiraUrl: localStorage.getItem(APP_NAME + '_jiraUrl') || (window.location.hostname.includes('atlassian.net') ? window.location.origin : ''),
                     jiraEmail: localStorage.getItem(APP_NAME + '_jiraEmail') || '',
                     jiraToken: localStorage.getItem(APP_NAME + '_jiraToken') || '',
                     groqApiKey: localStorage.getItem(APP_NAME + '_groqApiKey') || '',
@@ -521,17 +535,71 @@
                     if (newSettings.jiraUrl && newSettings.jiraEmail && newSettings.jiraToken) loadData(newSettings);
                 };
 
+                // Transparent Fallback Logic within component for standalone script
+                const smartFetch = async (url, options) => {
+                    try {
+                        const response = await fetch(url, options);
+                        return response;
+                    } catch (error) {
+                        if (error instanceof TypeError) {
+                            console.warn("Direct fetch failed, retrying via fallback proxy");
+                            const proxyUrl = "https://corsproxy.io/?" + encodeURIComponent(url);
+                            return await fetch(proxyUrl, options);
+                        }
+                        throw error;
+                    }
+                };
+
                 const loadData = async (currentSettings = settings) => {
                     if (!currentSettings.jiraUrl || !currentSettings.jiraEmail || !currentSettings.jiraToken) return;
                     setLoadingState(LoadingState.LOADING);
+                    
+                    const normalizeUrl = (url) => {
+                        let normalized = url.trim().replace(/\/$/, '');
+                        if (normalized && !normalized.startsWith('http')) normalized = 'https://' + normalized;
+                        return normalized;
+                    }
+                    const buildUrl = (base, end) => normalizeUrl(base) + end;
+                    const getAuth = (e, t) => 'Basic ' + btoa(e + ':' + t);
+
                     try {
-                        const data = await fetchWorklogs(selectedDate, currentSettings);
-                        setWorklogs(data);
+                        const jql = 'worklogDate = "' + selectedDate + '" AND worklogAuthor = currentUser()';
+                        const requestUrl = buildUrl(currentSettings.jiraUrl, '/rest/api/3/search?jql=' + encodeURIComponent(jql) + '&fields=worklog,key,summary&maxResults=100');
+                        
+                        const response = await smartFetch(requestUrl, {
+                            method: 'GET',
+                            headers: { 'Authorization': getAuth(currentSettings.jiraEmail, currentSettings.jiraToken), 'Accept': 'application/json', 'Content-Type': 'application/json' }
+                        });
+
+                        if (!response.ok) throw new Error("Jira API Error (" + response.status + ")");
+                        const data = await response.json();
+                        const allWorklogs = [];
+                        
+                        const promises = data.issues.map(async (issue) => {
+                            try {
+                                const wlResponse = await smartFetch(buildUrl(currentSettings.jiraUrl, '/rest/api/3/issue/' + issue.key + '/worklog'), {
+                                    headers: { 'Authorization': getAuth(currentSettings.jiraEmail, currentSettings.jiraToken), 'Accept': 'application/json' }
+                                });
+                                if (!wlResponse.ok) return;
+                                const wlData = await wlResponse.json();
+                                wlData.worklogs.forEach((wl) => {
+                                    if (wl.started.split('T')[0] === selectedDate) {
+                                        allWorklogs.push({
+                                            id: wl.id, issueKey: issue.key, summary: issue.fields?.summary || '',
+                                            seconds: wl.timeSpentSeconds, hours: secondsToHours(wl.timeSpentSeconds),
+                                            comment: parseJiraComment(wl.comment), started: wl.started, author: wl.author?.displayName, originalADF: wl.comment
+                                        });
+                                    }
+                                });
+                            } catch (e) { console.error(e); }
+                        });
+                        await Promise.all(promises);
+                        setWorklogs(allWorklogs);
                         setLoadingState(LoadingState.SUCCESS);
                     } catch (e) {
                         setLoadingState(LoadingState.ERROR);
                         notify('Error', e.message, 'error');
-                        if(e.message.includes('Credentials') || e.message.includes('Network')) setIsSettingsOpen(true);
+                        if(e.message.includes('Jira API') || e.message.includes('Network')) setIsSettingsOpen(true);
                     }
                 };
 
