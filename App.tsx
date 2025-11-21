@@ -13,7 +13,7 @@ const initialSettings: AppSettings = {
   jiraUrl: localStorage.getItem(`${APP_NAME}_jiraUrl`) || '',
   jiraEmail: localStorage.getItem(`${APP_NAME}_jiraEmail`) || '',
   jiraToken: localStorage.getItem(`${APP_NAME}_jiraToken`) || '',
-  corsProxy: localStorage.getItem(`${APP_NAME}_corsProxy`) || '',
+  corsProxy: localStorage.getItem(`${APP_NAME}_corsProxy`) || 'https://corsproxy.io/?',
   groqApiKey: localStorage.getItem(`${APP_NAME}_groqApiKey`) || '',
   groqModel: localStorage.getItem(`${APP_NAME}_groqModel`) || 'llama-3.3-70b-versatile',
   targetDailyHours: parseFloat(localStorage.getItem(`${APP_NAME}_targetDailyHours`) || '8'),
