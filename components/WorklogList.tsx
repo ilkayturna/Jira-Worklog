@@ -235,8 +235,12 @@ const WorklogRow: React.FC<{
     return (
         <article 
             ref={cardRef}
-            className={`group relative overflow-hidden transition-all duration-200 rounded-2xl shadow-sm ${isProcessing ? 'opacity-60' : ''}`}
-            style={{ animationDelay: `${index * 50}ms` }}
+            className={`group relative overflow-hidden transition-all duration-200 rounded-2xl shadow-lg border border-white/10 ${isProcessing ? 'opacity-60' : ''}`}
+            style={{ 
+                animationDelay: `${index * 50}ms`,
+                backgroundColor: 'var(--color-surface-elevated)',
+                marginBottom: '4px'
+            }}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
@@ -545,7 +549,7 @@ export const WorklogList: React.FC<Props> = ({
     }
 
     return (
-        <div className="flex flex-col gap-4 stagger-animation">
+        <div className="flex flex-col gap-5 stagger-animation">
             {worklogs.map((wl, index) => (
                 <WorklogRow 
                     key={wl.id} 
