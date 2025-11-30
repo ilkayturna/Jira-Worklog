@@ -39,6 +39,7 @@ export default function App() {
   const [worklogs, setWorklogs] = useState<Worklog[]>([]);
   const [loadingState, setLoadingState] = useState<LoadingState>(LoadingState.IDLE);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [distributeTarget, setDistributeTarget] = useState<string>(settings.targetDailyHours.toString());
   
   // Stats
   const totalHours = useMemo(() => worklogs.reduce((acc, wl) => acc + wl.hours, 0), [worklogs]);
@@ -165,36 +166,62 @@ export default function App() {
     }
   };
 
-  const handleDistribute = async () => {
+  const handleDistribute = async (mode: 'equal' | 'proportional' = 'proportional') => {
      if (loadingState === LoadingState.LOADING) return;
      
+     const target = parseFloat(distributeTarget) || settings.targetDailyHours;
      const currentTotal = worklogs.reduce((sum, wl) => sum + wl.hours, 0);
-     const target = settings.targetDailyHours;
-     const diff = target - currentTotal;
+     
+     if (worklogs.length === 0) {
+         notify('Hata', 'Dağıtılacak worklog bulunamadı.', 'error');
+         return;
+     }
 
-     if (Math.abs(diff) < 0.05) {
+     if (Math.abs(target - currentTotal) < 0.01 && mode === 'proportional') {
          notify('Hedef Tamam', 'Saatler zaten hedefe uygun!', 'success');
          return;
      }
 
-     notify('Dağıtılıyor', 'En iyi dağılım hesaplanıyor...', 'info');
+     notify('Dağıtılıyor', `${target} saat hedefe göre dağıtılıyor...`, 'info');
      
-     // Simple algorithm for now (proportional distribution)
-     const distributable = [...worklogs];
-     if(distributable.length === 0) return;
-
-     const diffSeconds = Math.round(diff * 3600);
-     const secondsPerLog = Math.floor(diffSeconds / distributable.length);
+     const targetSeconds = Math.round(target * 3600);
+     const minSeconds = Math.round(settings.minHoursPerWorklog * 3600);
+     const count = worklogs.length;
+     
+     let newSecondsArray: number[] = [];
+     
+     if (mode === 'equal') {
+         // Eşit dağıtım: Her worklog'a eşit süre
+         const perLog = Math.floor(targetSeconds / count);
+         const remainder = targetSeconds % count;
+         newSecondsArray = worklogs.map((_, i) => perLog + (i < remainder ? 1 : 0));
+     } else {
+         // Orantılı dağıtım: Mevcut oranları koruyarak hedefe ulaş
+         const totalCurrentSeconds = worklogs.reduce((sum, wl) => sum + wl.seconds, 0);
+         if (totalCurrentSeconds === 0) {
+             // Tümü 0 ise eşit dağıt
+             const perLog = Math.floor(targetSeconds / count);
+             const remainder = targetSeconds % count;
+             newSecondsArray = worklogs.map((_, i) => perLog + (i < remainder ? 1 : 0));
+         } else {
+             const ratio = targetSeconds / totalCurrentSeconds;
+             let distributed = 0;
+             newSecondsArray = worklogs.map((wl, i) => {
+                 if (i === count - 1) {
+                     // Son eleman: kalanı al (yuvarlama hatasını düzelt)
+                     return Math.max(minSeconds, targetSeconds - distributed);
+                 }
+                 const newSec = Math.max(minSeconds, Math.round(wl.seconds * ratio));
+                 distributed += newSec;
+                 return newSec;
+             });
+         }
+     }
      
      try {
          // Update all
-         const promises = distributable.map(async (wl, index) => {
-             // Add remainder to first one
-             const extra = index === 0 ? (diffSeconds % distributable.length) : 0;
-             const newSeconds = Math.max(
-                 Math.round(settings.minHoursPerWorklog * 3600), 
-                 wl.seconds + secondsPerLog + extra
-             );
+         const promises = worklogs.map(async (wl, index) => {
+             const newSeconds = newSecondsArray[index];
              if (newSeconds !== wl.seconds) {
                 await updateWorklog(wl, settings, undefined, newSeconds);
              }
@@ -247,96 +274,226 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center py-8 px-4 font-sans">
+    <main className="min-h-screen py-6 px-4 md:py-10 md:px-6 animate-fade-in">
       
-      {/* Main Container */}
-      <div className="w-full max-w-4xl space-y-6">
+      {/* Main Container - Clean Google-style layout */}
+      <div className="w-full max-w-5xl mx-auto space-y-6">
         
-        {/* Header */}
-        <header className="flex items-center justify-between bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-800">
-            <div className="flex items-center gap-3">
-                <div className="bg-jira-blue p-2 rounded-lg">
-                    <CalendarIcon className="text-white" size={24} />
+        {/* Header - Minimal & Clean */}
+        <header className="surface-card p-4 md:p-5 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+                {/* Logo */}
+                <div className="w-10 h-10 md:w-11 md:h-11 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
+                    <CalendarIcon className="text-white" size={22} />
                 </div>
                 <div>
-                    <h1 className="text-xl font-bold text-slate-900 dark:text-slate-50 tracking-tight">Worklog Yöneticisi Pro</h1>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Jira Entegrasyonu</p>
+                    <h1 className="text-lg md:text-xl font-semibold tracking-tight" style={{ color: 'var(--color-on-surface)' }}>
+                        Worklog Manager
+                    </h1>
+                    <p className="text-xs font-medium" style={{ color: 'var(--color-on-surface-variant)' }}>
+                        Jira Cloud Integration
+                    </p>
                 </div>
             </div>
 
-            <div className="flex items-center gap-2">
-                 <button onClick={() => setSettings(s => ({...s, isDarkTheme: !s.isDarkTheme}))} className="p-2.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+            {/* Header Actions */}
+            <div className="flex items-center gap-1">
+                <button 
+                    onClick={() => setSettings(s => ({...s, isDarkTheme: !s.isDarkTheme}))} 
+                    className="btn-icon"
+                    aria-label="Toggle theme"
+                >
                     {settings.isDarkTheme ? <Sun size={20}/> : <Moon size={20}/>}
-                 </button>
-                 <button onClick={() => setIsSettingsOpen(true)} className="p-2.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
+                </button>
+                <button 
+                    onClick={() => setIsSettingsOpen(true)} 
+                    className="btn-icon"
+                    aria-label="Settings"
+                >
                     <Settings size={20} />
-                 </button>
+                </button>
             </div>
         </header>
 
-        {/* Dashboard Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* Dashboard Grid - Responsive */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             
-            {/* Left: Controls & Stats */}
-            <div className="md:col-span-1 space-y-6">
+            {/* Left Sidebar: Controls & Stats */}
+            <aside className="lg:col-span-4 space-y-5">
                 
                 {/* Date Picker Card */}
-                <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 block">Seçili Tarih</label>
-                    <div className="flex items-center gap-2 mb-4">
-                        <button onClick={() => changeDate(-1)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"><ChevronLeft size={18}/></button>
+                <section className="surface-card p-5" aria-label="Date selection">
+                    <h2 className="text-xs font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--color-on-surface-variant)' }}>
+                        Tarih Seçimi
+                    </h2>
+                    <div className="flex items-center gap-2">
+                        <button 
+                            onClick={() => changeDate(-1)} 
+                            className="btn-icon"
+                            aria-label="Previous day"
+                        >
+                            <ChevronLeft size={20}/>
+                        </button>
                         <input 
                             type="date" 
                             value={selectedDate} 
                             onChange={(e) => setSelectedDate(e.target.value)}
-                            className="flex-1 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-center font-mono text-sm font-bold"
+                            className="input-filled flex-1 text-center font-medium"
+                            style={{ fontFamily: 'var(--font-mono)' }}
                         />
-                        <button onClick={() => changeDate(1)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"><ChevronRight size={18}/></button>
+                        <button 
+                            onClick={() => changeDate(1)} 
+                            className="btn-icon"
+                            aria-label="Next day"
+                        >
+                            <ChevronRight size={20}/>
+                        </button>
                     </div>
-                </div>
+                </section>
 
-                {/* Daily Progress Card */}
-                <div className="bg-gradient-to-br from-slate-900 to-slate-800 p-6 rounded-xl shadow-lg text-white relative overflow-hidden">
-                    <div className="absolute top-0 right-0 p-3 opacity-10">
-                        <Clock size={80} />
+                {/* Daily Progress Card - Premium Feel */}
+                <section 
+                    className="relative p-6 rounded-2xl overflow-hidden"
+                    style={{ 
+                        background: isTargetMet 
+                            ? 'linear-gradient(135deg, #059669 0%, #10b981 100%)' 
+                            : 'linear-gradient(135deg, #1a73e8 0%, #4285f4 100%)',
+                        boxShadow: isTargetMet 
+                            ? '0 8px 32px -8px rgba(5, 150, 105, 0.5)' 
+                            : '0 8px 32px -8px rgba(26, 115, 232, 0.5)'
+                    }}
+                    aria-label="Daily progress"
+                >
+                    {/* Background Pattern */}
+                    <div className="absolute inset-0 opacity-10">
+                        <div className="absolute -right-8 -top-8">
+                            <Clock size={120} strokeWidth={1} />
+                        </div>
                     </div>
+                    
                     <div className="relative z-10">
-                        <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Günlük İlerleme</span>
-                        <div className="flex items-baseline gap-1 mt-2 mb-4">
-                            <span className="text-4xl font-extrabold tracking-tighter">{totalHours.toFixed(2)}</span>
-                            <span className="text-slate-400 font-medium">/ {settings.targetDailyHours}s</span>
+                        <span className="text-white/70 text-xs font-semibold uppercase tracking-wider">
+                            Günlük İlerleme
+                        </span>
+                        
+                        {/* Big Number Display */}
+                        <div className="flex items-baseline gap-2 mt-3 mb-5">
+                            <span className="text-5xl font-bold text-white tracking-tight" style={{ fontFamily: 'var(--font-mono)' }}>
+                                {totalHours.toFixed(1)}
+                            </span>
+                            <span className="text-white/60 text-lg font-medium">
+                                / {settings.targetDailyHours}h
+                            </span>
                         </div>
                         
-                        <div className="w-full bg-slate-700/50 h-3 rounded-full overflow-hidden backdrop-blur-sm">
+                        {/* Progress Bar */}
+                        <div className="w-full h-2 bg-white/20 rounded-full overflow-hidden backdrop-blur-sm">
                             <div 
-                                className={`h-full transition-all duration-1000 ease-out ${isTargetMet ? 'bg-emerald-500' : 'bg-blue-500'}`} 
+                                className="h-full bg-white rounded-full transition-all duration-1000 ease-out"
                                 style={{ width: `${progress}%` }}
-                            ></div>
+                            />
                         </div>
-                        <p className="mt-3 text-xs text-slate-300 flex items-center gap-2">
-                            {isTargetMet ? <CheckCircle2 size={14} className="text-emerald-400"/> : <Info size={14} />}
-                            {isTargetMet ? 'Günlük hedef tamam!' : `${(settings.targetDailyHours - totalHours).toFixed(2)}s kaldı`}
+                        
+                        {/* Status Text */}
+                        <p className="mt-4 text-sm text-white/90 flex items-center gap-2 font-medium">
+                            {isTargetMet ? (
+                                <>
+                                    <CheckCircle2 size={16} />
+                                    <span>Günlük hedef tamamlandı!</span>
+                                </>
+                            ) : (
+                                <>
+                                    <Clock size={16} />
+                                    <span>{(settings.targetDailyHours - totalHours).toFixed(1)} saat kaldı</span>
+                                </>
+                            )}
                         </p>
                     </div>
-                </div>
+                </section>
 
-                {/* Quick Actions */}
-                <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
-                     <button onClick={() => loadData()} className="w-full flex items-center justify-center gap-2 p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-sm font-medium transition-colors text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                        <RefreshCw size={16} className={loadingState === LoadingState.LOADING ? 'animate-spin' : ''}/> Verileri Yenile
-                     </button>
-                     <button onClick={handleDistribute} className="w-full flex items-center justify-center gap-2 p-2.5 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 text-sm font-medium transition-colors text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-900/50">
-                        <Sparkles size={16} /> Akıllı Dağıt
-                     </button>
-                     <button onClick={copyPreviousDay} className="w-full flex items-center justify-center gap-2 p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-sm font-medium transition-colors text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                        <Copy size={16} /> Dünden Kopyala
-                     </button>
-                </div>
-            </div>
+                {/* Quick Actions Card */}
+                <section className="surface-card p-5 space-y-4" aria-label="Quick actions">
+                    <h2 className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-on-surface-variant)' }}>
+                        Hızlı İşlemler
+                    </h2>
+                    
+                    {/* Refresh Button */}
+                    <button 
+                        onClick={() => loadData()} 
+                        className="btn-outlined w-full ripple"
+                        disabled={loadingState === LoadingState.LOADING}
+                    >
+                        <RefreshCw size={18} className={loadingState === LoadingState.LOADING ? 'animate-spin' : ''}/> 
+                        Verileri Yenile
+                    </button>
+                     
+                    {/* Distribution Section */}
+                    <div className="pt-4 border-t" style={{ borderColor: 'var(--color-outline-variant)' }}>
+                        <label className="text-xs font-semibold uppercase tracking-wider block mb-3" style={{ color: 'var(--color-on-surface-variant)' }}>
+                            Saat Dağıtımı
+                        </label>
+                        
+                        {/* Target Input */}
+                        <div className="flex items-center gap-3 mb-3">
+                            <input 
+                                type="number" 
+                                step="0.25" 
+                                min="0.25" 
+                                max="24"
+                                value={distributeTarget}
+                                onChange={(e) => setDistributeTarget(e.target.value)}
+                                className="input-filled flex-1 text-center font-semibold"
+                                style={{ fontFamily: 'var(--font-mono)' }}
+                                placeholder="8"
+                                aria-label="Target hours"
+                            />
+                            <span className="text-sm font-medium" style={{ color: 'var(--color-on-surface-variant)' }}>saat</span>
+                        </div>
+                        
+                        {/* Distribution Buttons */}
+                        <div className="grid grid-cols-2 gap-2">
+                            <button 
+                                onClick={() => handleDistribute('proportional')} 
+                                className="btn-tonal ripple text-sm"
+                                title="Mevcut oranları koruyarak hedefe ulaştırır"
+                            >
+                                <Sparkles size={16} /> Orantılı
+                            </button>
+                            <button 
+                                onClick={() => handleDistribute('equal')} 
+                                className="btn-tonal ripple text-sm"
+                                style={{ 
+                                    backgroundColor: 'var(--color-success-container)', 
+                                    color: 'var(--color-success)' 
+                                }}
+                                title="Tüm worklog'lara eşit süre dağıtır"
+                            >
+                                <Clock size={16} /> Eşit
+                            </button>
+                        </div>
+                    </div>
+                     
+                    {/* Copy Previous Day */}
+                    <button 
+                        onClick={copyPreviousDay} 
+                        className="btn-text w-full"
+                    >
+                        <Copy size={18} /> Dünden Kopyala
+                    </button>
+                </section>
+            </aside>
 
             {/* Right: Worklog List */}
-            <div className="md:col-span-2">
-                <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-1">
+            <section className="lg:col-span-8" aria-label="Worklog list">
+                <div className="surface-card p-4 md:p-5">
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-sm font-semibold" style={{ color: 'var(--color-on-surface)' }}>
+                            Worklog Kayıtları
+                        </h2>
+                        <span className="chip">
+                            {worklogs.length} kayıt
+                        </span>
+                    </div>
                     <WorklogList 
                         worklogs={worklogs} 
                         loading={loadingState} 
@@ -345,7 +502,7 @@ export default function App() {
                         onSpellCheck={(id) => handleAIAction(id, 'SPELL')}
                     />
                 </div>
-            </div>
+            </section>
 
         </div>
       </div>
@@ -358,26 +515,35 @@ export default function App() {
         onSave={saveSettings} 
       />
 
-      {/* Toast Notifications */}
-      <div className="fixed bottom-6 right-6 flex flex-col gap-2 z-50 pointer-events-none">
-          {notifications.map(n => (
-              <div key={n.id} className={`pointer-events-auto flex items-center gap-3 p-4 rounded-xl shadow-2xl border backdrop-blur-md animate-in slide-in-from-right duration-300 max-w-sm
-                 ${n.type === 'success' ? 'bg-emerald-50/90 dark:bg-emerald-900/90 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-100' : ''}
-                 ${n.type === 'error' ? 'bg-red-50/90 dark:bg-red-900/90 border-red-200 dark:border-red-800 text-red-800 dark:text-red-100' : ''}
-                 ${n.type === 'info' ? 'bg-slate-50/90 dark:bg-slate-800/90 border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-100' : ''}
-                 ${n.type === 'warning' ? 'bg-amber-50/90 dark:bg-amber-900/90 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-100' : ''}
-              `}>
-                  {n.type === 'success' && <CheckCircle2 size={20} />}
-                  {n.type === 'error' && <AlertCircle size={20} />}
-                  {n.type === 'info' && <Info size={20} />}
+      {/* Toast Notifications - Material Design Style */}
+      <div className="fixed bottom-6 right-6 flex flex-col gap-3 z-50 pointer-events-none" role="alert" aria-live="polite">
+          {notifications.map((n, index) => (
+              <div 
+                  key={n.id} 
+                  className="pointer-events-auto flex items-start gap-3 p-4 rounded-xl max-w-sm animate-slide-in-right"
+                  style={{ 
+                      backgroundColor: n.type === 'success' ? 'var(--color-success-container)' :
+                                       n.type === 'error' ? 'var(--color-error-container)' :
+                                       n.type === 'warning' ? 'var(--color-warning-container)' :
+                                       'var(--color-surface)',
+                      boxShadow: 'var(--elevation-3)',
+                      animationDelay: `${index * 50}ms`
+                  }}
+              >
+                  <div className="shrink-0 mt-0.5">
+                      {n.type === 'success' && <CheckCircle2 size={20} style={{ color: 'var(--color-success)' }} />}
+                      {n.type === 'error' && <AlertCircle size={20} style={{ color: 'var(--color-error)' }} />}
+                      {n.type === 'info' && <Info size={20} style={{ color: 'var(--color-primary-600)' }} />}
+                      {n.type === 'warning' && <AlertCircle size={20} style={{ color: 'var(--color-warning)' }} />}
+                  </div>
                   <div>
-                      <h4 className="text-sm font-bold">{n.title}</h4>
-                      <p className="text-xs opacity-90">{n.message}</p>
+                      <h4 className="text-sm font-semibold" style={{ color: 'var(--color-on-surface)' }}>{n.title}</h4>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--color-on-surface-variant)' }}>{n.message}</p>
                   </div>
               </div>
           ))}
       </div>
 
-    </div>
+    </main>
   );
 }

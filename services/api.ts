@@ -52,11 +52,6 @@ export const fetchWorklogs = async (date: string, settings: AppSettings): Promis
   // worklogDate ile o güne ait worklog'u olan issue'ları bul, worklogAuthor ile filtrele
   const jql = `worklogDate = "${date}" AND worklogAuthor = currentUser()`;
   
-  // DEBUG: JQL sorgusunu konsola yazdır
-  console.log('JQL Sorgusu:', jql);
-  console.log('Seçili Tarih:', date);
-  console.log('Kullanıcı Email:', settings.jiraEmail);
-  
   // POST metodu ile yeni /search/jql endpoint'i kullan (eski /search endpoint'i 410 Gone döner)
   // Bkz: https://developer.atlassian.com/changelog/#CHANGE-2046
   const targetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/search/jql`;
@@ -88,10 +83,7 @@ export const fetchWorklogs = async (date: string, settings: AppSettings): Promis
   }
 
   const data = await response.json();
-  // DEBUG: API yanıtını konsola yazdır
-  console.log('API Yanıtı:', data);
-  
-  // Yeni /search/jql endpoint'i issues array döner, eski format ile uyumlu kontrol yap
+  // Yeni /search/jql endpoint'i issues array döner
   const issues = data.issues || [];
   
   if (!issues) return [];
@@ -115,13 +107,9 @@ export const fetchWorklogs = async (date: string, settings: AppSettings): Promis
       logs.forEach((wl: any) => {
          const wlStartedDate = wl.started.split('T')[0];
          // Sadece o güne ait ve bana ait olanları al
-         // Email veya accountId ile eşleştir (Jira bazen emailAddress dönmeyebilir)
          const authorEmail = wl.author?.emailAddress?.toLowerCase();
          const userEmail = settings.jiraEmail.toLowerCase();
          const isMe = authorEmail === userEmail;
-         
-         // DEBUG
-         console.log('Worklog:', wl.id, 'Tarih:', wlStartedDate, 'Beklenen:', date, 'Author:', authorEmail, 'Ben mi:', isMe);
          
          if (wlStartedDate === date && isMe) {
              allWorklogs.push({
