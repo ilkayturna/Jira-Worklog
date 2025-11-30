@@ -336,18 +336,17 @@ export default function App() {
     }
   };
 
-  // AI Generate Weekly Report
-  const generateAIWeeklyReport = async (worklogs: Worklog[]): Promise<WeeklyReportItem[]> => {
+  // AI Generate Weekly Report - Smart distribution by importance
+  const generateAIWeeklyReport = async (worklogs: Worklog[], weekStart: string): Promise<WeeklyReportItem[]> => {
     if (!settings.groqApiKey || worklogs.length === 0) return [];
     
     const DAYS = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma'] as const;
     
-    // Group worklogs by issue
-    const issueMap = new Map<string, { worklog: Worklog; lastDay: Date; totalHours: number; days: string[] }>();
+    // Group worklogs by issue and calculate importance
+    const issueMap = new Map<string, { worklog: Worklog; lastDay: Date; totalHours: number; comments: string[] }>();
     
     worklogs.forEach(log => {
         const date = new Date(log.started);
-        const dayName = DAYS[date.getDay() - 1] || 'Pazartesi';
         const existing = issueMap.get(log.issueKey);
         
         if (!existing) {
@@ -355,7 +354,7 @@ export default function App() {
                 worklog: log,
                 lastDay: date,
                 totalHours: log.hours,
-                days: [dayName]
+                comments: log.comment ? [log.comment] : []
             });
         } else {
             if (date > existing.lastDay) {
@@ -363,41 +362,55 @@ export default function App() {
                 existing.worklog = log;
             }
             existing.totalHours += log.hours;
-            if (!existing.days.includes(dayName)) {
-                existing.days.push(dayName);
+            if (log.comment && !existing.comments.includes(log.comment)) {
+                existing.comments.push(log.comment);
             }
         }
     });
     
-    // Create summary for AI
-    const issuesSummary = Array.from(issueMap.entries()).map(([key, data]) => 
-        `- ${key}: "${data.worklog.summary}" (${data.totalHours.toFixed(1)} saat, Son gün: ${DAYS[data.lastDay.getDay() - 1] || 'Cuma'})`
-    ).join('\n');
+    // Sort by total hours (most important first)
+    const sortedIssues = Array.from(issueMap.entries())
+        .map(([key, data]) => ({ issueKey: key, ...data }))
+        .sort((a, b) => b.totalHours - a.totalHours);
     
-    const prompt = `Sen bir proje planlama asistanısın. Geçen hafta yapılan işlere bakarak önümüzdeki hafta için bir çalışma planı oluştur.
+    // Create detailed summary for AI
+    const issuesSummary = sortedIssues.map(data => 
+        `- ${data.issueKey}: "${data.worklog.summary}"
+   Toplam: ${data.totalHours.toFixed(1)} saat
+   Son çalışılan gün: ${['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'][data.lastDay.getDay()]}
+   Son yapılan: ${data.comments[data.comments.length - 1] || 'Bilgi yok'}`
+    ).join('\n\n');
+    
+    const prompt = `Sen deneyimli bir proje yöneticisisin. Geçen hafta çalışılan işlere bakarak önümüzdeki hafta için akıllı bir plan oluştur.
 
-GEÇMİŞ HAFTA İŞLERİ:
+GEÇMİŞ HAFTA ÇALIŞMALARI (önem/saat sırasına göre):
 ${issuesSummary}
 
-GÖREV: Her iş için önümüzdeki haftanın hangi gününde devam edilmesi gerektiğini ve kısa bir açıklama yaz.
+PLANLAMA KURALLARI:
+1. EN ÖNEMLİ (en çok saat harcanan) işler haftanın BAŞINDA (Pazartesi, Salı) olmalı
+2. Daha az önemli işler haftanın ortasına/sonuna atanmalı
+3. Her gün MAX 2-3 iş olsun, dengeli dağıt
+4. Geçen hafta CUMA çalışılan iş bu hafta PAZARTESİ'ye atanmalı (süreklilik)
+5. Description'da İŞİN DEVAMI için ne yapılacağını tahmin et:
+   - "Test edilecek, onay alınacak"
+   - "Müşteri ile görüşülecek, feedback beklenecek"  
+   - "Geliştirme devam edecek, entegrasyon yapılacak"
+   - "Kontrol edilecek, dokümantasyon hazırlanacak"
+   - "Tamamlanacak, canlıya alınacak"
+   gibi iş akışına uygun açıklamalar yaz.
 
-KURALLAR:
-1. Son çalışılan günü dikkate al (Cuma'da çalışılan iş Pazartesi'ye atanmalı)
-2. Çok saat harcanan işler muhtemelen devam edecek
-3. Az saat harcanan işler belki tamamlanmış olabilir
-4. Her iş için sadece bir gün seç
-
-JSON formatında yanıt ver (başka hiçbir şey yazma):
+JSON FORMATI (sadece JSON döndür):
 [
-  {"issueKey": "XXX-123", "day": "Pazartesi", "status": "devam", "description": "...kısa açıklama..."},
-  ...
+  {"issueKey": "XXX-123", "day": "Pazartesi", "status": "devam", "description": "...yapılacak iş açıklaması..."},
+  {"issueKey": "XXX-456", "day": "Salı", "status": "test", "description": "...yapılacak iş açıklaması..."}
 ]
 
-status değerleri: "devam", "test", "tamamlandı"`;
+status: "devam" | "test" | "tamamlandı" | "yeni"
+day: "Pazartesi" | "Salı" | "Çarşamba" | "Perşembe" | "Cuma"`;
 
     try {
         const response = await callGroq(prompt, settings);
-        const jsonMatch = response.match(/\[[\s\S]*\]/);
+        const jsonMatch = response.match(/\[[\s\S]*?\]/);
         if (jsonMatch) {
             const parsed = JSON.parse(jsonMatch[0]);
             return parsed.map((item: any) => {
@@ -406,7 +419,7 @@ status değerleri: "devam", "test", "tamamlandı"`;
                     issueKey: item.issueKey,
                     summary: issueData?.worklog.summary || '',
                     status: item.status || 'devam',
-                    day: item.day || 'Pazartesi',
+                    day: DAYS.includes(item.day) ? item.day : 'Pazartesi',
                     description: item.description || issueData?.worklog.summary || '',
                     hours: issueData?.totalHours
                 };
@@ -1534,7 +1547,6 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
       <WeeklyReportModal
         isOpen={isWeeklyReportOpen}
         onClose={() => setIsWeeklyReportOpen(false)}
-        worklogs={worklogs}
         settings={settings}
         onFetchWeekWorklogs={fetchWeekWorklogs}
         onAIGenerate={settings.groqApiKey ? generateAIWeeklyReport : undefined}
