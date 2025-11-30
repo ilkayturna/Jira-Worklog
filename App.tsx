@@ -1,7 +1,7 @@
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Settings, Moon, Sun, Calendar as CalendarIcon, RefreshCw, CheckCircle2, AlertCircle, Info, ChevronLeft, ChevronRight, Copy, Sparkles, Clock, Plus, Bell, History, Brain, Edit3, FileSpreadsheet, FileText } from 'lucide-react';
-import { AppSettings, Worklog, LoadingState, Notification, NotificationHistoryItem, WorklogSuggestion, UndoAction, DEFAULT_SYSTEM_PROMPT, TextChangePreview, WeeklyReportItem } from './types';
+import { AppSettings, Worklog, LoadingState, Notification, NotificationHistoryItem, WorklogSuggestion, UndoAction, DEFAULT_SYSTEM_PROMPT, TextChangePreview, WeeklyReportItem, WorklogHistoryEntry } from './types';
 import { fetchWorklogs, updateWorklog, callGroq, createWorklog, deleteWorklog, fetchIssueDetails } from './services/api';
 import { SettingsModal } from './components/SettingsModal';
 import { WorklogList } from './components/WorklogList';
@@ -141,6 +141,13 @@ export default function App() {
   const [suggestions, setSuggestions] = useState<WorklogSuggestion[]>(loadSuggestions());
   const [distributeTarget, setDistributeTarget] = useState<string>(settings.targetDailyHours.toString());
   const [tempTargetHours, setTempTargetHours] = useState<string>(settings.targetDailyHours.toString());
+  
+  // Worklog history for undo/redo (per worklog)
+  const [worklogHistories, setWorklogHistories] = useState<Map<string, { entries: WorklogHistoryEntry[]; index: number }>>(new Map());
+  
+  // Daily cache - aynı gün için tekrar istek atmamak için
+  const worklogCacheRef = useRef<Map<string, { worklogs: Worklog[]; timestamp: number }>>(new Map());
+  const CACHE_TTL = 5 * 60 * 1000; // 5 dakika cache süresi
   
   // Distribution Preview State
   const [distributionPreview, setDistributionPreview] = useState<{
@@ -342,8 +349,16 @@ export default function App() {
     }
   };
 
-  const loadData = async (currentSettings = settings) => {
+  const loadData = async (currentSettings = settings, forceRefresh = false) => {
     if (!currentSettings.jiraUrl || !currentSettings.jiraEmail || !currentSettings.jiraToken) {
+        return;
+    }
+
+    // Cache kontrolü
+    const cached = worklogCacheRef.current.get(selectedDate);
+    if (!forceRefresh && cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
+        setWorklogs(cached.worklogs);
+        setLoadingState(LoadingState.SUCCESS);
         return;
     }
 
@@ -351,6 +366,13 @@ export default function App() {
     try {
       const data = await fetchWorklogs(selectedDate, currentSettings);
       setWorklogs(data);
+      
+      // Cache'e kaydet
+      worklogCacheRef.current.set(selectedDate, {
+        worklogs: data,
+        timestamp: Date.now()
+      });
+      
       setLoadingState(LoadingState.SUCCESS);
     } catch (e: any) {
       console.error(e);
@@ -360,6 +382,20 @@ export default function App() {
           setIsSettingsOpen(true);
       }
     }
+  };
+
+  // Cache'i invalidate et (worklog eklendiğinde/güncellendiğinde)
+  const invalidateCache = (date: string) => {
+    worklogCacheRef.current.delete(date);
+  };
+
+  // Worklog history change handler
+  const handleWorklogHistoryChange = (worklogId: string, entries: WorklogHistoryEntry[], index: number) => {
+    setWorklogHistories(prev => {
+      const newMap = new Map(prev);
+      newMap.set(worklogId, { entries, index });
+      return newMap;
+    });
   };
 
   // Fetch worklogs for a date range (for weekly report)
@@ -1676,6 +1712,8 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
                         onImprove={(id) => handleAIAction(id, 'IMPROVE')}
                         onSpellCheck={(id) => handleAIAction(id, 'SPELL')}
                         jiraBaseUrl={settings.jiraUrl}
+                        worklogHistories={worklogHistories}
+                        onHistoryChange={handleWorklogHistoryChange}
                     />
                 </div>
             </section>

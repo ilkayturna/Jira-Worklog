@@ -1,8 +1,10 @@
 
 import React, { useState, useEffect } from 'react';
-import { Worklog, LoadingState } from '../types';
-import { Clock, Edit3, Wand2, SpellCheck, Check, X, ExternalLink } from 'lucide-react';
+import { Worklog, LoadingState, WorklogHistoryEntry } from '../types';
+import { Clock, Edit3, Wand2, SpellCheck, Check, X, ExternalLink, Undo2, Redo2 } from 'lucide-react';
 import { parseSmartTimeInput } from '../utils/adf';
+
+const MAX_HISTORY_SIZE = 20;
 
 interface Props {
   worklogs: Worklog[];
@@ -11,6 +13,8 @@ interface Props {
   onImprove: (id: string) => Promise<void>;
   onSpellCheck: (id: string) => Promise<void>;
   jiraBaseUrl: string;
+  worklogHistories: Map<string, { entries: WorklogHistoryEntry[]; index: number }>;
+  onHistoryChange: (id: string, entries: WorklogHistoryEntry[], index: number) => void;
 }
 
 const getHourIndicator = (hours: number) => {
@@ -27,7 +31,9 @@ const WorklogRow: React.FC<{
     onImprove: (id: string) => Promise<void>;
     onSpellCheck: (id: string) => Promise<void>;
     jiraBaseUrl: string;
-}> = ({ wl, index, onUpdate, onImprove, onSpellCheck, jiraBaseUrl }) => {
+    history: { entries: WorklogHistoryEntry[]; index: number } | undefined;
+    onHistoryChange: (entries: WorklogHistoryEntry[], index: number) => void;
+}> = ({ wl, index, onUpdate, onImprove, onSpellCheck, jiraBaseUrl, history, onHistoryChange }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [editComment, setEditComment] = useState(wl.comment);
     const [isProcessing, setIsProcessing] = useState(false);
@@ -35,6 +41,12 @@ const WorklogRow: React.FC<{
     const [isTimeEditing, setIsTimeEditing] = useState(false);
 
     const hourInfo = getHourIndicator(wl.hours);
+    
+    // History state
+    const entries = history?.entries || [];
+    const historyIndex = history?.index ?? -1;
+    const canUndo = entries.length > 0 && historyIndex < entries.length - 1;
+    const canRedo = historyIndex > -1;
 
     useEffect(() => {
         if (!isEditing) setEditComment(wl.comment);
@@ -44,7 +56,29 @@ const WorklogRow: React.FC<{
         if (!isTimeEditing) setTimeStr(wl.hours.toFixed(2));
     }, [wl.hours, isTimeEditing]);
 
+    // Save current state to history before making changes
+    const saveToHistory = () => {
+        const currentEntry: WorklogHistoryEntry = {
+            comment: wl.comment,
+            seconds: wl.seconds,
+            timestamp: Date.now()
+        };
+        
+        // If we're not at the latest point, remove future entries
+        let newEntries = historyIndex > -1 
+            ? entries.slice(historyIndex + 1) 
+            : [...entries];
+        
+        // Add current state to history
+        newEntries = [currentEntry, ...newEntries].slice(0, MAX_HISTORY_SIZE);
+        
+        onHistoryChange(newEntries, -1);
+    };
+
     const handleSaveComment = async () => {
+        if (editComment !== wl.comment) {
+            saveToHistory();
+        }
         setIsProcessing(true);
         await onUpdate(wl.id, editComment);
         setIsProcessing(false);
@@ -54,6 +88,7 @@ const WorklogRow: React.FC<{
     const handleSaveTime = async () => {
         const parsed = parseSmartTimeInput(timeStr);
         if (parsed && parsed !== wl.hours) {
+            saveToHistory();
             setIsProcessing(true);
             await onUpdate(wl.id, undefined, Math.round(parsed * 3600));
             setIsProcessing(false);
@@ -64,16 +99,61 @@ const WorklogRow: React.FC<{
     };
 
     const handleImprove = async () => {
+        saveToHistory();
         setIsProcessing(true);
         await onImprove(wl.id);
         setIsProcessing(false);
     }
 
     const handleSpellCheck = async () => {
+        saveToHistory();
         setIsProcessing(true);
         await onSpellCheck(wl.id);
         setIsProcessing(false);
     }
+
+    const handleUndo = async () => {
+        if (!canUndo) return;
+        
+        const newIndex = historyIndex + 1;
+        const targetEntry = entries[newIndex];
+        
+        // Save current state if we're at the latest
+        if (historyIndex === -1) {
+            const currentEntry: WorklogHistoryEntry = {
+                comment: wl.comment,
+                seconds: wl.seconds,
+                timestamp: Date.now()
+            };
+            const newEntries = [currentEntry, ...entries].slice(0, MAX_HISTORY_SIZE);
+            onHistoryChange(newEntries, 1); // Start at index 1 since we just added current at 0
+            
+            // Apply the previous state
+            setIsProcessing(true);
+            await onUpdate(wl.id, entries[0].comment, entries[0].seconds);
+            setIsProcessing(false);
+        } else {
+            onHistoryChange(entries, newIndex);
+            setIsProcessing(true);
+            await onUpdate(wl.id, targetEntry.comment, targetEntry.seconds);
+            setIsProcessing(false);
+        }
+    };
+
+    const handleRedo = async () => {
+        if (!canRedo) return;
+        
+        const newIndex = historyIndex - 1;
+        const targetEntry = newIndex === -1 ? null : entries[newIndex];
+        
+        onHistoryChange(entries, newIndex);
+        
+        if (targetEntry) {
+            setIsProcessing(true);
+            await onUpdate(wl.id, targetEntry.comment, targetEntry.seconds);
+            setIsProcessing(false);
+        }
+    };
 
     return (
         <article 
@@ -214,33 +294,72 @@ const WorklogRow: React.FC<{
 
             {/* Action Buttons - Show on Hover */}
             <div 
-                className="flex justify-end gap-2 mt-4 pt-4 opacity-0 group-hover:opacity-100 transition-all duration-200"
+                className="flex justify-between items-center gap-2 mt-4 pt-4 opacity-0 group-hover:opacity-100 transition-all duration-200"
                 style={{ borderTop: '1px solid var(--color-outline-variant)' }}
             >
-                <button 
-                    onClick={handleImprove}
-                    disabled={!wl.comment}
-                    className="btn-tonal text-xs px-3 py-2 disabled:opacity-40 disabled:cursor-not-allowed"
-                    style={{ 
-                        backgroundColor: 'rgba(156, 39, 176, 0.1)', 
-                        color: '#9c27b0' 
-                    }}
-                >
-                    <Wand2 size={14} /> AI İyileştir
-                </button>
-                <button 
-                    onClick={handleSpellCheck}
-                    disabled={!wl.comment}
-                    className="btn-tonal text-xs px-3 py-2 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                    <SpellCheck size={14} /> İmla Düzelt
-                </button>
+                {/* Undo/Redo Buttons */}
+                <div className="flex items-center gap-1">
+                    <button 
+                        onClick={handleUndo}
+                        disabled={!canUndo}
+                        className="p-2 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:bg-black/5 dark:hover:bg-white/10"
+                        title={canUndo ? `Geri Al` : 'Geri alınacak değişiklik yok'}
+                        style={{ color: 'var(--color-on-surface-variant)' }}
+                    >
+                        <Undo2 size={16} />
+                    </button>
+                    <button 
+                        onClick={handleRedo}
+                        disabled={!canRedo}
+                        className="p-2 rounded-lg transition-all disabled:opacity-30 disabled:cursor-not-allowed hover:bg-black/5 dark:hover:bg-white/10"
+                        title={canRedo ? `İleri Al` : 'İleri alınacak değişiklik yok'}
+                        style={{ color: 'var(--color-on-surface-variant)' }}
+                    >
+                        <Redo2 size={16} />
+                    </button>
+                    {entries.length > 0 && (
+                        <span className="text-xs ml-1" style={{ color: 'var(--color-on-surface-variant)' }}>
+                            {historyIndex === -1 ? '' : `${historyIndex + 1}/${entries.length}`}
+                        </span>
+                    )}
+                </div>
+
+                {/* AI Buttons */}
+                <div className="flex gap-2">
+                    <button 
+                        onClick={handleImprove}
+                        disabled={!wl.comment}
+                        className="btn-tonal text-xs px-3 py-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                        style={{ 
+                            backgroundColor: 'rgba(156, 39, 176, 0.1)', 
+                            color: '#9c27b0' 
+                        }}
+                    >
+                        <Wand2 size={14} /> AI İyileştir
+                    </button>
+                    <button 
+                        onClick={handleSpellCheck}
+                        disabled={!wl.comment}
+                        className="btn-tonal text-xs px-3 py-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                        <SpellCheck size={14} /> İmla Düzelt
+                    </button>
+                </div>
             </div>
         </article>
     );
 };
 
-export const WorklogList: React.FC<Props> = ({ worklogs, loading, onUpdate, onImprove, onSpellCheck, jiraBaseUrl }) => {
+export const WorklogList: React.FC<Props> = ({ 
+    worklogs, 
+    loading, 
+    onUpdate, 
+    onImprove, 
+    onSpellCheck, 
+    jiraBaseUrl,
+    worklogHistories,
+    onHistoryChange
+}) => {
     if (loading === LoadingState.LOADING) {
         return (
             <div className="space-y-4 stagger-animation">
@@ -287,6 +406,8 @@ export const WorklogList: React.FC<Props> = ({ worklogs, loading, onUpdate, onIm
                     onImprove={onImprove}
                     onSpellCheck={onSpellCheck}
                     jiraBaseUrl={jiraBaseUrl}
+                    history={worklogHistories.get(wl.id)}
+                    onHistoryChange={(entries, idx) => onHistoryChange(wl.id, entries, idx)}
                 />
             ))}
         </div>

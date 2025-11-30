@@ -80,16 +80,17 @@ export interface WorklogSuggestion {
   totalHours?: number; // Total hours logged historically
 }
 
-// Worklog template for quick entry
-export interface WorklogTemplate {
-  id: string;
-  name: string;
-  issueKey?: string; // Optional - can be generic
+// Worklog change history entry for undo/redo
+export interface WorklogHistoryEntry {
   comment: string;
-  defaultHours: number;
-  category?: string; // e.g., "Meeting", "Development", "Testing"
-  usageCount: number;
-  createdAt: string;
+  seconds: number;
+  timestamp: number;
+}
+
+// Worklog with history for undo/redo
+export interface WorklogWithHistory extends Worklog {
+  history: WorklogHistoryEntry[];
+  historyIndex: number; // Current position in history (-1 = current state)
 }
 
 // Jira Issue for search results
