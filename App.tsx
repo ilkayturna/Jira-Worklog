@@ -123,6 +123,14 @@ export default function App() {
   const [distributeTarget, setDistributeTarget] = useState<string>(settings.targetDailyHours.toString());
   const [tempTargetHours, setTempTargetHours] = useState<string>(settings.targetDailyHours.toString());
   
+  // Distribution Preview State
+  const [distributionPreview, setDistributionPreview] = useState<{
+    mode: 'equal' | 'ai';
+    items: { issueKey: string; summary: string; currentHours: number; newHours: number }[];
+    targetHours: number;
+  } | null>(null);
+  const [isDistributing, setIsDistributing] = useState(false);
+  
   // Stats
   const totalHours = useMemo(() => worklogs.reduce((acc, wl) => acc + wl.hours, 0), [worklogs]);
   const progress = Math.min((totalHours / settings.targetDailyHours) * 100, 100);
@@ -366,9 +374,9 @@ export default function App() {
     }
   };
 
-  // AI-powered smart distribution
-  const handleSmartDistribute = async () => {
-     if (loadingState === LoadingState.LOADING) return;
+  // AI-powered smart distribution - Preview
+  const previewSmartDistribute = async () => {
+     if (loadingState === LoadingState.LOADING || isDistributing) return;
      
      const target = parseFloat(distributeTarget) || settings.targetDailyHours;
      
@@ -383,6 +391,7 @@ export default function App() {
          return;
      }
 
+     setIsDistributing(true);
      notify('AI Analiz Ediyor', 'Worklog içerikleri analiz ediliyor...', 'info');
      
      try {
@@ -422,9 +431,8 @@ KURALLAR:
              if (!jsonMatch) throw new Error('JSON bulunamadı');
              distribution = JSON.parse(jsonMatch[0]);
          } catch (parseErr) {
-             notify('AI Yanıt Hatası', 'Yapay zeka yanıtı işlenemedi, orantılı dağıtım yapılıyor...', 'warning');
-             // Fall back to proportional
-             handleDistribute('proportional');
+             notify('AI Yanıt Hatası', 'Yapay zeka yanıtı işlenemedi.', 'error');
+             setIsDistributing(false);
              return;
          }
 
@@ -432,18 +440,83 @@ KURALLAR:
          const totalAIHours = distribution.reduce((sum, d) => sum + d.hours, 0);
          const ratio = target / totalAIHours;
          
-         // Store previous values for undo
-         const undoData = worklogs.map((wl, index) => {
+         // Create preview
+         const previewItems = worklogs.map((wl, index) => {
              const aiHours = distribution.find(d => d.index === index)?.hours || (target / worklogs.length);
-             const adjustedHours = Math.max(0.25, aiHours * ratio);
+             const adjustedHours = Math.max(0.25, Math.round(aiHours * ratio * 100) / 100);
              return {
-                 worklogId: wl.id,
                  issueKey: wl.issueKey,
-                 previousSeconds: wl.seconds,
-                 newSeconds: Math.round(adjustedHours * 3600)
+                 summary: wl.summary,
+                 currentHours: wl.hours,
+                 newHours: adjustedHours
              };
          });
+         
+         // Adjust last item to match exact target
+         const previewTotal = previewItems.reduce((sum, item) => sum + item.newHours, 0);
+         if (Math.abs(previewTotal - target) > 0.01 && previewItems.length > 0) {
+             previewItems[previewItems.length - 1].newHours = Math.round((previewItems[previewItems.length - 1].newHours + (target - previewTotal)) * 100) / 100;
+         }
+         
+         setDistributionPreview({
+             mode: 'ai',
+             items: previewItems,
+             targetHours: target
+         });
+         
+     } catch (e: any) {
+         notify('AI Dağıtım Hatası', e.message, 'error');
+     } finally {
+         setIsDistributing(false);
+     }
+  };
 
+  // Equal distribution - Preview
+  const previewEqualDistribute = () => {
+     const target = parseFloat(distributeTarget) || settings.targetDailyHours;
+     
+     if (worklogs.length === 0) {
+         notify('Hata', 'Dağıtılacak worklog bulunamadı.', 'error');
+         return;
+     }
+
+     const perLog = target / worklogs.length;
+     
+     const previewItems = worklogs.map(wl => ({
+         issueKey: wl.issueKey,
+         summary: wl.summary,
+         currentHours: wl.hours,
+         newHours: Math.round(perLog * 100) / 100
+     }));
+     
+     // Adjust for rounding errors
+     const previewTotal = previewItems.reduce((sum, item) => sum + item.newHours, 0);
+     if (Math.abs(previewTotal - target) > 0.01 && previewItems.length > 0) {
+         previewItems[previewItems.length - 1].newHours = Math.round((previewItems[previewItems.length - 1].newHours + (target - previewTotal)) * 100) / 100;
+     }
+     
+     setDistributionPreview({
+         mode: 'equal',
+         items: previewItems,
+         targetHours: target
+     });
+  };
+
+  // Apply distribution from preview
+  const applyDistribution = async () => {
+     if (!distributionPreview) return;
+     
+     setIsDistributing(true);
+     
+     try {
+         // Store previous values for undo
+         const undoData = worklogs.map((wl, index) => ({
+             worklogId: wl.id,
+             issueKey: wl.issueKey,
+             previousSeconds: wl.seconds,
+             newSeconds: Math.round(distributionPreview.items[index].newHours * 3600)
+         }));
+         
          // Apply distribution
          const promises = worklogs.map(async (wl, index) => {
              const newSeconds = undoData[index].newSeconds;
@@ -460,10 +533,15 @@ KURALLAR:
              type: 'BATCH_UPDATE',
              data: undoData
          };
-         notify('AI Dağıtım Tamamlandı', `Süreler akıllı şekilde ${target}h hedefe dağıtıldı.`, 'success', undoAction);
          
+         const modeLabel = distributionPreview.mode === 'ai' ? 'AI Akıllı' : 'Eşit';
+         notify('Dağıtım Tamamlandı', `Süreler ${modeLabel} dağıtım ile ${distributionPreview.targetHours}h hedefe ayarlandı.`, 'success', undoAction);
+         
+         setDistributionPreview(null);
      } catch (e: any) {
-         notify('AI Dağıtım Hatası', e.message, 'error');
+         notify('Dağıtım Hatası', e.message, 'error');
+     } finally {
+         setIsDistributing(false);
      }
   };
 
@@ -857,38 +935,41 @@ KURALLAR:
                         </div>
                         
                         {/* Distribution Buttons */}
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-2">
                             <button 
-                                onClick={() => handleDistribute('proportional')} 
-                                className="btn-tonal ripple text-sm"
-                                title="Mevcut oranları koruyarak hedefe ulaştırır"
-                            >
-                                <Sparkles size={16} /> Orantılı
-                            </button>
-                            <button 
-                                onClick={() => handleDistribute('equal')} 
-                                className="btn-tonal ripple text-sm"
+                                onClick={previewEqualDistribute} 
+                                className="btn-tonal ripple text-sm w-full"
                                 style={{ 
                                     backgroundColor: 'var(--color-success-container)', 
                                     color: 'var(--color-success)' 
                                 }}
                                 title="Tüm worklog'lara eşit süre dağıtır"
+                                disabled={isDistributing}
                             >
-                                <Clock size={16} /> Eşit
+                                <Clock size={16} /> Eşit Dağıtım
+                            </button>
+                            
+                            {/* AI Smart Distribution */}
+                            <button 
+                                onClick={previewSmartDistribute}
+                                className="btn-filled w-full ripple text-sm"
+                                style={{ 
+                                    background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)',
+                                }}
+                                title="Yapay zeka worklog içeriklerini analiz ederek akıllı dağıtım yapar"
+                                disabled={isDistributing}
+                            >
+                                {isDistributing ? (
+                                    <>
+                                        <RefreshCw size={16} className="animate-spin" /> Analiz Ediliyor...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Brain size={16} /> AI Akıllı Dağıtım
+                                    </>
+                                )}
                             </button>
                         </div>
-                        
-                        {/* AI Smart Distribution */}
-                        <button 
-                            onClick={handleSmartDistribute}
-                            className="btn-filled w-full mt-3 ripple text-sm"
-                            style={{ 
-                                background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)',
-                            }}
-                            title="Yapay zeka worklog içeriklerini analiz ederek akıllı dağıtım yapar"
-                        >
-                            <Brain size={16} /> AI Akıllı Dağıtım
-                        </button>
                     </div>
                      
                     {/* Copy Previous Day */}
@@ -959,6 +1040,142 @@ KURALLAR:
         onUndo={handleUndo}
         onClear={clearNotificationHistory}
       />
+
+      {/* Distribution Preview Modal */}
+      {distributionPreview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setDistributionPreview(null)}>
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+            
+            <div 
+                className="relative w-full max-w-lg animate-scale-in"
+                onClick={e => e.stopPropagation()}
+            >
+                <div className="surface-card p-0 overflow-hidden" style={{ boxShadow: 'var(--elevation-4)' }}>
+                    
+                    {/* Header */}
+                    <div className="px-6 py-5 border-b" style={{ borderColor: 'var(--color-outline-variant)' }}>
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl flex items-center justify-center" 
+                                     style={{ 
+                                         background: distributionPreview.mode === 'ai' 
+                                             ? 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)'
+                                             : 'var(--color-success-container)'
+                                     }}>
+                                    {distributionPreview.mode === 'ai' ? (
+                                        <Brain size={22} className="text-white" />
+                                    ) : (
+                                        <Clock size={22} style={{ color: 'var(--color-success)' }} />
+                                    )}
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-semibold" style={{ color: 'var(--color-on-surface)' }}>
+                                        {distributionPreview.mode === 'ai' ? 'AI Akıllı Dağıtım' : 'Eşit Dağıtım'}
+                                    </h2>
+                                    <p className="text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>
+                                        Hedef: {distributionPreview.targetHours} saat
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Body - Preview List */}
+                    <div className="p-4 max-h-96 overflow-y-auto">
+                        <div className="space-y-2">
+                            {distributionPreview.items.map((item, index) => (
+                                <div 
+                                    key={index}
+                                    className="p-3 rounded-xl border"
+                                    style={{ 
+                                        backgroundColor: 'var(--color-surface-variant)',
+                                        borderColor: 'var(--color-outline-variant)'
+                                    }}
+                                >
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div className="flex-1 min-w-0">
+                                            <span className="text-xs font-bold px-2 py-0.5 rounded mr-2" 
+                                                  style={{ backgroundColor: 'var(--color-primary-container)', color: 'var(--color-primary-600)' }}>
+                                                {item.issueKey}
+                                            </span>
+                                            <p className="text-sm font-medium truncate mt-1" style={{ color: 'var(--color-on-surface)' }}>
+                                                {item.summary}
+                                            </p>
+                                        </div>
+                                        <div className="text-right shrink-0">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-sm line-through" style={{ color: 'var(--color-on-surface-variant)' }}>
+                                                    {formatHours(item.currentHours)}h
+                                                </span>
+                                                <span className="text-lg font-bold" style={{ 
+                                                    color: item.newHours > item.currentHours 
+                                                        ? 'var(--color-success)' 
+                                                        : item.newHours < item.currentHours 
+                                                            ? 'var(--color-error)' 
+                                                            : 'var(--color-on-surface)'
+                                                }}>
+                                                    {formatHours(item.newHours)}h
+                                                </span>
+                                            </div>
+                                            {item.newHours !== item.currentHours && (
+                                                <span className="text-xs" style={{ 
+                                                    color: item.newHours > item.currentHours 
+                                                        ? 'var(--color-success)' 
+                                                        : 'var(--color-error)' 
+                                                }}>
+                                                    {item.newHours > item.currentHours ? '+' : ''}{formatHours(item.newHours - item.currentHours)}h
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        
+                        {/* Summary */}
+                        <div className="mt-4 p-3 rounded-xl" style={{ backgroundColor: 'var(--color-primary-container)' }}>
+                            <div className="flex items-center justify-between">
+                                <span className="text-sm font-medium" style={{ color: 'var(--color-on-surface)' }}>
+                                    Toplam
+                                </span>
+                                <span className="text-lg font-bold" style={{ color: 'var(--color-primary-600)' }}>
+                                    {formatHours(distributionPreview.items.reduce((sum, item) => sum + item.newHours, 0))}h
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="px-6 py-4 border-t flex items-center justify-end gap-3" style={{ borderColor: 'var(--color-outline-variant)' }}>
+                        <button 
+                            onClick={() => setDistributionPreview(null)} 
+                            className="btn-text"
+                        >
+                            İptal
+                        </button>
+                        <button 
+                            onClick={applyDistribution}
+                            className="btn-filled ripple"
+                            disabled={isDistributing}
+                            style={distributionPreview.mode === 'ai' ? { 
+                                background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)'
+                            } : {}}
+                        >
+                            {isDistributing ? (
+                                <>
+                                    <RefreshCw size={18} className="animate-spin" /> Uygulanıyor...
+                                </>
+                            ) : (
+                                <>
+                                    <CheckCircle2 size={18} /> Uygula
+                                </>
+                            )}
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+      )}
 
       {/* Toast Notifications - Material Design Style */}
       <div className="fixed bottom-6 right-6 flex flex-col gap-3 z-50 pointer-events-none" role="alert" aria-live="polite">
