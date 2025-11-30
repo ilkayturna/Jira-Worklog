@@ -381,68 +381,77 @@ export default function App() {
         return [];
     }
     
-    // Create detailed summary for AI
-    const issuesSummary = sortedIssues.map((data, idx) => {
-        const dayNames = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
-        const lastDayName = dayNames[data.lastDay.getDay()] || 'Bilinmiyor';
-        const lastComment = data.comments.length > 0 ? data.comments[data.comments.length - 1] : data.worklog.summary;
-        
-        return `${idx + 1}. ${data.issueKey}
-   Konu: ${data.worklog.summary}
-   Toplam Süre: ${data.totalHours.toFixed(1)} saat
-   Son Gün: ${lastDayName}
-   Son Yapılan: ${lastComment}`;
-    }).join('\n\n');
+    // Build simple issue list for prompt
+    const issueList = sortedIssues.map((data, idx) => 
+        `${data.issueKey}: ${data.worklog.summary} (${data.totalHours.toFixed(1)}h)`
+    ).join('\n');
     
-    const prompt = `Bir SAP danışmanının geçen hafta çalıştığı işlere bakarak önümüzdeki hafta planı oluştur.
+    // Simpler, more direct prompt
+    const prompt = `Aşağıdaki Jira işleri için haftalık plan oluştur. Her iş için hangi gün yapılacağını ve ne yapılacağını belirt.
 
-GEÇEN HAFTA İŞLERİ (önem sırasına göre - en çok çalışılan üstte):
-${issuesSummary}
+İŞLER:
+${issueList}
 
-PLAN OLUŞTURMA KURALLARI:
-- En önemli (en çok süre harcanan) iş PAZARTESİ'ye
-- İkinci önemli SALI'ya
-- Diğerleri sırayla ÇARŞAMBA, PERŞEMBE, CUMA'ya dağıt
-- Her iş için "Bu hafta ne yapılacak?" sorusuna cevap ver:
-  Örnek açıklamalar:
-  * "Geliştirme tamamlanacak, test ortamına alınacak"
-  * "Müşteri testi yapılacak, onay alınacak"
-  * "Hata düzeltmeleri yapılacak"
-  * "Dokümantasyon hazırlanacak, eğitim verilecek"
-  * "Canlıya alım yapılacak"
-  * "Analiz devam edecek, tasarım tamamlanacak"
+Her iş için JSON formatında yanıt ver. Sadece JSON array döndür, başka bir şey yazma:
+[{"issueKey":"ISSUE-1","day":"Pazartesi","status":"devam","description":"yapılacak iş"},{"issueKey":"ISSUE-2","day":"Salı","status":"test","description":"yapılacak iş"}]
 
-SADECE JSON DÖNDÜR, başka bir şey yazma:
-[
-  {"issueKey": "${sortedIssues[0]?.issueKey || 'XXX-1'}", "day": "Pazartesi", "status": "devam", "description": "Bu hafta yapılacak iş açıklaması"},
-  {"issueKey": "${sortedIssues[1]?.issueKey || 'XXX-2'}", "day": "Salı", "status": "devam", "description": "Bu hafta yapılacak iş açıklaması"}
-]
-
-status değerleri: devam, test, tamamlandı
-day değerleri: Pazartesi, Salı, Çarşamba, Perşembe, Cuma`;
+day: Pazartesi/Salı/Çarşamba/Perşembe/Cuma
+status: devam/test/tamamlandı`;
 
     try {
-        console.log('AI Weekly Report Prompt:', prompt);
+        console.log('AI Prompt:', prompt);
         const response = await callGroq(prompt, settings);
-        console.log('AI Weekly Report Response:', response);
+        console.log('AI Response:', response);
         
-        // Try to extract JSON array from response
-        const jsonMatch = response.match(/\[\s*\{[\s\S]*\}\s*\]/);
+        // Try multiple patterns to find JSON
+        let jsonData = null;
         
-        if (!jsonMatch) {
-            console.error('No JSON found in response:', response);
-            notify('AI Hatası', 'AI geçerli bir plan oluşturamadı. Tekrar deneyin.', 'error');
-            return [];
+        // Pattern 1: Full array
+        const match1 = response.match(/\[[\s\S]*\]/);
+        if (match1) {
+            try {
+                jsonData = JSON.parse(match1[0]);
+            } catch (e) {
+                console.log('Pattern 1 failed:', e);
+            }
         }
         
-        const parsed = JSON.parse(jsonMatch[0]);
-        
-        if (!Array.isArray(parsed) || parsed.length === 0) {
-            notify('AI Hatası', 'AI boş plan döndürdü', 'error');
-            return [];
+        // Pattern 2: Try to find JSON objects and build array
+        if (!jsonData) {
+            const objectMatches = response.match(/\{[^{}]*"issueKey"[^{}]*\}/g);
+            if (objectMatches && objectMatches.length > 0) {
+                try {
+                    jsonData = objectMatches.map(m => JSON.parse(m));
+                } catch (e) {
+                    console.log('Pattern 2 failed:', e);
+                }
+            }
         }
         
-        const result: WeeklyReportItem[] = parsed.map((item: any) => {
+        // If AI failed, create smart fallback based on sorting
+        if (!jsonData || !Array.isArray(jsonData) || jsonData.length === 0) {
+            console.log('AI JSON parsing failed, using smart fallback');
+            
+            // Create fallback plan - distribute by importance
+            const fallbackItems: WeeklyReportItem[] = sortedIssues.slice(0, 5).map((issue, idx) => {
+                const day = DAYS_ARRAY[Math.min(idx, 4)] as any;
+                const statusGuess = issue.totalHours > 4 ? 'devam' : issue.totalHours > 2 ? 'test' : 'tamamlandı';
+                
+                return {
+                    issueKey: issue.issueKey,
+                    summary: issue.worklog.summary,
+                    status: statusGuess,
+                    day: day,
+                    description: `${issue.worklog.summary} - devam edilecek`,
+                    hours: issue.totalHours
+                };
+            });
+            
+            notify('Bilgi', `AI yanıtı işlenemedi, ${fallbackItems.length} görev otomatik planlandı`, 'info');
+            return fallbackItems;
+        }
+        
+        const result: WeeklyReportItem[] = jsonData.map((item: any) => {
             const issueData = issueMap.get(item.issueKey);
             const validDay = DAYS_ARRAY.includes(item.day) ? item.day : 'Pazartesi';
             
@@ -461,8 +470,19 @@ day değerleri: Pazartesi, Salı, Çarşamba, Perşembe, Cuma`;
         
     } catch (e: any) {
         console.error('AI weekly report generation failed:', e);
-        notify('AI Hatası', e.message || 'Plan oluşturulamadı', 'error');
-        return [];
+        
+        // Even on error, provide fallback
+        const fallbackItems: WeeklyReportItem[] = sortedIssues.slice(0, 5).map((issue, idx) => ({
+            issueKey: issue.issueKey,
+            summary: issue.worklog.summary,
+            status: 'devam' as const,
+            day: DAYS_ARRAY[Math.min(idx, 4)] as any,
+            description: `${issue.worklog.summary} - devam edilecek`,
+            hours: issue.totalHours
+        }));
+        
+        notify('Uyarı', `AI hatası, ${fallbackItems.length} görev otomatik planlandı`, 'warning');
+        return fallbackItems;
     }
   };
 
