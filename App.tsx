@@ -665,24 +665,24 @@ status: devam/test/tamamlandı/beklemede`;
     try {
         let prompt = '';
         if (mode === 'IMPROVE') {
-            prompt = `Sen kıdemli bir SAP Business One danışmanısın. Aşağıdaki kısa worklog notunu, müşterinin anlayabileceği profesyonel ve detaylı bir metne dönüştür.
+            prompt = `Aşağıdaki worklog notunu daha açıklayıcı hale getir.
 
-BAĞLAM - Jira Talep Başlığı: ${wl.summary}
+TALEP BAŞLIĞI: ${wl.summary}
 
-KURALLAR:
-1. Kısa notu genişlet ve detaylandır (50-100 kelime hedefle)
-2. Yapılan işin ne olduğunu, neden yapıldığını ve sonucunu açıkla
-3. Teknik terimleri koru (FMS, Query, SQL, modül adları vb.)
-4. Profesyonel ve değer gösteren bir dil kullan
-5. Başlıkta veya metinde olmayan bilgileri UYDURMA (ticket no, müşteri adı vb.)
-6. Markdown, madde işareti, başlık KULLANMA - sadece düz metin
-7. Metnin başına veya sonuna tırnak işareti KOYMA
-8. "Düzeltilmiş:" gibi önek EKLEME
+MEVCUT NOT: ${wl.comment}
 
-WORKLOG METNİ:
-${wl.comment}
+ÖNEMLİ KURALLAR:
+1. 2-4 cümle yaz, toplam 100-200 karakter arası
+2. Somut ve gerçekçi ol - yapılan işi açıkla
+3. "Müşteri memnuniyeti sağlandı", "sistem performansı arttı", "süreçler optimize edildi" gibi boş ve anlamsız ifadeler KULLANMA
+4. Sadece mevcut bilgiyi genişlet, olmayan detay UYDURMA
+5. Teknik terimleri koru (modül adları, SQL, Query vb.)
+6. Türkçe, profesyonel ama doğal bir dil kullan
+7. Başlık, madde işareti, emoji KULLANMA
+8. "Bu çalışmada", "Bu kapsamda" gibi gereksiz girişler YAPMA
+9. Tırnak işareti KOYMA
 
-ÇIKTI (sadece iyileştirilmiş düz metin, başka hiçbir şey yazma):`;
+SADECE iyileştirilmiş metni yaz:`;
         } else {
             prompt = `SADECE yazım hatalarını ve noktalama işaretlerini düzelt. Başka HİÇBİR ŞEY yapma.
 

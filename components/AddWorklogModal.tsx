@@ -9,13 +9,6 @@ interface TimeEstimation {
     message: string;
 }
 
-interface AIWorklogSuggestion {
-    suggestedComment: string;
-    suggestedHours: number;
-    confidence: 'high' | 'medium' | 'low';
-    basedOn: string; // Hangi veriye dayandığı
-}
-
 interface AddWorklogModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -44,8 +37,10 @@ export const AddWorklogModal: React.FC<AddWorklogModalProps> = ({
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showSuggestions, setShowSuggestions] = useState(true);
     const [timeEstimation, setTimeEstimation] = useState<TimeEstimation | null>(null);
-    const [aiSuggestion, setAiSuggestion] = useState<AIWorklogSuggestion | null>(null);
-    const [isAiLoading, setIsAiLoading] = useState(false);
+    const [aiSuggestedComment, setAiSuggestedComment] = useState<string | null>(null);
+    const [aiSuggestedHours, setAiSuggestedHours] = useState<number | null>(null);
+    const [isAiCommentLoading, setIsAiCommentLoading] = useState(false);
+    const [isAiTimeLoading, setIsAiTimeLoading] = useState(false);
     const [error, setError] = useState('');
     
     const searchInputRef = useRef<HTMLInputElement>(null);
@@ -61,8 +56,10 @@ export const AddWorklogModal: React.FC<AddWorklogModalProps> = ({
             setComment('');
             setShowSuggestions(true);
             setTimeEstimation(null);
-            setAiSuggestion(null);
-            setIsAiLoading(false);
+            setAiSuggestedComment(null);
+            setAiSuggestedHours(null);
+            setIsAiCommentLoading(false);
+            setIsAiTimeLoading(false);
             setError('');
             setTimeout(() => searchInputRef.current?.focus(), 100);
         }
@@ -126,69 +123,108 @@ export const AddWorklogModal: React.FC<AddWorklogModalProps> = ({
         setSearchResults([]);
     };
 
-    // AI ile worklog önerisi al
-    const handleGetAISuggestion = async () => {
+    // AI ile yorum önerisi al
+    const handleGetAIComment = async () => {
         if (!selectedIssue || !settings.groqApiKey) return;
         
-        setIsAiLoading(true);
-        setAiSuggestion(null);
+        setIsAiCommentLoading(true);
+        setAiSuggestedComment(null);
         
         try {
-            // Geçmiş verileri topla
             const historySuggestion = suggestions.find(s => s.issueKey === selectedIssue.key);
             const issueDescription = selectedIssue.description || '';
             
             const historyContext = historySuggestion 
-                ? `Bu issue için geçmiş: ${historySuggestion.frequency}x çalışıldı, ortalama ${historySuggestion.avgHours.toFixed(1)}h, son yorum: "${historySuggestion.lastComment}"`
-                : 'Bu issue için geçmiş veri yok';
+                ? `Son girilen yorum: "${historySuggestion.lastComment}"`
+                : '';
             
-            const prompt = `Sen bir Jira worklog asistanısın. Aşağıdaki issue için yapılan işi açıklayan kısa, profesyonel bir worklog yorumu ve tahmini süre öner.
+            const prompt = `Sen deneyimli bir yazılım danışmanısın. Jira worklog için profesyonel ve gerçekçi bir açıklama yaz.
 
-Issue Key: ${selectedIssue.key}
-Issue Başlığı: ${selectedIssue.summary}
-${issueDescription ? `Issue Açıklaması: ${issueDescription}` : ''}
+TALEP BAŞLIĞI: ${selectedIssue.summary}
+${issueDescription ? `TALEP AÇIKLAMASI: ${issueDescription}` : ''}
 ${historyContext}
 
-KURALLAR:
-1. Yorum 50-100 karakter arasında, Türkçe olsun
-2. "Yapıldı", "Tamamlandı" gibi genel ifadeler yerine spesifik eylemler kullan
-3. Issue başlığındaki anahtar kelimelerden ne yapıldığını tahmin et
-4. Süre tahmini geçmiş veriye dayansın, yoksa issue tipine göre tahmin et
+ÖNEMLİ KURALLAR:
+1. 80-150 karakter arası, tek cümle veya iki kısa cümle
+2. Yapılan işin özünü yaz - ne yapıldı, nasıl çözüldü
+3. Gerçekçi ol - "sistem optimizasyonu sağlandı", "müşteri memnuniyeti arttı" gibi boş laflar YAZMA
+4. Somut eylemler kullan: "incelendi", "düzeltildi", "eklendi", "güncellendi", "test edildi"
+5. Başlıktaki anahtar kelimeleri kullan ama aynen kopyalama
+6. Türkçe yaz, profesyonel ama doğal bir dil kullan
+7. Tırnak işareti, başlık, madde işareti KULLANMA
+8. "işlemi yapıldı", "çalışması gerçekleştirildi" gibi gereksiz uzatmalar YAPMA
 
-JSON formatında cevap ver:
-{
-  "comment": "Önerilen worklog yorumu",
-  "hours": 2.0,
-  "confidence": "high|medium|low",
-  "reasoning": "Tahmin neye dayalı"
-}`;
+SADECE worklog açıklamasını yaz, başka hiçbir şey yazma:`;
 
-            const response = await callGroq(prompt, settings, 300);
-            
-            // JSON parse et
-            const jsonMatch = response.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-                const parsed = JSON.parse(jsonMatch[0]);
-                setAiSuggestion({
-                    suggestedComment: parsed.comment || '',
-                    suggestedHours: parsed.hours || 1,
-                    confidence: parsed.confidence || 'medium',
-                    basedOn: parsed.reasoning || 'AI tahmini'
-                });
-            }
+            const response = await callGroq(prompt, settings, 150);
+            const cleaned = response.trim().replace(/^["'"'""'']+|["'"'""'']+$/g, '');
+            setAiSuggestedComment(cleaned);
         } catch (e) {
-            console.error('AI suggestion error:', e);
-            setError('AI önerisi alınamadı');
+            console.error('AI comment error:', e);
+            setError('AI yorum önerisi alınamadı');
         } finally {
-            setIsAiLoading(false);
+            setIsAiCommentLoading(false);
         }
     };
 
-    // AI önerisini uygula
-    const handleApplyAISuggestion = () => {
-        if (aiSuggestion) {
-            setComment(aiSuggestion.suggestedComment);
-            setHours(aiSuggestion.suggestedHours.toFixed(1));
+    // AI ile süre önerisi al
+    const handleGetAITime = async () => {
+        if (!selectedIssue || !settings.groqApiKey) return;
+        
+        setIsAiTimeLoading(true);
+        setAiSuggestedHours(null);
+        
+        try {
+            const historySuggestion = suggestions.find(s => s.issueKey === selectedIssue.key);
+            
+            if (historySuggestion && historySuggestion.frequency >= 2) {
+                // Geçmiş veri varsa direkt kullan, AI'a gerek yok
+                setAiSuggestedHours(historySuggestion.avgHours);
+            } else {
+                // Geçmiş yoksa AI'dan tahmin al
+                const prompt = `Aşağıdaki Jira talebi için tahmini çalışma süresi ver.
+
+TALEP BAŞLIĞI: ${selectedIssue.summary}
+${selectedIssue.description ? `AÇIKLAMA: ${selectedIssue.description}` : ''}
+
+KURALLAR:
+1. Sadece sayı döndür (örn: 2.5)
+2. Minimum 0.5, maksimum 8 saat arası
+3. Basit işler (düzeltme, güncelleme): 0.5-2 saat
+4. Orta işler (geliştirme, analiz): 2-4 saat
+5. Karmaşık işler (entegrasyon, yeni özellik): 4-8 saat
+
+SADECE sayı yaz:`;
+
+                const response = await callGroq(prompt, settings, 20);
+                const hours = parseFloat(response.trim());
+                if (!isNaN(hours) && hours >= 0.25 && hours <= 24) {
+                    setAiSuggestedHours(hours);
+                } else {
+                    setAiSuggestedHours(2); // Varsayılan
+                }
+            }
+        } catch (e) {
+            console.error('AI time error:', e);
+            setError('AI süre önerisi alınamadı');
+        } finally {
+            setIsAiTimeLoading(false);
+        }
+    };
+
+    // AI yorum önerisini uygula
+    const handleApplyAIComment = () => {
+        if (aiSuggestedComment) {
+            setComment(aiSuggestedComment);
+            setAiSuggestedComment(null);
+        }
+    };
+
+    // AI süre önerisini uygula
+    const handleApplyAITime = () => {
+        if (aiSuggestedHours) {
+            setHours(aiSuggestedHours.toFixed(1));
+            setAiSuggestedHours(null);
         }
     };
 
@@ -386,89 +422,110 @@ JSON formatında cevap ver:
                             </div>
                         )}
 
-                        {/* AI Suggestion Button - Issue seçildiğinde göster */}
+                        {/* AI Butonları - Issue seçildiğinde göster */}
                         {selectedIssue && settings.groqApiKey && (
-                            <div className="space-y-2">
-                                <button
-                                    type="button"
-                                    onClick={handleGetAISuggestion}
-                                    disabled={isAiLoading}
-                                    className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl border-2 border-dashed transition-all hover:scale-[1.01]"
-                                    style={{ 
-                                        borderColor: 'var(--color-primary-300)',
-                                        backgroundColor: 'var(--color-primary-container)',
-                                        color: 'var(--color-primary-700)'
-                                    }}
-                                >
-                                    {isAiLoading ? (
-                                        <>
-                                            <Loader2 size={18} className="animate-spin" />
-                                            <span className="font-medium">AI düşünüyor...</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Wand2 size={18} />
-                                            <span className="font-medium">AI ile Yorum ve Süre Öner</span>
-                                        </>
-                                    )}
-                                </button>
-
-                                {/* AI Suggestion Result */}
-                                {aiSuggestion && (
-                                    <div 
-                                        className="p-4 rounded-xl border cursor-pointer hover:scale-[1.01] transition-all"
-                                        onClick={handleApplyAISuggestion}
+                            <div className="space-y-3">
+                                {/* İki buton yan yana */}
+                                <div className="grid grid-cols-2 gap-2">
+                                    {/* AI Yorum Öner Butonu */}
+                                    <button
+                                        type="button"
+                                        onClick={handleGetAIComment}
+                                        disabled={isAiCommentLoading}
+                                        className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border transition-all hover:scale-[1.01]"
                                         style={{ 
-                                            backgroundColor: aiSuggestion.confidence === 'high' 
-                                                ? 'rgba(34, 197, 94, 0.1)' 
-                                                : aiSuggestion.confidence === 'medium'
-                                                ? 'rgba(234, 179, 8, 0.1)'
-                                                : 'var(--color-surface-variant)',
-                                            borderColor: aiSuggestion.confidence === 'high'
-                                                ? 'rgba(34, 197, 94, 0.4)'
-                                                : aiSuggestion.confidence === 'medium'
-                                                ? 'rgba(234, 179, 8, 0.4)'
-                                                : 'var(--color-outline-variant)'
+                                            borderColor: 'var(--color-primary-300)',
+                                            backgroundColor: 'var(--color-primary-container)',
+                                            color: 'var(--color-primary-700)'
                                         }}
                                     >
-                                        <div className="flex items-start gap-3">
-                                            <Sparkles size={18} style={{ 
-                                                color: aiSuggestion.confidence === 'high' 
-                                                    ? '#22c55e' 
-                                                    : aiSuggestion.confidence === 'medium'
-                                                    ? '#eab308'
-                                                    : 'var(--color-primary-600)',
-                                                marginTop: 2
-                                            }} />
+                                        {isAiCommentLoading ? (
+                                            <Loader2 size={16} className="animate-spin" />
+                                        ) : (
+                                            <Wand2 size={16} />
+                                        )}
+                                        <span className="text-sm font-medium">AI Yorum Öner</span>
+                                    </button>
+
+                                    {/* AI Süre Öner Butonu */}
+                                    <button
+                                        type="button"
+                                        onClick={handleGetAITime}
+                                        disabled={isAiTimeLoading}
+                                        className="flex items-center justify-center gap-2 py-2.5 px-3 rounded-xl border transition-all hover:scale-[1.01]"
+                                        style={{ 
+                                            borderColor: 'var(--color-secondary-300)',
+                                            backgroundColor: 'var(--color-secondary-container)',
+                                            color: 'var(--color-secondary-700)'
+                                        }}
+                                    >
+                                        {isAiTimeLoading ? (
+                                            <Loader2 size={16} className="animate-spin" />
+                                        ) : (
+                                            <Clock size={16} />
+                                        )}
+                                        <span className="text-sm font-medium">AI Süre Öner</span>
+                                    </button>
+                                </div>
+
+                                {/* AI Yorum Önerisi Sonucu */}
+                                {aiSuggestedComment && (
+                                    <div 
+                                        className="p-3 rounded-xl border cursor-pointer hover:scale-[1.01] transition-all"
+                                        onClick={handleApplyAIComment}
+                                        style={{ 
+                                            backgroundColor: 'rgba(34, 197, 94, 0.08)',
+                                            borderColor: 'rgba(34, 197, 94, 0.3)'
+                                        }}
+                                    >
+                                        <div className="flex items-start gap-2">
+                                            <Sparkles size={16} style={{ color: '#22c55e', marginTop: 2, flexShrink: 0 }} />
                                             <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-medium mb-1" style={{ color: 'var(--color-on-surface)' }}>
-                                                    "{aiSuggestion.suggestedComment}"
+                                                <p className="text-sm" style={{ color: 'var(--color-on-surface)' }}>
+                                                    {aiSuggestedComment}
                                                 </p>
-                                                <div className="flex items-center gap-3 text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>
-                                                    <span className="flex items-center gap-1">
-                                                        <Clock size={12} /> {aiSuggestion.suggestedHours.toFixed(1)}h öneriliyor
-                                                    </span>
-                                                    <span>•</span>
-                                                    <span>{aiSuggestion.basedOn}</span>
-                                                </div>
+                                                <p className="text-xs mt-1" style={{ color: 'var(--color-on-surface-variant)' }}>
+                                                    Tıklayarak yoruma uygula
+                                                </p>
                                             </div>
-                                            <span 
-                                                className="text-lg font-bold shrink-0"
-                                                style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-primary-600)' }}
-                                            >
-                                                {aiSuggestion.suggestedHours.toFixed(1)}h
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* AI Süre Önerisi Sonucu */}
+                                {aiSuggestedHours && (
+                                    <div 
+                                        className="p-3 rounded-xl border cursor-pointer hover:scale-[1.01] transition-all flex items-center justify-between"
+                                        onClick={handleApplyAITime}
+                                        style={{ 
+                                            backgroundColor: 'rgba(234, 179, 8, 0.08)',
+                                            borderColor: 'rgba(234, 179, 8, 0.3)'
+                                        }}
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <TrendingUp size={16} style={{ color: '#eab308' }} />
+                                            <span className="text-sm" style={{ color: 'var(--color-on-surface)' }}>
+                                                Önerilen süre
                                             </span>
                                         </div>
-                                        <p className="text-xs mt-2 text-center" style={{ color: 'var(--color-on-surface-variant)' }}>
-                                            Tıklayarak uygula
-                                        </p>
+                                        <div className="flex items-center gap-2">
+                                            <span 
+                                                className="text-lg font-bold"
+                                                style={{ fontFamily: 'var(--font-mono)', color: '#eab308' }}
+                                            >
+                                                {aiSuggestedHours.toFixed(1)}h
+                                            </span>
+                                            <span className="text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>
+                                                tıkla uygula
+                                            </span>
+                                        </div>
                                     </div>
                                 )}
                             </div>
                         )}
 
-                        {/* Time Estimation - AI Suggestion */}
-                        {timeEstimation && selectedIssue && (
+                        {/* Time Estimation - Geçmiş veriye dayalı */}
+                        {timeEstimation && selectedIssue && !aiSuggestedHours && (
                             <div 
                                 className="flex items-center gap-3 p-3 rounded-xl border cursor-pointer hover:scale-[1.01] transition-all"
                                 onClick={handleApplyEstimation}
