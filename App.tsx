@@ -329,6 +329,18 @@ export default function App() {
     }
   };
 
+  // Clean AI output - remove quotes and unwanted formatting
+  const cleanAIOutput = (text: string): string => {
+    let cleaned = text.trim();
+    // Remove leading/trailing quotes (single, double, smart quotes)
+    cleaned = cleaned.replace(/^["'"'""'']+|["'"'""'']+$/g, '');
+    // Remove markdown formatting
+    cleaned = cleaned.replace(/^[#*_`]+|[#*_`]+$/g, '');
+    // Remove "Düzeltilmiş:", "Düzeltme:", "Output:" etc prefixes
+    cleaned = cleaned.replace(/^(Düzeltilmi[şs]:?|Düzeltme:?|Output:?|Çıktı:?|Result:?)\s*/i, '');
+    return cleaned.trim();
+  };
+
   const handleAIAction = async (id: string, mode: 'IMPROVE' | 'SPELL') => {
     const wl = worklogs.find(w => w.id === id);
     if(!wl || !wl.comment) return;
@@ -342,33 +354,71 @@ export default function App() {
     try {
         let prompt = '';
         if (mode === 'IMPROVE') {
-            prompt = `
-            BAĞLAM: Jira Talep Özeti: "${wl.summary}".
-            GÖREV: ${settings.aiSystemPrompt}
-            GİRDİ METİN: "${wl.comment}"
-            ÇIKTI: Sadece iyileştirilmiş metin. Markdown yok, tırnak işareti yok.
-            `;
+            prompt = `Sen kıdemli bir SAP Business One danışmanısın. Aşağıdaki kısa worklog notunu, müşterinin anlayabileceği profesyonel ve detaylı bir metne dönüştür.
+
+BAĞLAM - Jira Talep Başlığı: ${wl.summary}
+
+KURALLAR:
+1. Kısa notu genişlet ve detaylandır (50-100 kelime hedefle)
+2. Yapılan işin ne olduğunu, neden yapıldığını ve sonucunu açıkla
+3. Teknik terimleri koru (FMS, Query, SQL, modül adları vb.)
+4. Profesyonel ve değer gösteren bir dil kullan
+5. Başlıkta veya metinde olmayan bilgileri UYDURMA (ticket no, müşteri adı vb.)
+6. Markdown, madde işareti, başlık KULLANMA - sadece düz metin
+7. Metnin başına veya sonuna tırnak işareti KOYMA
+8. "Düzeltilmiş:" gibi önek EKLEME
+
+WORKLOG METNİ:
+${wl.comment}
+
+ÇIKTI (sadece iyileştirilmiş düz metin, başka hiçbir şey yazma):`;
         } else {
-             prompt = `
-            GÖREV: Sadece imla ve gramer hatalarını düzelt. Anlamı değiştirme. Ekstra içerik ekleme.
-            GİRDİ METİN: "${wl.comment}"
-            ÇIKTI: Sadece düzeltilmiş metin.
-            `;
+            prompt = `SADECE yazım hatalarını ve noktalama işaretlerini düzelt. Başka HİÇBİR ŞEY yapma.
+
+KURALLAR:
+- Sadece yanlış yazılmış kelimeleri düzelt
+- Noktalama işaretlerini düzelt (virgül, nokta, ünlem, soru işareti)
+- Hiç kelime ekleme
+- Hiç kelime çıkarma  
+- Hiç kelime değiştirme (sadece yazım hatası varsa düzelt)
+- Metni yeniden yazma
+- Başına "Düzeltilmiş:", "Düzeltme:" gibi hiçbir şey ekleme
+- Sonuna hiçbir şey ekleme
+- Metnin başına veya sonuna tırnak işareti KOYMA
+- Sadece düzeltilmiş metni döndür, başka hiçbir şey yazma
+
+METİN:
+${wl.comment}
+
+ÇIKTI (sadece düzeltilmiş metin):`;
         }
 
         const originalComment = wl.comment;
-        const improvedText = await callGroq(prompt, settings);
-        if (improvedText && improvedText.trim() !== wl.comment) {
-            await handleUpdateWorklog(id, improvedText.trim());
+        const rawResponse = await callGroq(prompt, settings);
+        const improvedText = cleanAIOutput(rawResponse || '');
+        
+        if (improvedText && improvedText !== wl.comment) {
+            // Create undo action BEFORE updating
+            const undoAction: UndoAction = {
+                type: 'UPDATE',
+                data: [{
+                    worklogId: wl.id,
+                    issueKey: wl.issueKey,
+                    previousComment: originalComment,
+                    newComment: improvedText
+                }]
+            };
             
-            // Notify with diff for history
+            await handleUpdateWorklog(id, improvedText);
+            
+            // Notify with diff AND undo action
             const actionName = mode === 'IMPROVE' ? 'İyileştirildi' : 'İmla Düzeltildi';
             notify(
                 actionName, 
                 `${wl.issueKey} worklog metni güncellendi`, 
                 'success',
-                undefined,
-                { before: originalComment, after: improvedText.trim(), issueKey: wl.issueKey }
+                undoAction,
+                { before: originalComment, after: improvedText, issueKey: wl.issueKey }
             );
         } else {
             notify('Bilgi', 'Yapay zeka önemli bir değişiklik önermedi.', 'info');
@@ -407,28 +457,55 @@ export default function App() {
         for (const wl of worklogsWithComments) {
             let prompt = '';
             if (mode === 'IMPROVE') {
-                prompt = `
-                BAĞLAM: Jira Talep Özeti: "${wl.summary}".
-                GÖREV: ${settings.aiSystemPrompt}
-                GİRDİ METİN: "${wl.comment}"
-                ÇIKTI: Sadece iyileştirilmiş metin. Markdown yok, tırnak işareti yok.
-                `;
+                prompt = `Sen kıdemli bir SAP Business One danışmanısın. Aşağıdaki kısa worklog notunu, müşterinin anlayabileceği profesyonel ve detaylı bir metne dönüştür.
+
+BAĞLAM - Jira Talep Başlığı: ${wl.summary}
+
+KURALLAR:
+1. Kısa notu genişlet ve detaylandır (50-100 kelime hedefle)
+2. Yapılan işin ne olduğunu, neden yapıldığını ve sonucunu açıkla
+3. Teknik terimleri koru (FMS, Query, SQL, modül adları vb.)
+4. Profesyonel ve değer gösteren bir dil kullan
+5. Başlıkta veya metinde olmayan bilgileri UYDURMA (ticket no, müşteri adı vb.)
+6. Markdown, madde işareti, başlık KULLANMA - sadece düz metin
+7. Metnin başına veya sonuna tırnak işareti KOYMA
+8. "Düzeltilmiş:" gibi önek EKLEME
+
+WORKLOG METNİ:
+${wl.comment}
+
+ÇIKTI (sadece iyileştirilmiş düz metin, başka hiçbir şey yazma):`;
             } else {
-                prompt = `
-                GÖREV: Sadece imla ve gramer hatalarını düzelt. Anlamı değiştirme. Ekstra içerik ekleme.
-                GİRDİ METİN: "${wl.comment}"
-                ÇIKTI: Sadece düzeltilmiş metin.
-                `;
+                prompt = `SADECE yazım hatalarını ve noktalama işaretlerini düzelt. Başka HİÇBİR ŞEY yapma.
+
+KURALLAR:
+- Sadece yanlış yazılmış kelimeleri düzelt
+- Noktalama işaretlerini düzelt (virgül, nokta, ünlem, soru işareti)
+- Hiç kelime ekleme
+- Hiç kelime çıkarma
+- Hiç kelime değiştirme (sadece yazım hatası varsa düzelt)
+- Metni yeniden yazma
+- Başına "Düzeltilmiş:", "Düzeltme:" gibi hiçbir şey ekleme
+- Sonuna hiçbir şey ekleme
+- Metnin başına veya sonuna tırnak işareti KOYMA
+- Sadece düzeltilmiş metni döndür, başka hiçbir şey yazma
+
+METİN:
+${wl.comment}
+
+ÇIKTI (sadece düzeltilmiş metin):`;
             }
 
-            const improvedText = await callGroq(prompt, settings);
-            if (improvedText && improvedText.trim() !== wl.comment) {
+            const rawResponse = await callGroq(prompt, settings);
+            const improvedText = cleanAIOutput(rawResponse || '');
+            
+            if (improvedText && improvedText !== wl.comment) {
                 previews.push({
                     worklogId: wl.id,
                     issueKey: wl.issueKey,
                     summary: wl.summary,
                     before: wl.comment,
-                    after: improvedText.trim(),
+                    after: improvedText,
                     mode
                 });
             }
@@ -456,22 +533,32 @@ export default function App() {
     setIsAIProcessing(true);
     
     try {
+        // Collect all undo data first
+        const allUndoData = textChangePreview.map(preview => ({
+            worklogId: preview.worklogId,
+            issueKey: preview.issueKey,
+            previousComment: preview.before,
+            newComment: preview.after
+        }));
+        
         for (const preview of textChangePreview) {
             await handleUpdateWorklog(preview.worklogId, preview.after);
-            
-            // Add to notification history with diff
-            const actionName = preview.mode === 'IMPROVE' ? 'İyileştirildi' : 'İmla Düzeltildi';
-            notify(
-                actionName,
-                `${preview.issueKey} worklog metni güncellendi`,
-                'success',
-                undefined,
-                { before: preview.before, after: preview.after, issueKey: preview.issueKey }
-            );
         }
         
+        // Create single batch undo action
+        const batchUndoAction: UndoAction = {
+            type: 'BATCH_UPDATE',
+            data: allUndoData
+        };
+        
         const modeLabel = textChangeMode === 'IMPROVE' ? 'İyileştirme' : 'İmla Düzeltme';
-        notify('Toplu İşlem Tamamlandı', `${textChangePreview.length} worklog ${modeLabel.toLowerCase()} uygulandı.`, 'success');
+        notify(
+            'Toplu İşlem Tamamlandı', 
+            `${textChangePreview.length} worklog ${modeLabel.toLowerCase()} uygulandı.`, 
+            'success',
+            batchUndoAction
+        );
+        
         setTextChangePreview(null);
         setTextChangeMode(null);
         
