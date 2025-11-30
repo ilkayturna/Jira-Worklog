@@ -701,24 +701,22 @@ status: devam/test/tamamlandı/beklemede`;
     try {
         let prompt = '';
         if (mode === 'IMPROVE') {
-            prompt = `Aşağıdaki worklog notunu daha açıklayıcı hale getir.
+            prompt = `Bir yazılım danışmanı olarak worklog notunu yeniden yaz.
 
-TALEP BAŞLIĞI: ${wl.summary}
+Talep: ${wl.summary}
+Mevcut not: ${wl.comment}
 
-MEVCUT NOT: ${wl.comment}
+Yazım kuralları:
+- Mevcut notu detaylandır ve zenginleştir
+- 2-3 cümle ile ne yapıldığını açıkla (100-180 karakter)
+- Doğal ve akıcı Türkçe kullan, kurumsal jargon kullanma
+- "Gerçekleştirildi", "sağlandı", "optimize edildi" gibi klişeler YASAK
+- Yapılan işi somut fiillerle anlat: incelendi, düzeltildi, eklendi, test edildi, kontrol edildi
+- Teknik terimleri koru (SQL, Query, modül adları vb.)
+- Tırnak, madde işareti, emoji kullanma
+- Sadece düz metin yaz, açıklama ekleme
 
-ÖNEMLİ KURALLAR:
-1. 2-4 cümle yaz, toplam 100-200 karakter arası
-2. Somut ve gerçekçi ol - yapılan işi açıkla
-3. "Müşteri memnuniyeti sağlandı", "sistem performansı arttı", "süreçler optimize edildi" gibi boş ve anlamsız ifadeler KULLANMA
-4. Sadece mevcut bilgiyi genişlet, olmayan detay UYDURMA
-5. Teknik terimleri koru (modül adları, SQL, Query vb.)
-6. Türkçe, profesyonel ama doğal bir dil kullan
-7. Başlık, madde işareti, emoji KULLANMA
-8. "Bu çalışmada", "Bu kapsamda" gibi gereksiz girişler YAPMA
-9. Tırnak işareti KOYMA
-
-SADECE iyileştirilmiş metni yaz:`;
+Yeniden yazılmış not:`;
         } else {
             prompt = `SADECE yazım hatalarını ve noktalama işaretlerini düzelt. Başka HİÇBİR ŞEY yapma.
 
@@ -744,7 +742,11 @@ ${wl.comment}
         const rawResponse = await callGroq(prompt, settings);
         const improvedText = cleanAIOutput(rawResponse || '');
         
-        if (improvedText && improvedText !== wl.comment) {
+        // Küçük farkları da kabul et - normalize edip karşılaştır
+        const normalizeText = (t: string) => t.toLowerCase().replace(/[^a-zçğıöşü0-9]/gi, '');
+        const isDifferent = improvedText && normalizeText(improvedText) !== normalizeText(wl.comment);
+        
+        if (improvedText && isDifferent) {
             // Create undo action BEFORE updating
             const undoAction: UndoAction = {
                 type: 'UPDATE',
@@ -767,8 +769,12 @@ ${wl.comment}
                 undoAction,
                 { before: originalComment, after: improvedText, issueKey: wl.issueKey }
             );
+        } else if (improvedText) {
+            // Metin var ama çok benzer - yine de uygula
+            await handleUpdateWorklog(id, improvedText, undefined, true);
+            notify('Güncellendi', `${wl.issueKey} metni güncellendi`, 'success');
         } else {
-            notify('Bilgi', 'Yapay zeka önemli bir değişiklik önermedi.', 'info');
+            notify('Hata', 'AI yanıt veremedi, tekrar deneyin.', 'error');
         }
 
     } catch (e: any) {
@@ -804,24 +810,22 @@ ${wl.comment}
         for (const wl of worklogsWithComments) {
             let prompt = '';
             if (mode === 'IMPROVE') {
-                prompt = `Sen kıdemli bir SAP Business One danışmanısın. Aşağıdaki kısa worklog notunu, müşterinin anlayabileceği profesyonel ve detaylı bir metne dönüştür.
+                prompt = `Bir yazılım danışmanı olarak worklog notunu yeniden yaz.
 
-BAĞLAM - Jira Talep Başlığı: ${wl.summary}
+Talep: ${wl.summary}
+Mevcut not: ${wl.comment}
 
-KURALLAR:
-1. Kısa notu genişlet ve detaylandır (50-100 kelime hedefle)
-2. Yapılan işin ne olduğunu, neden yapıldığını ve sonucunu açıkla
-3. Teknik terimleri koru (FMS, Query, SQL, modül adları vb.)
-4. Profesyonel ve değer gösteren bir dil kullan
-5. Başlıkta veya metinde olmayan bilgileri UYDURMA (ticket no, müşteri adı vb.)
-6. Markdown, madde işareti, başlık KULLANMA - sadece düz metin
-7. Metnin başına veya sonuna tırnak işareti KOYMA
-8. "Düzeltilmiş:" gibi önek EKLEME
+Yazım kuralları:
+- Mevcut notu detaylandır ve zenginleştir
+- 2-3 cümle ile ne yapıldığını açıkla (100-180 karakter)
+- Doğal ve akıcı Türkçe kullan, kurumsal jargon kullanma
+- "Gerçekleştirildi", "sağlandı", "optimize edildi" gibi klişeler YASAK
+- Yapılan işi somut fiillerle anlat: incelendi, düzeltildi, eklendi, test edildi, kontrol edildi
+- Teknik terimleri koru (SQL, Query, modül adları vb.)
+- Tırnak, madde işareti, emoji kullanma
+- Sadece düz metin yaz, açıklama ekleme
 
-WORKLOG METNİ:
-${wl.comment}
-
-ÇIKTI (sadece iyileştirilmiş düz metin, başka hiçbir şey yazma):`;
+Yeniden yazılmış not:`;
             } else {
                 prompt = `SADECE yazım hatalarını ve noktalama işaretlerini düzelt. Başka HİÇBİR ŞEY yapma.
 
@@ -846,7 +850,21 @@ ${wl.comment}
             const rawResponse = await callGroq(prompt, settings);
             const improvedText = cleanAIOutput(rawResponse || '');
             
-            if (improvedText && improvedText !== wl.comment) {
+            // Normalize edip karşılaştır - küçük farkları da kabul et
+            const normalizeText = (t: string) => t.toLowerCase().replace(/[^a-zçğıöşü0-9]/gi, '');
+            const isDifferent = improvedText && normalizeText(improvedText) !== normalizeText(wl.comment);
+            
+            if (improvedText && isDifferent) {
+                previews.push({
+                    worklogId: wl.id,
+                    issueKey: wl.issueKey,
+                    summary: wl.summary,
+                    before: wl.comment,
+                    after: improvedText,
+                    mode
+                });
+            } else if (improvedText) {
+                // Metin var ama çok benzer - yine de ekle
                 previews.push({
                     worklogId: wl.id,
                     issueKey: wl.issueKey,
@@ -859,7 +877,7 @@ ${wl.comment}
         }
         
         if (previews.length === 0) {
-            notify('Bilgi', 'Yapay zeka önemli değişiklikler önermedi.', 'info');
+            notify('Hata', 'AI yanıt veremedi, tekrar deneyin.', 'error');
             setIsAIProcessing(false);
             return;
         }
