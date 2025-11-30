@@ -439,11 +439,6 @@ export default function App() {
       }
   };
 
-      } catch (e: any) {
-          notify('Kopyalama Başarısız', e.message, 'error');
-      }
-  };
-
   // --- Render Helpers ---
 
   const changeDate = (days: number) => {
