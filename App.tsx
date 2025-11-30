@@ -174,7 +174,6 @@ export default function App() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notificationHistory, setNotificationHistory] = useState<NotificationHistoryItem[]>(loadNotificationHistory());
   const [suggestions, setSuggestions] = useState<WorklogSuggestion[]>(loadSuggestions());
-  const [distributeTarget, setDistributeTarget] = useState<string>(settings.targetDailyHours.toString());
   const [tempTargetHours, setTempTargetHours] = useState<string>(settings.targetDailyHours.toString());
   
   // Worklog history for undo/redo (per worklog) - localStorage'dan yükle
@@ -201,6 +200,13 @@ export default function App() {
   const totalHours = useMemo(() => worklogs.reduce((acc, wl) => acc + wl.hours, 0), [worklogs]);
   const progress = Math.min((totalHours / settings.targetDailyHours) * 100, 100);
   const isTargetMet = totalHours >= settings.targetDailyHours;
+  
+  // Confetti state
+  const [showConfetti, setShowConfetti] = useState(false);
+  const prevIsTargetMet = useRef(isTargetMet);
+  
+  // Weekly hours for chart
+  const [weeklyHours, setWeeklyHours] = useState<{ date: string; hours: number; dayName: string }[]>([]);
   
   // Count undoable notifications
   const undoableCount = useMemo(() => 
@@ -232,6 +238,109 @@ export default function App() {
     saveWorklogHistories(worklogHistories);
   }, [worklogHistories]);
 
+  // Confetti effect when target is met for the first time
+  useEffect(() => {
+    if (isTargetMet && !prevIsTargetMet.current && totalHours > 0) {
+      setShowConfetti(true);
+      setTimeout(() => setShowConfetti(false), 3000);
+    }
+    prevIsTargetMet.current = isTargetMet;
+  }, [isTargetMet, totalHours]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing in input/textarea
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      
+      // N = New worklog
+      if (e.key === 'n' || e.key === 'N') {
+        e.preventDefault();
+        setIsAddWorklogOpen(true);
+      }
+      // Left arrow = Previous day
+      else if (e.key === 'ArrowLeft' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        const prev = new Date(selectedDate);
+        prev.setDate(prev.getDate() - 1);
+        setSelectedDate(prev.toISOString().split('T')[0]);
+      }
+      // Right arrow = Next day
+      else if (e.key === 'ArrowRight' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        const next = new Date(selectedDate);
+        next.setDate(next.getDate() + 1);
+        setSelectedDate(next.toISOString().split('T')[0]);
+      }
+      // T = Today
+      else if (e.key === 't' || e.key === 'T') {
+        e.preventDefault();
+        setSelectedDate(new Date().toISOString().split('T')[0]);
+      }
+      // R = Refresh
+      else if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        loadData(settings, true);
+      }
+      // S = Settings
+      else if (e.key === 's' || e.key === 'S') {
+        e.preventDefault();
+        setIsSettingsOpen(true);
+      }
+      // H = History
+      else if (e.key === 'h' || e.key === 'H') {
+        e.preventDefault();
+        setIsHistoryOpen(true);
+      }
+      // Escape = Close modals
+      else if (e.key === 'Escape') {
+        setIsAddWorklogOpen(false);
+        setIsSettingsOpen(false);
+        setIsHistoryOpen(false);
+        setIsWeeklyReportOpen(false);
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedDate, settings]);
+
+  // Load weekly hours for chart
+  useEffect(() => {
+    const loadWeeklyHours = async () => {
+      if (!settings.jiraUrl || !settings.jiraToken) return;
+      
+      const days: { date: string; hours: number; dayName: string }[] = [];
+      const today = new Date();
+      const dayNames = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
+      
+      // Get last 7 days
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        const dateStr = date.toISOString().split('T')[0];
+        
+        // Check cache first
+        const cached = worklogCacheRef.current.get(dateStr);
+        if (cached) {
+          const totalHours = cached.worklogs.reduce((sum, wl) => sum + wl.hours, 0);
+          days.push({ date: dateStr, hours: totalHours, dayName: dayNames[date.getDay()] });
+        } else if (dateStr === selectedDate) {
+          // Use current worklogs for today
+          const totalHours = worklogs.reduce((sum, wl) => sum + wl.hours, 0);
+          days.push({ date: dateStr, hours: totalHours, dayName: dayNames[date.getDay()] });
+        } else {
+          // Default to 0 for uncached days
+          days.push({ date: dateStr, hours: 0, dayName: dayNames[date.getDay()] });
+        }
+      }
+      
+      setWeeklyHours(days);
+    };
+    
+    loadWeeklyHours();
+  }, [selectedDate, worklogs, settings.jiraUrl, settings.jiraToken]);
+
   // --- Actions ---
 
   const notify = (title: string, message: string, type: Notification['type'] = 'info', undoAction?: UndoAction, diff?: { before: string; after: string; issueKey?: string }) => {
@@ -258,7 +367,6 @@ export default function App() {
     const newSettings = { ...settings, targetDailyHours: newTarget };
     setSettings(newSettings);
     localStorage.setItem(`${APP_NAME}_targetDailyHours`, String(newTarget));
-    setDistributeTarget(newTarget.toString());
     setIsEditingTarget(false);
     notify('Hedef Güncellendi', `Günlük hedef ${newTarget} saat olarak ayarlandı.`, 'success');
   };
@@ -1007,7 +1115,7 @@ ${wl.comment}
   const previewSmartDistribute = async () => {
      if (loadingState === LoadingState.LOADING || isDistributing) return;
      
-     const target = parseFloat(distributeTarget) || settings.targetDailyHours;
+     const target = settings.targetDailyHours;
      
      if (worklogs.length === 0) {
          notify('Hata', 'Dağıtılacak worklog bulunamadı.', 'error');
@@ -1118,7 +1226,7 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
   // Equal distribution - Preview
   // Kalan saati (hedef - mevcut toplam) mevcut work log'lara eşit dağıtır
   const previewEqualDistribute = () => {
-     const target = parseFloat(distributeTarget) || settings.targetDailyHours;
+     const target = settings.targetDailyHours;
      
      if (worklogs.length === 0) {
          notify('Hata', 'Dağıtılacak worklog bulunamadı.', 'error');
@@ -1202,7 +1310,7 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
   const handleDistribute = async (mode: 'equal' | 'proportional' = 'proportional') => {
      if (loadingState === LoadingState.LOADING) return;
      
-     const target = parseFloat(distributeTarget) || settings.targetDailyHours;
+     const target = settings.targetDailyHours;
      const currentTotal = worklogs.reduce((sum, wl) => sum + wl.hours, 0);
      
      if (worklogs.length === 0) {
@@ -1334,37 +1442,162 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
       setSelectedDate(d.toISOString().split('T')[0]);
   };
 
+  // Confetti component
+  const ConfettiEffect = () => {
+    if (!showConfetti) return null;
+    
+    const colors = ['#4285f4', '#34a853', '#fbbc04', '#ea4335', '#9c27b0', '#00bcd4'];
+    const confettiPieces = Array.from({ length: 50 }, (_, i) => ({
+      id: i,
+      left: Math.random() * 100,
+      delay: Math.random() * 0.5,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      size: Math.random() * 8 + 6,
+      rotation: Math.random() * 360
+    }));
+    
+    return (
+      <div className="confetti-container">
+        {confettiPieces.map(piece => (
+          <div
+            key={piece.id}
+            className="confetti-piece"
+            style={{
+              left: `${piece.left}%`,
+              width: piece.size,
+              height: piece.size,
+              backgroundColor: piece.color,
+              borderRadius: Math.random() > 0.5 ? '50%' : '0',
+              animationDelay: `${piece.delay}s`,
+              transform: `rotate(${piece.rotation}deg)`
+            }}
+          />
+        ))}
+      </div>
+    );
+  };
+
+  // Weekly Chart Component
+  const WeeklyChart = () => {
+    const maxHours = Math.max(...weeklyHours.map(d => d.hours), settings.targetDailyHours);
+    
+    return (
+      <section className="surface-card p-5" aria-label="Weekly overview">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-on-surface-variant)' }}>
+            Haftalık Özet
+          </h2>
+          <span className="text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>
+            Son 7 gün
+          </span>
+        </div>
+        <div className="flex items-end justify-between gap-1 h-24">
+          {weeklyHours.map((day, idx) => {
+            const heightPercent = maxHours > 0 ? (day.hours / maxHours) * 100 : 0;
+            const isToday = day.date === selectedDate;
+            const metTarget = day.hours >= settings.targetDailyHours;
+            
+            return (
+              <div key={day.date} className="flex flex-col items-center flex-1 gap-1">
+                <div 
+                  className="w-full relative group cursor-pointer"
+                  style={{ height: '80px' }}
+                  onClick={() => setSelectedDate(day.date)}
+                >
+                  {/* Target line */}
+                  <div 
+                    className="absolute w-full border-t border-dashed"
+                    style={{ 
+                      bottom: `${(settings.targetDailyHours / maxHours) * 100}%`,
+                      borderColor: 'var(--color-warning)',
+                      opacity: 0.5
+                    }}
+                  />
+                  {/* Bar */}
+                  <div 
+                    className={`chart-bar absolute bottom-0 w-full ${settings.isDarkTheme && metTarget ? 'glow-success' : ''}`}
+                    style={{ 
+                      height: `${Math.max(heightPercent, 4)}%`,
+                      backgroundColor: metTarget 
+                        ? 'var(--color-success)' 
+                        : isToday 
+                        ? 'var(--color-primary-500)' 
+                        : 'var(--color-primary-300)',
+                      opacity: isToday ? 1 : 0.7
+                    }}
+                  />
+                  {/* Tooltip */}
+                  <div 
+                    className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 whitespace-nowrap px-2 py-1 rounded text-xs font-medium"
+                    style={{ 
+                      backgroundColor: 'var(--color-surface-container-high)',
+                      color: 'var(--color-on-surface)',
+                      boxShadow: 'var(--elevation-2)'
+                    }}
+                  >
+                    {day.hours.toFixed(1)}h
+                  </div>
+                </div>
+                <span 
+                  className={`text-xs font-medium ${isToday ? 'font-bold' : ''}`}
+                  style={{ color: isToday ? 'var(--color-primary-600)' : 'var(--color-on-surface-variant)' }}
+                >
+                  {day.dayName}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        {/* Legend */}
+        <div className="flex items-center justify-center gap-4 mt-3 pt-3 border-t" style={{ borderColor: 'var(--color-outline-variant)' }}>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: 'var(--color-success)' }} />
+            <span className="text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>Hedef ✓</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="w-3 h-0.5 border-t border-dashed" style={{ borderColor: 'var(--color-warning)', width: '12px' }} />
+            <span className="text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>{settings.targetDailyHours}h hedef</span>
+          </div>
+        </div>
+      </section>
+    );
+  };
+
   return (
     <main className="min-h-screen py-6 px-4 md:py-10 md:px-6 animate-fade-in">
+      
+      {/* Confetti Effect */}
+      <ConfettiEffect />
       
       {/* Main Container - Clean Google-style layout */}
       <div className="w-full max-w-5xl mx-auto space-y-6">
         
-        {/* Header - Minimal & Clean */}
-        <header className="surface-card p-4 md:p-5 flex items-center justify-between">
+        {/* Header - Apple Glassmorphism */}
+        <header className="apple-header">
             <div className="flex items-center gap-4">
-                {/* Logo */}
-                <div className="w-10 h-10 md:w-11 md:h-11 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/25">
-                    <CalendarIcon className="text-white" size={22} />
+                {/* Apple-style Logo */}
+                <div className="w-12 h-12 md:w-14 md:h-14 rounded-[18px] flex items-center justify-center shadow-lg" style={{ background: 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)' }}>
+                    <CalendarIcon className="text-white" size={28} strokeWidth={1.5} />
                 </div>
                 <div>
-                    <h1 className="text-lg md:text-xl font-semibold tracking-tight" style={{ color: 'var(--color-on-surface)' }}>
-                        Worklog Manager
+                    <h1 className="text-2xl md:text-[28px] font-bold" style={{ color: 'var(--color-on-surface)', letterSpacing: '-0.03em' }}>
+                        Worklog
                     </h1>
-                    <p className="text-xs font-medium" style={{ color: 'var(--color-on-surface-variant)' }}>
-                        Jira Cloud Integration
+                    <p className="text-[13px] mt-0.5" style={{ color: 'var(--color-on-surface-variant)', letterSpacing: '-0.01em' }}>
+                        Jira Cloud ile senkronize
                     </p>
                 </div>
             </div>
 
             {/* Header Actions */}
             <div className="flex items-center gap-1">
-                {/* Add Worklog Button */}
+                {/* Add Worklog Button - Apple style */}
                 <button 
                     onClick={() => setIsAddWorklogOpen(true)} 
-                    className="btn-filled text-sm hidden sm:flex"
+                    className="hidden sm:flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-full transition-all hover:scale-[1.02] active:scale-[0.98]"
+                    style={{ background: 'linear-gradient(135deg, #007AFF 0%, #0055d4 100%)', color: 'white' }}
                 >
-                    <Plus size={18}/> Worklog Ekle
+                    <Plus size={16} strokeWidth={2.5}/> Yeni
                 </button>
                 <button 
                     onClick={() => setIsAddWorklogOpen(true)} 
@@ -1427,10 +1660,10 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
             {/* Left Sidebar: Controls & Stats */}
             <aside className="lg:col-span-4 space-y-5">
                 
-                {/* Date Picker Card */}
+                {/* Date Picker Card - Apple style */}
                 <section className="surface-card p-5" aria-label="Date selection">
-                    <h2 className="text-xs font-semibold uppercase tracking-wider mb-4" style={{ color: 'var(--color-on-surface-variant)' }}>
-                        Tarih Seçimi
+                    <h2 className="text-[11px] font-semibold uppercase tracking-wide mb-4" style={{ color: 'var(--color-on-surface-variant)', letterSpacing: '0.05em' }}>
+                        Tarih
                     </h2>
                     <div className="flex items-center gap-2">
                         <button 
@@ -1456,9 +1689,9 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
                         </button>
                     </div>
                     
-                    {/* Week Days Quick Navigation */}
-                    <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--color-border)' }}>
-                        <div className="flex gap-1">
+                    {/* Week Days - Apple Segmented Control Style */}
+                    <div className="mt-5 pt-5 border-t" style={{ borderColor: 'var(--color-outline-variant)' }}>
+                        <div className="apple-segmented-control">
                             {(() => {
                                 const selected = new Date(selectedDate);
                                 const dayOfWeek = selected.getDay();
@@ -1487,28 +1720,11 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
                                         <button
                                             key={dateStr}
                                             onClick={() => setSelectedDate(dateStr)}
-                                            className={`flex-1 py-2 px-1 rounded-lg text-center transition-all ${isSelected ? 'scale-105' : 'hover:scale-102'}`}
-                                            style={{
-                                                backgroundColor: isSelected 
-                                                    ? 'var(--color-primary-600)' 
-                                                    : isToday 
-                                                        ? (settings.isDarkTheme ? 'rgba(66, 133, 244, 0.3)' : 'var(--color-primary-100)')
-                                                        : 'transparent',
-                                                color: isSelected 
-                                                    ? 'white' 
-                                                    : isToday
-                                                        ? (settings.isDarkTheme ? '#93c5fd' : 'var(--color-primary-700)')
-                                                        : isWeekend 
-                                                            ? 'var(--color-text-tertiary)' 
-                                                            : 'var(--color-text-primary)',
-                                                fontWeight: isSelected || isToday ? 600 : 400
-                                            }}
+                                            className={`apple-segment-item ${isSelected ? 'active' : ''} ${isToday ? 'today' : ''}`}
                                         >
-                                            <div className="text-xs opacity-70">{days[i]}</div>
-                                            <div className="text-sm font-medium">{day.getDate()}</div>
-                                            {isToday && !isSelected && (
-                                                <div className="w-1.5 h-1.5 rounded-full mx-auto mt-0.5" style={{ backgroundColor: 'var(--color-primary-500)' }} />
-                                            )}
+                                            <span className="day-label">{days[i]}</span>
+                                            <span className="day-number">{day.getDate()}</span>
+                                            {isToday && <span className="today-dot" />}
                                         </button>
                                     );
                                 }
@@ -1519,184 +1735,153 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
                     </div>
                 </section>
 
-                {/* Daily Progress Card - Premium Feel */}
-                <section 
-                    className="relative p-6 rounded-2xl overflow-hidden"
-                    style={{ 
-                        background: isTargetMet 
-                            ? 'linear-gradient(135deg, #059669 0%, #10b981 100%)' 
-                            : 'linear-gradient(135deg, #1a73e8 0%, #4285f4 100%)',
-                        boxShadow: isTargetMet 
-                            ? '0 8px 32px -8px rgba(5, 150, 105, 0.5)' 
-                            : '0 8px 32px -8px rgba(26, 115, 232, 0.5)'
-                    }}
-                    aria-label="Daily progress"
-                >
-                    {/* Background Pattern */}
-                    <div className="absolute inset-0 opacity-10">
-                        <div className="absolute -right-8 -top-8">
-                            <Clock size={120} strokeWidth={1} />
+                {/* Daily Progress - Apple Activity Ring Style */}
+                <section className="apple-progress-card" aria-label="Daily progress">
+                    <div className="flex items-start justify-between">
+                        <div>
+                            <h2 className="text-[11px] font-semibold uppercase tracking-wide mb-1" style={{ color: 'var(--color-on-surface-variant)', letterSpacing: '0.05em' }}>
+                                Günlük İlerleme
+                            </h2>
+                            <div className="flex items-baseline gap-1 mt-2">
+                                <span className="text-[42px] font-bold tracking-tight" style={{ color: 'var(--color-on-surface)', letterSpacing: '-0.03em' }}>
+                                    {formatHours(totalHours)}
+                                </span>
+                                {isEditingTarget ? (
+                                    <div className="flex items-center gap-1">
+                                        <span className="text-lg" style={{ color: 'var(--color-on-surface-variant)' }}>/</span>
+                                        <input
+                                            type="number"
+                                            step="0.5"
+                                            min="0.5"
+                                            max="24"
+                                            value={tempTargetHours}
+                                            onChange={(e) => setTempTargetHours(e.target.value)}
+                                            onBlur={handleTargetHoursChange}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') handleTargetHoursChange();
+                                                if (e.key === 'Escape') {
+                                                    setTempTargetHours(settings.targetDailyHours.toString());
+                                                    setIsEditingTarget(false);
+                                                }
+                                            }}
+                                            autoFocus
+                                            className="w-14 bg-transparent border-b-2 px-1 py-0.5 text-lg font-semibold text-center focus:outline-none"
+                                            style={{ borderColor: 'var(--color-primary-500)', color: 'var(--color-on-surface)' }}
+                                        />
+                                    </div>
+                                ) : (
+                                    <button 
+                                        onClick={() => {
+                                            setTempTargetHours(settings.targetDailyHours.toString());
+                                            setIsEditingTarget(true);
+                                        }}
+                                        className="text-lg font-medium transition-opacity hover:opacity-70 cursor-pointer"
+                                        style={{ color: 'var(--color-on-surface-variant)' }}
+                                        title="Tıkla düzenle"
+                                    >
+                                        / {settings.targetDailyHours}h
+                                    </button>
+                                )}
+                            </div>
+                            <p className="text-[13px] mt-1" style={{ color: isTargetMet ? 'var(--color-success)' : 'var(--color-on-surface-variant)' }}>
+                                {isTargetMet ? 'Hedef tamamlandı!' : `${formatHours(settings.targetDailyHours - totalHours)} kaldı`}
+                            </p>
+                        </div>
+                        
+                        {/* Apple Activity Ring */}
+                        <div className="apple-progress-ring">
+                            <svg viewBox="0 0 100 100" className="w-20 h-20 md:w-24 md:h-24">
+                                {/* Background Ring */}
+                                <circle
+                                    cx="50" cy="50" r="42"
+                                    fill="none"
+                                    stroke="var(--color-outline-variant)"
+                                    strokeWidth="8"
+                                />
+                                {/* Progress Ring */}
+                                <circle
+                                    cx="50" cy="50" r="42"
+                                    fill="none"
+                                    stroke={isTargetMet ? '#30d158' : '#007AFF'}
+                                    strokeWidth="8"
+                                    strokeLinecap="round"
+                                    strokeDasharray={`${progress * 2.64} 264`}
+                                    transform="rotate(-90 50 50)"
+                                    style={{ transition: 'stroke-dasharray 1s ease-out' }}
+                                />
+                            </svg>
+                            <span className="absolute inset-0 flex items-center justify-center text-lg font-bold" style={{ color: 'var(--color-on-surface)' }}>
+                                {Math.round(progress)}%
+                            </span>
                         </div>
                     </div>
                     
-                    <div className="relative z-10">
-                        <div className="flex items-center justify-between">
-                            <span className="text-white/70 text-xs font-semibold uppercase tracking-wider">
-                                Günlük İlerleme
+                    {/* Completion Badge */}
+                    {isTargetMet && (
+                        <div className="mt-4 pt-4 border-t flex items-center gap-2" style={{ borderColor: 'var(--color-outline-variant)' }}>
+                            <CheckCircle2 size={18} className="text-green-500" />
+                            <span className="text-[13px] font-medium" style={{ color: 'var(--color-success)' }}>
+                                Günlük hedef başarıyla tamamlandı
                             </span>
-                            {/* Edit Target Button */}
-                            <button 
-                                onClick={() => {
-                                    setTempTargetHours(settings.targetDailyHours.toString());
-                                    setIsEditingTarget(true);
-                                }}
-                                className="p-1.5 rounded-lg hover:bg-white/20 transition-colors"
-                                title="Hedef saati düzenle"
-                            >
-                                <Edit3 size={14} className="text-white/70" />
-                            </button>
                         </div>
-                        
-                        {/* Big Number Display */}
-                        <div className="flex items-baseline gap-2 mt-3 mb-5">
-                            <span className="text-5xl font-bold text-white tracking-tight" style={{ fontFamily: 'var(--font-mono)' }}>
-                                {formatHours(totalHours)}
-                            </span>
-                            {isEditingTarget ? (
-                                <div className="flex items-center gap-1">
-                                    <span className="text-white/60 text-lg font-medium">/</span>
-                                    <input
-                                        type="number"
-                                        step="0.5"
-                                        min="0.5"
-                                        max="24"
-                                        value={tempTargetHours}
-                                        onChange={(e) => setTempTargetHours(e.target.value)}
-                                        onBlur={handleTargetHoursChange}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter') handleTargetHoursChange();
-                                            if (e.key === 'Escape') {
-                                                setTempTargetHours(settings.targetDailyHours.toString());
-                                                setIsEditingTarget(false);
-                                            }
-                                        }}
-                                        autoFocus
-                                        className="w-16 bg-white/20 border-none rounded px-2 py-0.5 text-white text-lg font-medium text-center focus:outline-none focus:ring-2 focus:ring-white/50"
-                                        style={{ fontFamily: 'var(--font-mono)' }}
-                                    />
-                                    <span className="text-white/60 text-lg font-medium">h</span>
-                                </div>
-                            ) : (
-                                <button 
-                                    onClick={() => {
-                                        setTempTargetHours(settings.targetDailyHours.toString());
-                                        setIsEditingTarget(true);
-                                    }}
-                                    className="text-white/60 text-lg font-medium hover:text-white/80 transition-colors cursor-pointer"
-                                    title="Tıkla düzenle"
-                                >
-                                    / {settings.targetDailyHours}h
-                                </button>
-                            )}
-                        </div>
-                        
-                        {/* Progress Bar */}
-                        <div className="w-full h-2 bg-white/20 rounded-full overflow-hidden backdrop-blur-sm">
-                            <div 
-                                className="h-full bg-white rounded-full transition-all duration-1000 ease-out"
-                                style={{ width: `${progress}%` }}
-                            />
-                        </div>
-                        
-                        {/* Status Text */}
-                        <p className="mt-4 text-sm text-white/90 flex items-center gap-2 font-medium">
-                            {isTargetMet ? (
-                                <>
-                                    <CheckCircle2 size={16} />
-                                    <span>Günlük hedef tamamlandı!</span>
-                                </>
-                            ) : (
-                                <>
-                                    <Clock size={16} />
-                                    <span>{formatHours(settings.targetDailyHours - totalHours)} saat kaldı</span>
-                                </>
-                            )}
-                        </p>
-                    </div>
+                    )}
                 </section>
 
                 {/* Quick Actions Card */}
                 <section className="surface-card p-5 space-y-4" aria-label="Quick actions">
-                    <h2 className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-on-surface-variant)' }}>
-                        Hızlı İşlemler
+                    <h2 className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--color-on-surface-variant)', letterSpacing: '0.05em' }}>
+                        İşlemler
                     </h2>
                     
                     {/* Refresh Button */}
                     <button 
                         onClick={() => loadData()} 
-                        className="btn-outlined w-full ripple"
+                        className="btn-outlined w-full"
                         disabled={loadingState === LoadingState.LOADING}
                     >
-                        <RefreshCw size={18} className={loadingState === LoadingState.LOADING ? 'animate-spin' : ''}/> 
-                        Verileri Yenile
+                        <RefreshCw size={16} className={loadingState === LoadingState.LOADING ? 'animate-spin' : ''}/> 
+                        Yenile
                     </button>
                      
                     {/* Distribution Section */}
                     <div className="pt-4 border-t" style={{ borderColor: 'var(--color-outline-variant)' }}>
-                        <label className="text-xs font-semibold uppercase tracking-wider block mb-3" style={{ color: 'var(--color-on-surface-variant)' }}>
-                            Saat Dağıtımı
+                        <label className="text-[11px] font-semibold uppercase tracking-wide block mb-3" style={{ color: 'var(--color-on-surface-variant)', letterSpacing: '0.05em' }}>
+                            Dağıtım ({settings.targetDailyHours}h)
                         </label>
-                        
-                        {/* Target Input */}
-                        <div className="flex items-center gap-3 mb-3">
-                            <input 
-                                type="number" 
-                                step="0.25" 
-                                min="0.25" 
-                                max="24"
-                                value={distributeTarget}
-                                onChange={(e) => setDistributeTarget(e.target.value)}
-                                className="input-filled flex-1 text-center font-semibold"
-                                style={{ fontFamily: 'var(--font-mono)' }}
-                                placeholder="8"
-                                aria-label="Target hours"
-                            />
-                            <span className="text-sm font-medium" style={{ color: 'var(--color-on-surface-variant)' }}>saat</span>
-                        </div>
                         
                         {/* Distribution Buttons */}
                         <div className="space-y-2">
                             <button 
                                 onClick={previewEqualDistribute} 
-                                className="btn-filled ripple text-sm w-full"
+                                className="btn-filled w-full text-sm"
                                 style={{ 
-                                    background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
+                                    background: 'linear-gradient(135deg, #30d158 0%, #34c759 100%)',
                                     color: 'white',
                                     opacity: isDistributing ? 0.7 : 1
                                 }}
                                 title="Tüm worklog'lara eşit süre dağıtır"
                                 disabled={isDistributing}
                             >
-                                <Clock size={16} /> Eşit Dağıtım
+                                <Clock size={16} /> Eşit
                             </button>
                             
                             {/* AI Smart Distribution */}
                             <button 
                                 onClick={previewSmartDistribute}
-                                className="btn-filled w-full ripple text-sm"
+                                className="btn-filled w-full text-sm"
                                 style={{ 
-                                    background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)',
+                                    background: 'linear-gradient(135deg, #af52de 0%, #5856d6 100%)',
                                 }}
                                 title="Yapay zeka worklog içeriklerini analiz ederek akıllı dağıtım yapar"
                                 disabled={isDistributing}
                             >
                                 {isDistributing ? (
                                     <>
-                                        <RefreshCw size={16} className="animate-spin" /> Analiz Ediliyor...
+                                        <RefreshCw size={16} className="animate-spin" /> Analiz...
                                     </>
                                 ) : (
                                     <>
-                                        <Brain size={16} /> AI Akıllı Dağıtım
+                                        <Brain size={16} /> Akıllı
                                     </>
                                 )}
                             </button>
@@ -1705,14 +1890,14 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
                     
                     {/* AI Text Operations */}
                     <div className="pt-4 border-t" style={{ borderColor: 'var(--color-outline-variant)' }}>
-                        <label className="text-xs font-semibold uppercase tracking-wider block mb-3" style={{ color: 'var(--color-on-surface-variant)' }}>
-                            Toplu AI İşlemleri
+                        <label className="text-[11px] font-semibold uppercase tracking-wide block mb-3" style={{ color: 'var(--color-on-surface-variant)', letterSpacing: '0.05em' }}>
+                            AI
                         </label>
                         <div className="space-y-2">
                             <button 
                                 onClick={() => previewBatchAI('SPELL')}
-                                className="btn-outlined w-full ripple text-sm"
-                                style={{ borderColor: '#f59e0b', color: '#f59e0b' }}
+                                className="btn-outlined w-full text-sm"
+                                style={{ borderColor: '#ff9f0a', color: '#ff9f0a' }}
                                 title="Tüm worklog yorumlarının imla ve gramer hatalarını düzeltir"
                                 disabled={isAIProcessing}
                             >
@@ -1750,19 +1935,22 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
                     {/* Copy Previous Day */}
                     <button 
                         onClick={copyPreviousDay} 
-                        className="btn-text w-full"
+                        className="btn-text w-full ripple"
                     >
                         <Copy size={18} /> Dünden Kopyala
                     </button>
                 </section>
+                
+                {/* Weekly Chart */}
+                <WeeklyChart />
             </aside>
 
             {/* Right: Worklog List */}
             <section className="lg:col-span-8" aria-label="Worklog list">
                 <div className="surface-card p-4 md:p-5">
                     <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-sm font-semibold" style={{ color: 'var(--color-on-surface)' }}>
-                            Worklog Kayıtları
+                        <h2 className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--color-on-surface-variant)', letterSpacing: '0.05em' }}>
+                            Kayıtlar
                         </h2>
                         <div className="flex items-center gap-2">
                             <button 
@@ -2139,6 +2327,44 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
               </div>
           ))}
       </div>
+
+      {/* Mobile Bottom Navigation - Apple Tab Bar Style */}
+      <nav className="bottom-nav">
+        <button 
+          onClick={() => setSelectedDate(new Date().toISOString().split('T')[0])}
+          className={`bottom-nav-item ${selectedDate === new Date().toISOString().split('T')[0] ? 'active' : ''}`}
+        >
+          <CalendarIcon size={22} strokeWidth={1.5} />
+          <span>Bugün</span>
+        </button>
+        <button 
+          onClick={() => setIsAddWorklogOpen(true)}
+          className="bottom-nav-item"
+          style={{ 
+            background: 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)', 
+            color: 'white',
+            borderRadius: 'var(--radius-full)',
+            padding: '0.75rem 1.25rem',
+            boxShadow: '0 4px 12px rgba(0, 122, 255, 0.3)'
+          }}
+        >
+          <Plus size={22} strokeWidth={2} />
+        </button>
+        <button 
+          onClick={() => setIsHistoryOpen(true)}
+          className="bottom-nav-item"
+        >
+          <History size={22} strokeWidth={1.5} />
+          <span>Geçmiş</span>
+        </button>
+      </nav>
+
+      {/* Apple-style Footer */}
+      <footer className="apple-footer hidden lg:block">
+        <span className="footer-text">
+          Powered by <span className="footer-author">İlkay Turna</span>
+        </span>
+      </footer>
 
     </main>
   );

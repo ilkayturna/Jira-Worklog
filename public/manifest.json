@@ -1,0 +1,20 @@
+{
+  "name": "WorklogPro - Jira Worklog Manager",
+  "short_name": "WorklogPro",
+  "description": "Jira worklog'larınızı kolayca yönetin",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1a73e8",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "business"],
+  "lang": "tr"
+}
