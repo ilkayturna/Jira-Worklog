@@ -93,6 +93,22 @@ export interface HistoryAction {
   newData: any;
 }
 
+// Weekly report types
+export interface WeeklyReportItem {
+  issueKey: string;
+  summary: string;
+  status: 'devam' | 'test' | 'tamamlandı' | 'yeni';
+  day: 'Pazartesi' | 'Salı' | 'Çarşamba' | 'Perşembe' | 'Cuma';
+  description: string;
+  hours?: number;
+}
+
+export interface WeeklyReport {
+  weekStart: string; // YYYY-MM-DD
+  weekEnd: string;
+  items: WeeklyReportItem[];
+}
+
 export enum LoadingState {
   IDLE = 'IDLE',
   LOADING = 'LOADING',

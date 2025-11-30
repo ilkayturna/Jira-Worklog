@@ -1,12 +1,13 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Settings, Moon, Sun, Calendar as CalendarIcon, RefreshCw, CheckCircle2, AlertCircle, Info, ChevronLeft, ChevronRight, Copy, Sparkles, Clock, Plus, Bell, History, Brain, Edit3 } from 'lucide-react';
-import { AppSettings, Worklog, LoadingState, Notification, NotificationHistoryItem, WorklogSuggestion, UndoAction, DEFAULT_SYSTEM_PROMPT, TextChangePreview } from './types';
+import { Settings, Moon, Sun, Calendar as CalendarIcon, RefreshCw, CheckCircle2, AlertCircle, Info, ChevronLeft, ChevronRight, Copy, Sparkles, Clock, Plus, Bell, History, Brain, Edit3, FileSpreadsheet } from 'lucide-react';
+import { AppSettings, Worklog, LoadingState, Notification, NotificationHistoryItem, WorklogSuggestion, UndoAction, DEFAULT_SYSTEM_PROMPT, TextChangePreview, WeeklyReportItem } from './types';
 import { fetchWorklogs, updateWorklog, callGroq, createWorklog, deleteWorklog } from './services/api';
 import { SettingsModal } from './components/SettingsModal';
 import { WorklogList } from './components/WorklogList';
 import { AddWorklogModal } from './components/AddWorklogModal';
 import { NotificationHistory } from './components/NotificationHistory';
+import { WeeklyReportModal } from './components/WeeklyReportModal';
 import { secondsToHours, formatHours } from './utils/adf';
 
 const APP_NAME = 'WorklogPro';
@@ -113,6 +114,7 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAddWorklogOpen, setIsAddWorklogOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isWeeklyReportOpen, setIsWeeklyReportOpen] = useState(false);
   const [isEditingTarget, setIsEditingTarget] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [worklogs, setWorklogs] = useState<Worklog[]>([]);
@@ -309,9 +311,120 @@ export default function App() {
     }
   };
 
-  const handleUpdateWorklog = async (id: string, comment?: string, seconds?: number) => {
+  // Fetch worklogs for a date range (for weekly report)
+  const fetchWeekWorklogs = async (startDate: string, endDate: string): Promise<Worklog[]> => {
+    if (!settings.jiraUrl || !settings.jiraEmail || !settings.jiraToken) {
+        return [];
+    }
+    
+    try {
+        // Fetch each day in the range
+        const allLogs: Worklog[] = [];
+        const start = new Date(startDate);
+        const end = new Date(endDate);
+        
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            const dateStr = d.toISOString().split('T')[0];
+            const dayLogs = await fetchWorklogs(dateStr, settings);
+            allLogs.push(...dayLogs);
+        }
+        
+        return allLogs;
+    } catch (e) {
+        console.error('Failed to fetch week worklogs:', e);
+        return [];
+    }
+  };
+
+  // AI Generate Weekly Report
+  const generateAIWeeklyReport = async (worklogs: Worklog[]): Promise<WeeklyReportItem[]> => {
+    if (!settings.groqApiKey || worklogs.length === 0) return [];
+    
+    const DAYS = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma'] as const;
+    
+    // Group worklogs by issue
+    const issueMap = new Map<string, { worklog: Worklog; lastDay: Date; totalHours: number; days: string[] }>();
+    
+    worklogs.forEach(log => {
+        const date = new Date(log.started);
+        const dayName = DAYS[date.getDay() - 1] || 'Pazartesi';
+        const existing = issueMap.get(log.issueKey);
+        
+        if (!existing) {
+            issueMap.set(log.issueKey, {
+                worklog: log,
+                lastDay: date,
+                totalHours: log.hours,
+                days: [dayName]
+            });
+        } else {
+            if (date > existing.lastDay) {
+                existing.lastDay = date;
+                existing.worklog = log;
+            }
+            existing.totalHours += log.hours;
+            if (!existing.days.includes(dayName)) {
+                existing.days.push(dayName);
+            }
+        }
+    });
+    
+    // Create summary for AI
+    const issuesSummary = Array.from(issueMap.entries()).map(([key, data]) => 
+        `- ${key}: "${data.worklog.summary}" (${data.totalHours.toFixed(1)} saat, Son gün: ${DAYS[data.lastDay.getDay() - 1] || 'Cuma'})`
+    ).join('\n');
+    
+    const prompt = `Sen bir proje planlama asistanısın. Geçen hafta yapılan işlere bakarak önümüzdeki hafta için bir çalışma planı oluştur.
+
+GEÇMİŞ HAFTA İŞLERİ:
+${issuesSummary}
+
+GÖREV: Her iş için önümüzdeki haftanın hangi gününde devam edilmesi gerektiğini ve kısa bir açıklama yaz.
+
+KURALLAR:
+1. Son çalışılan günü dikkate al (Cuma'da çalışılan iş Pazartesi'ye atanmalı)
+2. Çok saat harcanan işler muhtemelen devam edecek
+3. Az saat harcanan işler belki tamamlanmış olabilir
+4. Her iş için sadece bir gün seç
+
+JSON formatında yanıt ver (başka hiçbir şey yazma):
+[
+  {"issueKey": "XXX-123", "day": "Pazartesi", "status": "devam", "description": "...kısa açıklama..."},
+  ...
+]
+
+status değerleri: "devam", "test", "tamamlandı"`;
+
+    try {
+        const response = await callGroq(prompt, settings);
+        const jsonMatch = response.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            return parsed.map((item: any) => {
+                const issueData = issueMap.get(item.issueKey);
+                return {
+                    issueKey: item.issueKey,
+                    summary: issueData?.worklog.summary || '',
+                    status: item.status || 'devam',
+                    day: item.day || 'Pazartesi',
+                    description: item.description || issueData?.worklog.summary || '',
+                    hours: issueData?.totalHours
+                };
+            });
+        }
+    } catch (e) {
+        console.error('AI weekly report generation failed:', e);
+    }
+    
+    return [];
+  };
+
+  const handleUpdateWorklog = async (id: string, comment?: string, seconds?: number, skipNotification?: boolean) => {
     const wl = worklogs.find(w => w.id === id);
     if (!wl) return;
+
+    const previousComment = wl.comment;
+    const previousSeconds = wl.seconds;
 
     try {
       await updateWorklog(wl, settings, comment, seconds);
@@ -326,7 +439,34 @@ export default function App() {
               hours: seconds !== undefined ? secondsToHours(seconds) : w.hours
           };
       }));
-      notify('Güncellendi', 'Kayıt başarıyla güncellendi', 'success');
+      
+      // Skip notification if called from batch operations
+      if (skipNotification) return;
+      
+      // Create diff and undo action for manual edits
+      if (comment !== undefined && comment !== previousComment) {
+        const undoAction: UndoAction = {
+          type: 'UPDATE',
+          data: [{ worklogId: id, issueKey: wl.issueKey, previousComment, newComment: comment }]
+        };
+        notify('Güncellendi', `${wl.issueKey} worklog metni güncellendi`, 'success', undoAction, {
+          before: previousComment,
+          after: comment,
+          issueKey: wl.issueKey
+        });
+      } else if (seconds !== undefined) {
+        const undoAction: UndoAction = {
+          type: 'UPDATE',
+          data: [{ worklogId: id, issueKey: wl.issueKey, previousSeconds, newSeconds: seconds }]
+        };
+        notify('Güncellendi', `${wl.issueKey} worklog süresi güncellendi`, 'success', undoAction, {
+          before: `${(previousSeconds / 3600).toFixed(2)} saat`,
+          after: `${(seconds / 3600).toFixed(2)} saat`,
+          issueKey: wl.issueKey
+        });
+      } else {
+        notify('Güncellendi', 'Kayıt başarıyla güncellendi', 'success');
+      }
     } catch (e: any) {
       notify('Güncelleme Başarısız', e.message, 'error');
       loadData(); // Revert
@@ -413,7 +553,7 @@ ${wl.comment}
                 }]
             };
             
-            await handleUpdateWorklog(id, improvedText);
+            await handleUpdateWorklog(id, improvedText, undefined, true);
             
             // Notify with diff AND undo action
             const actionName = mode === 'IMPROVE' ? 'İyileştirildi' : 'İmla Düzeltildi';
@@ -546,7 +686,7 @@ ${wl.comment}
         }));
         
         for (const preview of textChangePreview) {
-            await handleUpdateWorklog(preview.worklogId, preview.after);
+            await handleUpdateWorklog(preview.worklogId, preview.after, undefined, true);
         }
         
         // Create single batch undo action
@@ -961,6 +1101,16 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
                     <Plus size={20}/>
                 </button>
                 
+                {/* Weekly Report */}
+                <button 
+                    onClick={() => setIsWeeklyReportOpen(true)} 
+                    className="btn-icon"
+                    aria-label="Weekly report"
+                    title="Haftalık Rapor Oluştur"
+                >
+                    <FileSpreadsheet size={20}/>
+                </button>
+                
                 {/* Notification History */}
                 <button 
                     onClick={() => setIsHistoryOpen(true)} 
@@ -1325,6 +1475,16 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
         onUndo={handleUndo}
         onDelete={deleteNotification}
         onClear={clearNotificationHistory}
+      />
+
+      {/* Weekly Report Modal */}
+      <WeeklyReportModal
+        isOpen={isWeeklyReportOpen}
+        onClose={() => setIsWeeklyReportOpen(false)}
+        worklogs={worklogs}
+        settings={settings}
+        onFetchWeekWorklogs={fetchWeekWorklogs}
+        onAIGenerate={settings.groqApiKey ? generateAIWeeklyReport : undefined}
       />
 
       {/* Distribution Preview Modal */}
