@@ -243,6 +243,10 @@ export default function App() {
     setNotificationHistory([]);
   };
 
+  const deleteNotification = (id: string) => {
+    setNotificationHistory(prev => prev.filter(n => n.id !== id));
+  };
+
   const handleAddWorklog = async (issueKey: string, hours: number, comment: string) => {
     const seconds = Math.round(hours * 3600);
     
@@ -1316,6 +1320,7 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
         onClose={() => setIsHistoryOpen(false)}
         notifications={notificationHistory}
         onUndo={handleUndo}
+        onDelete={deleteNotification}
         onClear={clearNotificationHistory}
       />
 

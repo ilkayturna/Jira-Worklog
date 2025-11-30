@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Bell, Undo2, CheckCircle2, AlertCircle, Info, Clock, Trash2, ChevronRight, ChevronDown, GitCompare } from 'lucide-react';
+import { X, Bell, Undo2, CheckCircle2, AlertCircle, Info, Clock, Trash2, ChevronDown } from 'lucide-react';
 import { NotificationHistoryItem } from '../types';
 
 interface NotificationHistoryProps {
@@ -8,75 +8,19 @@ interface NotificationHistoryProps {
     notifications: NotificationHistoryItem[];
     onUndo: (notification: NotificationHistoryItem) => void;
     onClear: () => void;
+    onDelete: (id: string) => void;
 }
-
-// Diff renderer component
-const DiffView: React.FC<{ before: string; after: string; issueKey?: string }> = ({ before, after, issueKey }) => {
-    const [isExpanded, setIsExpanded] = useState(false);
-    
-    return (
-        <div className="mt-2 rounded-lg overflow-hidden border" style={{ borderColor: 'var(--color-outline-variant)' }}>
-            <button 
-                onClick={() => setIsExpanded(!isExpanded)}
-                className="w-full px-3 py-2 flex items-center justify-between text-xs font-medium"
-                style={{ backgroundColor: 'var(--color-surface-variant)' }}
-            >
-                <span className="flex items-center gap-2">
-                    <GitCompare size={14} />
-                    {issueKey && <span className="font-bold">{issueKey}</span>}
-                    Değişiklikleri Göster
-                </span>
-                {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-            </button>
-            
-            {isExpanded && (
-                <div className="p-3 space-y-2 text-xs" style={{ backgroundColor: 'var(--color-surface)' }}>
-                    {/* Before */}
-                    <div>
-                        <span className="font-semibold text-xs mb-1 block" style={{ color: 'var(--color-error)' }}>
-                            Önceki:
-                        </span>
-                        <div 
-                            className="p-2 rounded border-l-4"
-                            style={{ 
-                                backgroundColor: 'rgba(234, 67, 53, 0.1)', 
-                                borderColor: 'var(--color-error)',
-                                color: 'var(--color-on-surface)'
-                            }}
-                        >
-                            <p className="whitespace-pre-wrap break-words">{before}</p>
-                        </div>
-                    </div>
-                    
-                    {/* After */}
-                    <div>
-                        <span className="font-semibold text-xs mb-1 block" style={{ color: 'var(--color-success)' }}>
-                            Sonraki:
-                        </span>
-                        <div 
-                            className="p-2 rounded border-l-4"
-                            style={{ 
-                                backgroundColor: 'rgba(52, 168, 83, 0.1)', 
-                                borderColor: 'var(--color-success)',
-                                color: 'var(--color-on-surface)'
-                            }}
-                        >
-                            <p className="whitespace-pre-wrap break-words">{after}</p>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-};
 
 export const NotificationHistory: React.FC<NotificationHistoryProps> = ({
     isOpen,
     onClose,
     notifications,
     onUndo,
-    onClear
+    onClear,
+    onDelete
 }) => {
+    const [expandedId, setExpandedId] = useState<string | null>(null);
+    
     if (!isOpen) return null;
 
     const formatTime = (timestamp: number) => {
@@ -103,25 +47,22 @@ export const NotificationHistory: React.FC<NotificationHistoryProps> = ({
         }
     };
 
-    const getUndoLabel = (notification: NotificationHistoryItem) => {
-        if (!notification.undoAction) return null;
-        
-        switch (notification.undoAction.type) {
-            case 'CREATE':
-                return 'Eklemeyi Geri Al';
-            case 'UPDATE':
-                return 'Değişikliği Geri Al';
-            case 'BATCH_UPDATE':
-                return `${notification.undoAction.data.length} işlemi geri al`;
-            case 'BATCH_CREATE':
-                return `${notification.undoAction.data.length} eklemeyi geri al`;
-            default:
-                return 'Geri Al';
+    const getTypeColor = (type: string) => {
+        switch (type) {
+            case 'success': return 'var(--color-success)';
+            case 'error': return 'var(--color-error)';
+            case 'warning': return 'var(--color-warning)';
+            default: return 'var(--color-primary-600)';
         }
     };
 
-    const undoableNotifications = notifications.filter(n => n.undoAction && !n.dismissed);
-    const otherNotifications = notifications.filter(n => !n.undoAction || n.dismissed);
+    const toggleExpand = (id: string) => {
+        setExpandedId(expandedId === id ? null : id);
+    };
+
+    const hasExpandableContent = (n: NotificationHistoryItem) => {
+        return n.diff || (n.undoAction && !n.dismissed);
+    };
 
     return (
         <>
@@ -153,10 +94,10 @@ export const NotificationHistory: React.FC<NotificationHistoryProps> = ({
                             </div>
                             <div>
                                 <h2 className="text-lg font-semibold" style={{ color: 'var(--color-on-surface)' }}>
-                                    Bildirim Geçmişi
+                                    Geçmiş
                                 </h2>
                                 <p className="text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>
-                                    {notifications.length} bildirim
+                                    {notifications.length} işlem
                                 </p>
                             </div>
                         </div>
@@ -177,103 +118,50 @@ export const NotificationHistory: React.FC<NotificationHistoryProps> = ({
                     </div>
 
                     {/* Content */}
-                    <div className="flex-1 overflow-y-auto">
+                    <div className="flex-1 overflow-y-auto p-4">
                         {notifications.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+                            <div className="flex flex-col items-center justify-center h-full text-center">
                                 <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4"
                                      style={{ backgroundColor: 'var(--color-surface-variant)' }}>
                                     <Bell size={28} style={{ color: 'var(--color-on-surface-variant)' }} />
                                 </div>
                                 <p className="font-medium" style={{ color: 'var(--color-on-surface)' }}>
-                                    Bildirim yok
+                                    Geçmiş boş
                                 </p>
                                 <p className="text-sm mt-1" style={{ color: 'var(--color-on-surface-variant)' }}>
                                     Yapılan işlemler burada görünecek
                                 </p>
                             </div>
                         ) : (
-                            <div className="p-4 space-y-4">
-                                {/* Undoable Section */}
-                                {undoableNotifications.length > 0 && (
-                                    <div>
-                                        <div className="flex items-center gap-2 mb-3 px-2">
-                                            <Undo2 size={14} style={{ color: 'var(--color-primary-600)' }} />
-                                            <span className="text-xs font-semibold uppercase tracking-wider"
-                                                  style={{ color: 'var(--color-primary-600)' }}>
-                                                Geri Alınabilir İşlemler
-                                            </span>
-                                        </div>
-                                        <div className="space-y-2">
-                                            {undoableNotifications.map(notification => (
-                                                <div 
-                                                    key={notification.id}
-                                                    className="p-4 rounded-xl border transition-all hover:scale-[1.01]"
-                                                    style={{ 
-                                                        backgroundColor: 'var(--color-primary-container)',
-                                                        borderColor: 'var(--color-primary-600)'
-                                                    }}
-                                                >
-                                                    <div className="flex items-start gap-3">
-                                                        {getIcon(notification.type)}
-                                                        <div className="flex-1 min-w-0">
-                                                            <p className="font-semibold text-sm" 
-                                                               style={{ color: 'var(--color-on-surface)' }}>
-                                                                {notification.title}
-                                                            </p>
-                                                            <p className="text-xs mt-0.5 line-clamp-2"
-                                                               style={{ color: 'var(--color-on-surface-variant)' }}>
-                                                                {notification.message}
-                                                            </p>
-                                                            <div className="flex items-center justify-between mt-3">
-                                                                <span className="text-xs flex items-center gap-1"
-                                                                      style={{ color: 'var(--color-on-surface-variant)' }}>
-                                                                    <Clock size={12} /> {formatTime(notification.timestamp)}
-                                                                </span>
-                                                                <button 
-                                                                    onClick={() => onUndo(notification)}
-                                                                    className="btn-tonal text-xs py-1.5 px-3"
-                                                                    style={{ 
-                                                                        backgroundColor: 'var(--color-surface)',
-                                                                        color: 'var(--color-primary-600)'
-                                                                    }}
-                                                                >
-                                                                    <Undo2 size={14} /> {getUndoLabel(notification)}
-                                                                </button>
-                                                            </div>
-                                                        </div>
-                                                    </div>
+                            <div className="space-y-2">
+                                {notifications.map(notification => {
+                                    const isExpanded = expandedId === notification.id;
+                                    const canExpand = hasExpandableContent(notification);
+                                    const canUndo = notification.undoAction && !notification.dismissed;
+                                    
+                                    return (
+                                        <div 
+                                            key={notification.id}
+                                            className="rounded-xl border overflow-hidden transition-all"
+                                            style={{ 
+                                                borderColor: isExpanded ? getTypeColor(notification.type) : 'var(--color-outline-variant)',
+                                                backgroundColor: notification.dismissed 
+                                                    ? 'var(--color-surface-variant)' 
+                                                    : 'var(--color-surface-elevated)',
+                                                opacity: notification.dismissed ? 0.7 : 1
+                                            }}
+                                        >
+                                            {/* Main Row - Clickable */}
+                                            <div 
+                                                className={`p-3 flex items-start gap-3 ${canExpand ? 'cursor-pointer hover:bg-black/5' : ''}`}
+                                                onClick={() => canExpand && toggleExpand(notification.id)}
+                                            >
+                                                <div className="shrink-0 mt-0.5">
+                                                    {getIcon(notification.type)}
                                                 </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Other Notifications */}
-                                {otherNotifications.length > 0 && (
-                                    <div>
-                                        {undoableNotifications.length > 0 && (
-                                            <div className="flex items-center gap-2 mb-3 px-2 mt-6">
-                                                <Clock size={14} style={{ color: 'var(--color-on-surface-variant)' }} />
-                                                <span className="text-xs font-semibold uppercase tracking-wider"
-                                                      style={{ color: 'var(--color-on-surface-variant)' }}>
-                                                    Geçmiş
-                                                </span>
-                                            </div>
-                                        )}
-                                        <div className="space-y-2">
-                                            {otherNotifications.map(notification => (
-                                                <div 
-                                                    key={notification.id}
-                                                    className="p-3 rounded-xl"
-                                                    style={{ 
-                                                        backgroundColor: notification.dismissed 
-                                                            ? 'var(--color-surface-variant)' 
-                                                            : 'var(--color-surface-elevated)',
-                                                        opacity: notification.dismissed ? 0.6 : 1
-                                                    }}
-                                                >
-                                                    <div className="flex items-start gap-3">
-                                                        {getIcon(notification.type)}
+                                                
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-start justify-between gap-2">
                                                         <div className="flex-1 min-w-0">
                                                             <p className="font-medium text-sm" 
                                                                style={{ color: 'var(--color-on-surface)' }}>
@@ -283,48 +171,125 @@ export const NotificationHistory: React.FC<NotificationHistoryProps> = ({
                                                                style={{ color: 'var(--color-on-surface-variant)' }}>
                                                                 {notification.message}
                                                             </p>
-                                                            
-                                                            {/* Show diff for AI changes */}
-                                                            {notification.diff && (
-                                                                <DiffView 
-                                                                    before={notification.diff.before}
-                                                                    after={notification.diff.after}
-                                                                    issueKey={notification.diff.issueKey}
-                                                                />
-                                                            )}
-                                                            
-                                                            <span className="text-xs mt-2 flex items-center gap-1"
-                                                                  style={{ color: 'var(--color-on-surface-variant)' }}>
-                                                                <Clock size={10} /> {formatTime(notification.timestamp)}
-                                                                {notification.dismissed && (
-                                                                    <span className="ml-2 text-xs px-2 py-0.5 rounded"
-                                                                          style={{ backgroundColor: 'var(--color-surface)' }}>
-                                                                        Geri alındı
-                                                                    </span>
-                                                                )}
-                                                            </span>
                                                         </div>
+                                                        
+                                                        {/* Delete button */}
+                                                        <button 
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                onDelete(notification.id);
+                                                            }}
+                                                            className="shrink-0 p-1.5 rounded-lg hover:bg-black/10 transition-colors"
+                                                            title="Sil"
+                                                        >
+                                                            <X size={14} style={{ color: 'var(--color-on-surface-variant)' }} />
+                                                        </button>
+                                                    </div>
+                                                    
+                                                    <div className="flex items-center gap-2 mt-2">
+                                                        <span className="text-xs flex items-center gap-1"
+                                                              style={{ color: 'var(--color-on-surface-variant)' }}>
+                                                            <Clock size={10} /> {formatTime(notification.timestamp)}
+                                                        </span>
+                                                        
+                                                        {notification.dismissed && (
+                                                            <span className="text-xs px-1.5 py-0.5 rounded"
+                                                                  style={{ 
+                                                                      backgroundColor: 'var(--color-surface)',
+                                                                      color: 'var(--color-on-surface-variant)'
+                                                                  }}>
+                                                                Geri alındı
+                                                            </span>
+                                                        )}
+                                                        
+                                                        {canExpand && (
+                                                            <ChevronDown 
+                                                                size={14} 
+                                                                className={`ml-auto transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                                                style={{ color: 'var(--color-on-surface-variant)' }}
+                                                            />
+                                                        )}
                                                     </div>
                                                 </div>
-                                            ))}
+                                            </div>
+                                            
+                                            {/* Expanded Content */}
+                                            {isExpanded && (
+                                                <div className="border-t px-4 py-3 space-y-3"
+                                                     style={{ 
+                                                         borderColor: 'var(--color-outline-variant)',
+                                                         backgroundColor: 'var(--color-surface)'
+                                                     }}>
+                                                    
+                                                    {/* Diff View */}
+                                                    {notification.diff && (
+                                                        <div className="space-y-2">
+                                                            {/* Before */}
+                                                            <div>
+                                                                <span className="text-xs font-semibold mb-1 block" 
+                                                                      style={{ color: 'var(--color-error)' }}>
+                                                                    Önceki:
+                                                                </span>
+                                                                <div 
+                                                                    className="p-2 rounded-lg text-xs"
+                                                                    style={{ 
+                                                                        backgroundColor: 'rgba(234, 67, 53, 0.1)', 
+                                                                        borderLeft: '3px solid var(--color-error)',
+                                                                        color: 'var(--color-on-surface)'
+                                                                    }}
+                                                                >
+                                                                    <p className="whitespace-pre-wrap break-words">
+                                                                        {notification.diff.before}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            
+                                                            {/* After */}
+                                                            <div>
+                                                                <span className="text-xs font-semibold mb-1 block" 
+                                                                      style={{ color: 'var(--color-success)' }}>
+                                                                    Sonraki:
+                                                                </span>
+                                                                <div 
+                                                                    className="p-2 rounded-lg text-xs"
+                                                                    style={{ 
+                                                                        backgroundColor: 'rgba(52, 168, 83, 0.1)', 
+                                                                        borderLeft: '3px solid var(--color-success)',
+                                                                        color: 'var(--color-on-surface)'
+                                                                    }}
+                                                                >
+                                                                    <p className="whitespace-pre-wrap break-words">
+                                                                        {notification.diff.after}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    
+                                                    {/* Undo Button */}
+                                                    {canUndo && (
+                                                        <button 
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                onUndo(notification);
+                                                            }}
+                                                            className="btn-tonal w-full text-sm py-2"
+                                                            style={{ 
+                                                                backgroundColor: 'var(--color-primary-container)',
+                                                                color: 'var(--color-primary-600)'
+                                                            }}
+                                                        >
+                                                            <Undo2 size={16} /> Geri Al
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
-                                    </div>
-                                )}
+                                    );
+                                })}
                             </div>
                         )}
                     </div>
-
-                    {/* Footer - Quick Actions */}
-                    {undoableNotifications.length > 1 && (
-                        <div className="p-4 border-t shrink-0" style={{ borderColor: 'var(--color-outline-variant)' }}>
-                            <button 
-                                onClick={() => undoableNotifications.forEach(n => onUndo(n))}
-                                className="btn-outlined w-full"
-                            >
-                                <Undo2 size={18} /> Tüm İşlemleri Geri Al ({undoableNotifications.length})
-                            </button>
-                        </div>
-                    )}
                 </div>
             </div>
         </>
