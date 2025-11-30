@@ -551,6 +551,19 @@ ${wl.comment}
             data: allUndoData
         };
         
+        // Add individual notifications with diff for each change
+        for (const preview of textChangePreview) {
+            const actionName = preview.mode === 'IMPROVE' ? 'İyileştirildi' : 'İmla Düzeltildi';
+            notify(
+                actionName,
+                `${preview.issueKey} worklog metni güncellendi`,
+                'success',
+                undefined, // No individual undo - will use batch
+                { before: preview.before, after: preview.after, issueKey: preview.issueKey }
+            );
+        }
+        
+        // Final notification with batch undo
         const modeLabel = textChangeMode === 'IMPROVE' ? 'İyileştirme' : 'İmla Düzeltme';
         notify(
             'Toplu İşlem Tamamlandı', 
