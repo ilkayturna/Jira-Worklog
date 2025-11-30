@@ -49,8 +49,8 @@ export const fetchWorklogs = async (date: string, settings: AppSettings): Promis
     throw new Error("Jira Bilgileri Eksik: Ayarları kontrol edin.");
   }
 
-  // Basit bir JQL ile assigned issue'ları çek
-  const jql = `assignee = currentUser() ORDER BY updated DESC`;
+  // worklogDate ile o güne ait worklog'u olan issue'ları bul, worklogAuthor ile filtrele
+  const jql = `worklogDate = "${date}" AND worklogAuthor = currentUser()`;
   
   // DEBUG: JQL sorgusunu konsola yazdır
   console.log('JQL Sorgusu:', jql);
