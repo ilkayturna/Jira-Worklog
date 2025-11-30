@@ -1,4 +1,3 @@
-
 import { AppSettings, Worklog } from '../types';
 import { plainTextToADF, parseJiraComment, secondsToHours } from '../utils/adf';
 
@@ -16,59 +15,75 @@ const normalizeUrl = (url: string) => {
     return normalized;
 }
 
-const buildUrl = (jiraUrl: string, endpoint: string) => {
-    const normalizedJira = normalizeUrl(jiraUrl);
-    return `${normalizedJira}${endpoint}`;
+// ARTIK PROXY ÜZERİNDEN İSTEK ATIYORUZ
+const fetchThroughProxy = async (targetUrl: string, method: string, headers: any, body?: any) => {
+    // Vercel'de çalışırken /api/proxy endpoint'ini kullan
+    // Localhost'ta çalışırken de aynı endpoint (vite config proxy veya vercel dev ile) çalışır
+    const proxyUrl = `/api/proxy?url=${encodeURIComponent(targetUrl)}`;
+    
+    const options: any = {
+        method: method,
+        headers: headers
+    };
+
+    if (body) {
+        options.body = JSON.stringify(body);
+    }
+
+    const response = await fetch(proxyUrl, options);
+    return response;
 };
 
 // --- JIRA API ---
 
 export const fetchWorklogs = async (date: string, settings: AppSettings): Promise<Worklog[]> => {
   if (!settings.jiraUrl || !settings.jiraEmail || !settings.jiraToken) {
-    throw new Error("Missing Jira Credentials: Check Settings");
+    throw new Error("Jira Bilgileri Eksik: Ayarları kontrol edin.");
   }
 
   const jql = `worklogDate = "${date}" AND worklogAuthor = currentUser()`;
-  const requestUrl = buildUrl(settings.jiraUrl, `/rest/api/3/search?jql=${encodeURIComponent(jql)}&fields=worklog,key,summary&maxResults=100`);
+  // Target URL (Jira)
+  const targetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/search?jql=${encodeURIComponent(jql)}&fields=worklog,key,summary&maxResults=100`;
   
   let response;
   try {
-      response = await fetch(requestUrl, {
-        method: 'GET',
-        headers: {
+      response = await fetchThroughProxy(targetUrl, 'GET', {
           'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
           'Accept': 'application/json',
           'Content-Type': 'application/json'
-        }
       });
   } catch (error) {
-      // Pass the raw network error (likely CORS or Offline)
-      throw new Error("Network Request Failed. Check URL or Internet connection.");
+      throw new Error("Ağ Hatası: Proxy sunucusuna erişilemiyor.");
   }
 
   if (!response.ok) {
     let errText = '';
     try { errText = await response.text(); } catch(e) {}
-    throw new Error(`Jira API Error (${response.status}): ${errText || response.statusText}`);
+    throw new Error(`Jira API Hatası (${response.status}): ${errText || response.statusText}`);
   }
 
   const data = await response.json();
+  // Vercel function'dan dönen veriyi kontrol et (Proxy bazen string dönebilir)
+  const issues = data.issues || (typeof data === 'string' ? JSON.parse(data).issues : []);
+  
+  if (!issues) return [];
+
   const allWorklogs: Worklog[] = [];
 
-  const promises = data.issues.map(async (issue: any) => {
+  const promises = issues.map(async (issue: any) => {
     try {
-      const wlRequestUrl = buildUrl(settings.jiraUrl, `/rest/api/3/issue/${issue.key}/worklog`);
-      const wlResponse = await fetch(wlRequestUrl, {
-         headers: {
+      const wlTargetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/issue/${issue.key}/worklog`;
+      const wlResponse = await fetchThroughProxy(wlTargetUrl, 'GET', {
             'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
             'Accept': 'application/json'
-         }
       });
       
       if (!wlResponse.ok) return;
       
       const wlData = await wlResponse.json();
-      wlData.worklogs.forEach((wl: any) => {
+      const logs = wlData.worklogs || (typeof wlData === 'string' ? JSON.parse(wlData).worklogs : []);
+
+      logs.forEach((wl: any) => {
          const wlStartedDate = wl.started.split('T')[0];
          if (wlStartedDate === date) {
              allWorklogs.push({
@@ -106,16 +121,13 @@ export const updateWorklog = async (wl: Worklog, settings: AppSettings, newComme
         body.comment = wl.originalADF;
     }
 
-    const requestUrl = buildUrl(settings.jiraUrl, `/rest/api/3/issue/${wl.issueKey}/worklog/${wl.id}`);
-    const response = await fetch(requestUrl, {
-        method: 'PUT',
-        headers: {
-            'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(body)
-    });
+    const targetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/issue/${wl.issueKey}/worklog/${wl.id}`;
+    
+    const response = await fetchThroughProxy(targetUrl, 'PUT', {
+        'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+    }, body);
 
     if (!response.ok) {
         throw new Error(`Failed to update worklog (${response.status})`);
@@ -131,37 +143,34 @@ export const createWorklog = async (issueKey: string, dateStr: string, seconds: 
         comment: plainTextToADF(comment)
     };
 
-    const requestUrl = buildUrl(settings.jiraUrl, `/rest/api/3/issue/${issueKey}/worklog`);
-    const response = await fetch(requestUrl, {
-        method: 'POST',
-        headers: {
-            'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
-            'Accept': 'application/json',
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(body)
-    });
+    const targetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/issue/${issueKey}/worklog`;
+    
+    const response = await fetchThroughProxy(targetUrl, 'POST', {
+        'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+    }, body);
 
     if(!response.ok) throw new Error("Failed to create worklog");
 }
 
-// --- GROQ API ---
+// --- GROQ API (Proxy Üzerinden) ---
 
 export const callGroq = async (prompt: string, settings: AppSettings, maxTokens = 300): Promise<string> => {
     if (!settings.groqApiKey) throw new Error("Groq API Key missing");
 
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${settings.groqApiKey}`,
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            model: settings.groqModel || 'llama-3.3-70b-versatile',
-            messages: [{ role: 'user', content: prompt }],
-            max_tokens: maxTokens,
-            temperature: 0.3
-        })
+    // Groq zaten CORS destekler ama tutarlılık için proxy kullanabiliriz veya direkt çağırabiliriz.
+    // Güvenlik için frontend'de key saklamak yerine proxy daha iyidir ama şimdilik proxy üzerinden geçirelim.
+    const targetUrl = 'https://api.groq.com/openai/v1/chat/completions';
+    
+    const response = await fetchThroughProxy(targetUrl, 'POST', {
+        'Authorization': `Bearer ${settings.groqApiKey}`,
+        'Content-Type': 'application/json'
+    }, {
+        model: settings.groqModel || 'llama-3.3-70b-versatile',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: maxTokens,
+        temperature: 0.3
     });
 
     if (!response.ok) throw new Error("Groq API failed");
