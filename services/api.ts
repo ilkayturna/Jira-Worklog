@@ -42,15 +42,20 @@ export const fetchWorklogs = async (date: string, settings: AppSettings): Promis
   }
 
   const jql = `worklogDate = "${date}" AND worklogAuthor = currentUser()`;
-  // Target URL (Jira)
-  const targetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/search?jql=${encodeURIComponent(jql)}&fields=worklog,key,summary&maxResults=100`;
+  
+  // FIX: GET method deprecated (410 Gone). Switched to POST.
+  const targetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/search`;
   
   let response;
   try {
-      response = await fetchThroughProxy(targetUrl, 'GET', {
+      response = await fetchThroughProxy(targetUrl, 'POST', {
           'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
           'Accept': 'application/json',
           'Content-Type': 'application/json'
+      }, {
+          jql: jql,
+          fields: ['worklog', 'key', 'summary'],
+          maxResults: 100
       });
   } catch (error) {
       throw new Error("Ağ Hatası: Proxy sunucusuna erişilemiyor.");

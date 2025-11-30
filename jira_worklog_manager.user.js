@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name         Jira Worklog Yöneticisi Pro (Full Türkçe)
 // @namespace    http://tampermonkey.net/
-// @version      10.0
+// @version      10.1
 // @description  Jira workloglarını yönetmek, AI ile iyileştirmek, süreleri akıllı dağıtmak ve geçmişi yönetmek için kapsamlı araç.
 // @author       İlkay Turna
 // @match        https://*.atlassian.net/*
@@ -173,7 +173,7 @@
                 return null;
             };
 
-            // --- API KATMANI (CORS Proxy Yok - Tampermonkey ile çalışır) ---
+            // --- API KATMANI ---
             const getAuth = (email, token) => 'Basic ' + btoa(email + ':' + token);
             const getBaseUrl = (saved) => {
                 // Eğer kaydedilmiş yoksa ve Jira sayfasındaysak, mevcut origin'i al
@@ -188,10 +188,21 @@
 
             const fetchWorklogs = async (date, set) => {
                 const jql = 'worklogDate = "' + date + '" AND worklogAuthor = currentUser()';
-                const url = buildUrl(set.jiraUrl, '/rest/api/3/search?jql=' + encodeURIComponent(jql) + '&fields=worklog,key,summary&maxResults=100');
                 
+                // POST metodu ile arama (v3 API)
+                const url = buildUrl(set.jiraUrl, '/rest/api/3/search');
                 const res = await fetch(url, {
-                    headers: { 'Authorization': getAuth(set.jiraEmail, set.jiraToken), 'Accept': 'application/json' }
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': getAuth(set.jiraEmail, set.jiraToken), 
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        jql: jql,
+                        fields: ['worklog', 'key', 'summary'],
+                        maxResults: 100
+                    })
                 });
                 
                 if(!res.ok) throw new Error("API Hatası (" + res.status + "): " + res.statusText);
