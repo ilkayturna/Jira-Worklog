@@ -1097,6 +1097,113 @@ body {
 }
 
 /* ============================================
+   🍎 APPLE SETTINGS FORM ELEMENTS
+   ============================================ */
+
+.apple-settings-item {
+  padding: 12px 16px;
+}
+
+.apple-settings-item + .apple-settings-item {
+  border-top: 0.5px solid var(--color-outline-variant);
+}
+
+.apple-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--color-on-surface-variant);
+  margin-bottom: 6px;
+}
+
+.apple-input {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 15px;
+  color: var(--color-on-surface);
+  background: var(--color-surface-container);
+  border: none;
+  border-radius: 10px;
+  outline: none;
+  transition: all 150ms ease;
+}
+
+.apple-input:focus {
+  background: var(--color-surface-container-high);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
+}
+
+.apple-input::placeholder {
+  color: var(--color-outline);
+}
+
+.apple-select {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 15px;
+  color: var(--color-on-surface);
+  background: var(--color-surface-container);
+  border: none;
+  border-radius: 10px;
+  outline: none;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238e8e93' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 36px;
+}
+
+.apple-select:focus {
+  background-color: var(--color-surface-container-high);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
+}
+
+.apple-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 13px;
+  font-family: var(--font-mono);
+  color: var(--color-on-surface);
+  background: var(--color-surface-container);
+  border: none;
+  border-radius: 10px;
+  outline: none;
+  resize: vertical;
+  min-height: 80px;
+}
+
+.apple-textarea:focus {
+  background: var(--color-surface-container-high);
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
+}
+
+/* Dark mode inputs */
+.dark .apple-input,
+.dark .apple-select,
+.dark .apple-textarea {
+  background: var(--color-surface-container);
+}
+
+.dark .apple-input:focus,
+.dark .apple-select:focus,
+.dark .apple-textarea:focus {
+  background: var(--color-surface-container-high);
+}
+
+/* Modal Animation */
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* ============================================
    🍎 APPLE SECTION HEADER
    ============================================ */
 
@@ -1106,7 +1213,7 @@ body {
   color: var(--color-on-surface-variant);
   text-transform: uppercase;
   letter-spacing: 0.02em;
-  padding: 0 16px;
+  padding: 0 4px;
   margin-bottom: 8px;
 }
 

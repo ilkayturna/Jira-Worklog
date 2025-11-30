@@ -29,22 +29,40 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: 'rgba(0, 0, 0, 0.4)' }}
+      onClick={onClose}
+    >
+      {/* Backdrop blur */}
+      <div className="absolute inset-0 backdrop-blur-xl" style={{ backgroundColor: 'rgba(0, 0, 0, 0.2)' }} />
+      
+      {/* Modal */}
       <div 
         ref={modalRef}
-        className={`bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col ${className}`}
+        className={`apple-modal relative w-full max-w-lg max-h-[85vh] flex flex-col ${className}`}
         onClick={(e) => e.stopPropagation()}
+        style={{
+          backgroundColor: 'var(--color-surface)',
+          borderRadius: '14px',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 0.5px rgba(0, 0, 0, 0.05)',
+          animation: 'modalSlideIn 0.25s ease-out'
+        }}
       >
-        <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-900 rounded-t-xl shrink-0">
-          <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">{title}</h2>
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b" style={{ borderColor: 'var(--color-outline-variant)' }}>
+          <h2 className="text-[17px] font-semibold" style={{ color: 'var(--color-on-surface)', letterSpacing: '-0.02em' }}>{title}</h2>
           <button 
             onClick={onClose}
-            className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 transition-colors"
+            className="w-8 h-8 flex items-center justify-center rounded-full transition-colors"
+            style={{ backgroundColor: 'var(--color-surface-container)' }}
           >
-            <X size={20} />
+            <X size={16} style={{ color: 'var(--color-on-surface-variant)' }} />
           </button>
         </div>
-        <div className="p-6 overflow-y-auto">
+        
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto px-5 py-4">
           {children}
         </div>
       </div>

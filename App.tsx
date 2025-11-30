@@ -1737,18 +1737,46 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
 
                 {/* Daily Progress - Apple Activity Ring Style */}
                 <section className="apple-progress-card" aria-label="Daily progress">
-                    <div className="flex items-start justify-between">
-                        <div>
-                            <h2 className="text-[11px] font-semibold uppercase tracking-wide mb-1" style={{ color: 'var(--color-on-surface-variant)', letterSpacing: '0.05em' }}>
+                    <div className="flex items-center gap-5">
+                        {/* Apple Activity Ring */}
+                        <div className="apple-progress-ring flex-shrink-0">
+                            <svg viewBox="0 0 100 100" className="w-20 h-20">
+                                {/* Background Ring */}
+                                <circle
+                                    cx="50" cy="50" r="42"
+                                    fill="none"
+                                    stroke="var(--color-outline-variant)"
+                                    strokeWidth="8"
+                                />
+                                {/* Progress Ring */}
+                                <circle
+                                    cx="50" cy="50" r="42"
+                                    fill="none"
+                                    stroke={isTargetMet ? '#30d158' : '#007AFF'}
+                                    strokeWidth="8"
+                                    strokeLinecap="round"
+                                    strokeDasharray={`${Math.min(progress, 100) * 2.64} 264`}
+                                    transform="rotate(-90 50 50)"
+                                    style={{ transition: 'stroke-dasharray 1s ease-out' }}
+                                />
+                            </svg>
+                            <span className="absolute inset-0 flex items-center justify-center text-sm font-bold" style={{ color: 'var(--color-on-surface)' }}>
+                                {Math.round(Math.min(progress, 100))}%
+                            </span>
+                        </div>
+                        
+                        {/* Text Info */}
+                        <div className="flex-1 min-w-0">
+                            <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--color-on-surface-variant)', letterSpacing: '0.05em' }}>
                                 Günlük İlerleme
-                            </h2>
-                            <div className="flex items-baseline gap-1 mt-2">
-                                <span className="text-[42px] font-bold tracking-tight" style={{ color: 'var(--color-on-surface)', letterSpacing: '-0.03em' }}>
+                            </p>
+                            <div className="flex items-baseline gap-1 mt-1">
+                                <span className="text-[32px] font-bold tracking-tight" style={{ color: 'var(--color-on-surface)', letterSpacing: '-0.03em' }}>
                                     {formatHours(totalHours)}
                                 </span>
                                 {isEditingTarget ? (
                                     <div className="flex items-center gap-1">
-                                        <span className="text-lg" style={{ color: 'var(--color-on-surface-variant)' }}>/</span>
+                                        <span style={{ color: 'var(--color-on-surface-variant)' }}>/</span>
                                         <input
                                             type="number"
                                             step="0.5"
@@ -1765,7 +1793,7 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
                                                 }
                                             }}
                                             autoFocus
-                                            className="w-14 bg-transparent border-b-2 px-1 py-0.5 text-lg font-semibold text-center focus:outline-none"
+                                            className="w-12 bg-transparent border-b-2 px-1 py-0.5 text-base font-semibold text-center focus:outline-none"
                                             style={{ borderColor: 'var(--color-primary-500)', color: 'var(--color-on-surface)' }}
                                         />
                                     </div>
@@ -1775,56 +1803,18 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
                                             setTempTargetHours(settings.targetDailyHours.toString());
                                             setIsEditingTarget(true);
                                         }}
-                                        className="text-lg font-medium transition-opacity hover:opacity-70 cursor-pointer"
+                                        className="text-base font-medium transition-opacity hover:opacity-70"
                                         style={{ color: 'var(--color-on-surface-variant)' }}
-                                        title="Tıkla düzenle"
                                     >
                                         / {settings.targetDailyHours}h
                                     </button>
                                 )}
                             </div>
                             <p className="text-[13px] mt-1" style={{ color: isTargetMet ? 'var(--color-success)' : 'var(--color-on-surface-variant)' }}>
-                                {isTargetMet ? 'Hedef tamamlandı!' : `${formatHours(settings.targetDailyHours - totalHours)} kaldı`}
+                                {isTargetMet ? '✓ Hedef tamamlandı' : `${formatHours(settings.targetDailyHours - totalHours)} kaldı`}
                             </p>
                         </div>
-                        
-                        {/* Apple Activity Ring */}
-                        <div className="apple-progress-ring">
-                            <svg viewBox="0 0 100 100" className="w-20 h-20 md:w-24 md:h-24">
-                                {/* Background Ring */}
-                                <circle
-                                    cx="50" cy="50" r="42"
-                                    fill="none"
-                                    stroke="var(--color-outline-variant)"
-                                    strokeWidth="8"
-                                />
-                                {/* Progress Ring */}
-                                <circle
-                                    cx="50" cy="50" r="42"
-                                    fill="none"
-                                    stroke={isTargetMet ? '#30d158' : '#007AFF'}
-                                    strokeWidth="8"
-                                    strokeLinecap="round"
-                                    strokeDasharray={`${progress * 2.64} 264`}
-                                    transform="rotate(-90 50 50)"
-                                    style={{ transition: 'stroke-dasharray 1s ease-out' }}
-                                />
-                            </svg>
-                            <span className="absolute inset-0 flex items-center justify-center text-lg font-bold" style={{ color: 'var(--color-on-surface)' }}>
-                                {Math.round(progress)}%
-                            </span>
-                        </div>
                     </div>
-                    
-                    {/* Completion Badge */}
-                    {isTargetMet && (
-                        <div className="mt-4 pt-4 border-t flex items-center gap-2" style={{ borderColor: 'var(--color-outline-variant)' }}>
-                            <CheckCircle2 size={18} className="text-green-500" />
-                            <span className="text-[13px] font-medium" style={{ color: 'var(--color-success)' }}>
-                                Günlük hedef başarıyla tamamlandı
-                            </span>
-                        </div>
-                    )}
                 </section>
 
                 {/* Quick Actions Card */}

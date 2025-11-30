@@ -169,164 +169,179 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose, settings, onSa
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Ayarlar & Yapılandırma">
+    <Modal isOpen={isOpen} onClose={onClose} title="Ayarlar">
       <div className="space-y-6">
         
-        {/* Jira Settings */}
-        <section className="space-y-4 p-4 bg-slate-100 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
-          <h3 className="text-sm font-bold text-jira-blue uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 pb-2">Jira Bağlantısı</h3>
-          <div className="grid gap-4">
-            <div>
-              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Jira URL Adresi</label>
+        {/* Jira Settings - Apple Grouped List Style */}
+        <section>
+          <h3 className="apple-section-header">Jira Bağlantısı</h3>
+          <div className="apple-grouped-list">
+            <div className="apple-settings-item">
+              <label className="apple-label">Jira URL</label>
               <input 
                 name="jiraUrl"
                 value={formData.jiraUrl}
                 onChange={handleChange}
                 placeholder="https://sirketiniz.atlassian.net"
-                className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-sm focus:ring-2 focus:ring-jira-blue focus:border-transparent"
+                className="apple-input"
               />
             </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">E-posta Adresi</label>
+            <div className="apple-settings-item">
+              <label className="apple-label">E-posta</label>
               <input 
                 name="jiraEmail"
                 value={formData.jiraEmail}
                 onChange={handleChange}
                 placeholder="adiniz@sirket.com"
-                className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-sm focus:ring-2 focus:ring-jira-blue focus:border-transparent"
+                className="apple-input"
               />
             </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">API Token</label>
+            <div className="apple-settings-item">
+              <label className="apple-label">API Token</label>
               <input 
                 name="jiraToken"
                 type="password"
                 value={formData.jiraToken}
                 onChange={handleChange}
-                placeholder="Atlassian API Token"
-                className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-sm focus:ring-2 focus:ring-jira-blue focus:border-transparent"
+                placeholder="••••••••"
+                className="apple-input"
               />
-              <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noreferrer" className="text-xs text-jira-blue hover:underline mt-1 inline-block">API Token Oluştur &rarr;</a>
             </div>
           </div>
+          <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noreferrer" 
+             className="text-[13px] mt-2 inline-block" style={{ color: 'var(--color-primary-500)' }}>
+            API Token Oluştur →
+          </a>
         </section>
 
         {/* AI Settings */}
-        <section className="space-y-4 p-4 bg-slate-100 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
-          <h3 className="text-sm font-bold text-purple-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 pb-2">Yapay Zeka (Groq)</h3>
-          <div className="grid gap-4">
-            <div>
-              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Groq API Anahtarı</label>
+        <section>
+          <h3 className="apple-section-header">Yapay Zeka</h3>
+          <div className="apple-grouped-list">
+            <div className="apple-settings-item">
+              <label className="apple-label">Groq API Key</label>
               <input 
                 name="groqApiKey"
                 type="password"
                 value={formData.groqApiKey}
                 onChange={handleChange}
                 placeholder="gsk_..."
-                className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                className="apple-input"
               />
-              <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="text-xs text-purple-500 hover:underline mt-1 inline-block">Groq Anahtarı Al &rarr;</a>
             </div>
-            <div>
+            <div className="apple-settings-item">
               <div className="flex justify-between items-center mb-1">
-                <label className="block text-xs font-medium text-slate-500 dark:text-slate-400">Model</label>
+                <label className="apple-label">Model</label>
                 <button 
                   onClick={fetchModels}
                   disabled={isLoadingModels || !formData.groqApiKey}
-                  className="text-xs text-slate-400 hover:text-purple-500 flex items-center gap-1 disabled:opacity-50"
+                  className="text-[13px] flex items-center gap-1 disabled:opacity-50"
+                  style={{ color: 'var(--color-primary-500)' }}
                 >
-                  <RefreshCw size={10} className={isLoadingModels ? 'animate-spin' : ''}/> 
-                  {isLoadingModels ? 'Yükleniyor...' : 'Modelleri Güncelle'}
+                  <RefreshCw size={12} className={isLoadingModels ? 'animate-spin' : ''}/> 
+                  {isLoadingModels ? 'Yükleniyor' : 'Güncelle'}
                 </button>
               </div>
               <select 
                 name="groqModel"
                 value={formData.groqModel}
                 onChange={handleChange}
-                className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-sm focus:ring-2 focus:ring-purple-500"
+                className="apple-select"
               >
                 {models.length > 0 ? (
                   models.map((model, index) => (
                     <option key={model.id} value={model.id}>
                       {model.id} 
                       {model.context_window ? ` (${formatContextWindow(model.context_window)})` : ''}
-                      {index === 0 ? ' ⭐ Önerilen' : ''}
+                      {index === 0 ? ' ⭐' : ''}
                     </option>
                   ))
                 ) : (
                   <>
-                    <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile (Önerilen)</option>
-                    <option value="llama-3.1-8b-instant">llama-3.1-8b-instant (Hızlı)</option>
+                    <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile</option>
+                    <option value="llama-3.1-8b-instant">llama-3.1-8b-instant</option>
                     <option value="mixtral-8x7b-32768">mixtral-8x7b-32768</option>
                   </>
                 )}
               </select>
               {modelError && (
-                <p className="text-xs text-red-500 mt-1">Model listesi yüklenemedi: {modelError}</p>
-              )}
-              {models.length > 0 && (
-                <p className="text-xs text-slate-400 mt-1 flex items-center gap-1">
-                  <Zap size={10} className="text-purple-500" />
-                  {models.length} model mevcut • Otomatik güncellenir
-                </p>
+                <p className="text-[12px] mt-1" style={{ color: 'var(--color-error)' }}>{modelError}</p>
               )}
             </div>
-            <div>
-                <div className="flex justify-between items-center mb-1">
-                    <label className="block text-xs font-medium text-slate-500 dark:text-slate-400">Sistem Promptu</label>
-                    <button onClick={handleResetPrompt} className="text-xs text-slate-400 hover:text-purple-500 flex items-center gap-1"><RefreshCw size={10}/> Varsayılana Dön</button>
-                </div>
-                <textarea 
-                    name="aiSystemPrompt"
-                    value={formData.aiSystemPrompt}
-                    onChange={handleChange}
-                    rows={4}
-                    className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-xs font-mono focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                />
+            <div className="apple-settings-item">
+              <div className="flex justify-between items-center mb-1">
+                <label className="apple-label">Sistem Promptu</label>
+                <button onClick={handleResetPrompt} className="text-[13px] flex items-center gap-1" style={{ color: 'var(--color-primary-500)' }}>
+                  <RefreshCw size={12}/> Sıfırla
+                </button>
+              </div>
+              <textarea 
+                name="aiSystemPrompt"
+                value={formData.aiSystemPrompt}
+                onChange={handleChange}
+                rows={3}
+                className="apple-textarea"
+              />
             </div>
           </div>
+          <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" 
+             className="text-[13px] mt-2 inline-block" style={{ color: 'var(--color-primary-500)' }}>
+            Groq API Key Al →
+          </a>
         </section>
 
-        {/* General */}
-        <section className="space-y-4 p-4 bg-slate-100 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
-          <h3 className="text-sm font-bold text-emerald-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 pb-2">Tercihler</h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Günlük Hedef (Saat)</label>
-              <input 
-                name="targetDailyHours"
-                type="number"
-                step="0.25"
-                value={formData.targetDailyHours}
-                onChange={handleChange}
-                className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-sm focus:ring-2 focus:ring-emerald-500"
-              />
-              <p className="text-xs text-slate-400 mt-1">Varsayılan hedef saat</p>
+        {/* Preferences */}
+        <section>
+          <h3 className="apple-section-header">Tercihler</h3>
+          <div className="apple-grouped-list">
+            <div className="apple-settings-item">
+              <label className="apple-label">Günlük Hedef</label>
+              <div className="flex items-center gap-2">
+                <input 
+                  name="targetDailyHours"
+                  type="number"
+                  step="0.25"
+                  value={formData.targetDailyHours}
+                  onChange={handleChange}
+                  className="apple-input w-20 text-right"
+                />
+                <span className="text-[15px]" style={{ color: 'var(--color-on-surface-variant)' }}>saat</span>
+              </div>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Min. Worklog (Saat)</label>
-              <input 
-                name="minHoursPerWorklog"
-                type="number"
-                step="0.05"
-                min="0.1"
-                value={formData.minHoursPerWorklog}
-                onChange={handleChange}
-                className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-sm focus:ring-2 focus:ring-emerald-500"
-              />
-              <p className="text-xs text-slate-400 mt-1">Dağıtımda min. süre</p>
+            <div className="apple-settings-item">
+              <label className="apple-label">Min. Worklog Süresi</label>
+              <div className="flex items-center gap-2">
+                <input 
+                  name="minHoursPerWorklog"
+                  type="number"
+                  step="0.05"
+                  min="0.1"
+                  value={formData.minHoursPerWorklog}
+                  onChange={handleChange}
+                  className="apple-input w-20 text-right"
+                />
+                <span className="text-[15px]" style={{ color: 'var(--color-on-surface-variant)' }}>saat</span>
+              </div>
             </div>
           </div>
         </section>
         
-        <div className="flex justify-end gap-3 pt-4">
-            <button onClick={onClose} className="px-4 py-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium text-sm">İptal</button>
-            <button 
-                onClick={() => onSave(formData)}
-                className="px-4 py-2 rounded-lg bg-jira-blue hover:bg-blue-700 text-white font-medium text-sm flex items-center gap-2 shadow-lg shadow-blue-900/20"
-            >
-                <Save size={16} /> Kaydet
-            </button>
+        {/* Action Buttons - Apple Style */}
+        <div className="flex gap-3 pt-2">
+          <button 
+            onClick={onClose} 
+            className="flex-1 py-3 rounded-xl text-[15px] font-semibold transition-all active:scale-[0.98]"
+            style={{ backgroundColor: 'var(--color-surface-container)', color: 'var(--color-on-surface)' }}
+          >
+            İptal
+          </button>
+          <button 
+            onClick={() => onSave(formData)}
+            className="flex-1 py-3 rounded-xl text-[15px] font-semibold text-white transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+            style={{ backgroundColor: 'var(--color-primary-500)' }}
+          >
+            <Save size={16} /> Kaydet
+          </button>
         </div>
       </div>
     </Modal>
