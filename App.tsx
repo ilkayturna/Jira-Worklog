@@ -161,6 +161,33 @@ const getDefaultStartDate = (): string => {
   return `${year}-${month}-${day}`;
 };
 
+// Helper: Local date string (YYYY-MM-DD)
+const toLocalDateStr = (d: Date): string => {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
+// Helper: Haftanın Pazartesi gününü bul
+const getWeekMonday = (dateStr: string): string => {
+  const date = new Date(dateStr);
+  const dayOfWeek = date.getDay();
+  const monday = new Date(date);
+  monday.setDate(date.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+  return toLocalDateStr(monday);
+};
+
+// Helper: Haftanın tüm günlerini al (Pazartesi-Pazar)
+const getWeekDays = (dateStr: string): string[] => {
+  const monday = getWeekMonday(dateStr);
+  const mondayDate = new Date(monday);
+  const days: string[] = [];
+  for (let i = 0; i < 7; i++) {
+    const day = new Date(mondayDate);
+    day.setDate(mondayDate.getDate() + i);
+    days.push(toLocalDateStr(day));
+  }
+  return days;
+};
+
 export default function App() {
   const [settings, setSettings] = useState<AppSettings>(initialSettings);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -182,6 +209,10 @@ export default function App() {
   // Daily cache - aynı gün için tekrar istek atmamak için
   const worklogCacheRef = useRef<Map<string, { worklogs: Worklog[]; timestamp: number }>>(new Map());
   const CACHE_TTL = 5 * 60 * 1000; // 5 dakika cache süresi
+  
+  // Mevcut haftayı takip et (Pazartesi tarihi)
+  const currentWeekMondayRef = useRef<string>(getWeekMonday(selectedDate));
+  const [isLoadingWeek, setIsLoadingWeek] = useState(false);
   
   // Distribution Preview State
   const [distributionPreview, setDistributionPreview] = useState<{
@@ -305,40 +336,88 @@ export default function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedDate, settings]);
 
-  // Load weekly hours for chart
+  // Tek bir günün worklog'larını yükle ve cache'e kaydet
+  const loadDayWorklogs = async (dateStr: string, currentSettings = settings): Promise<Worklog[]> => {
+    const cached = worklogCacheRef.current.get(dateStr);
+    if (cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
+      return cached.worklogs;
+    }
+    
+    try {
+      const data = await fetchWorklogs(dateStr, currentSettings);
+      worklogCacheRef.current.set(dateStr, { worklogs: data, timestamp: Date.now() });
+      return data;
+    } catch {
+      return [];
+    }
+  };
+
+  // Hafta değişikliğinde tüm haftanın günlerini sırayla yükle
   useEffect(() => {
-    const loadWeeklyHours = async () => {
-      if (!settings.jiraUrl || !settings.jiraToken) return;
+    const loadWeekData = async () => {
+      if (!settings.jiraUrl || !settings.jiraToken || !settings.jiraEmail) return;
       
-      const days: { date: string; hours: number; dayName: string }[] = [];
-      const today = new Date();
-      const dayNames = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
+      const newMonday = getWeekMonday(selectedDate);
+      const prevMonday = currentWeekMondayRef.current;
       
-      // Get last 7 days
-      for (let i = 6; i >= 0; i--) {
-        const date = new Date(today);
-        date.setDate(date.getDate() - i);
-        const dateStr = date.toISOString().split('T')[0];
+      // Hafta değişti mi kontrol et
+      if (newMonday !== prevMonday) {
+        currentWeekMondayRef.current = newMonday;
+        const weekDays = getWeekDays(selectedDate);
         
-        // Check cache first
-        const cached = worklogCacheRef.current.get(dateStr);
-        if (cached) {
-          const totalHours = cached.worklogs.reduce((sum, wl) => sum + wl.hours, 0);
-          days.push({ date: dateStr, hours: totalHours, dayName: dayNames[date.getDay()] });
-        } else if (dateStr === selectedDate) {
-          // Use current worklogs for today
-          const totalHours = worklogs.reduce((sum, wl) => sum + wl.hours, 0);
-          days.push({ date: dateStr, hours: totalHours, dayName: dayNames[date.getDay()] });
-        } else {
-          // Default to 0 for uncached days
-          days.push({ date: dateStr, hours: 0, dayName: dayNames[date.getDay()] });
+        // Önce seçili günü yükle
+        setIsLoadingWeek(true);
+        
+        // Seçili günden başla, sonra diğer günleri sırayla yükle
+        const selectedIndex = weekDays.indexOf(selectedDate);
+        
+        // Önce seçili günü yükle (loadData zaten yapacak ama hızlıca)
+        await loadDayWorklogs(selectedDate, settings);
+        
+        // Sonra diğer günleri sırayla yükle (seçili günden başlayarak)
+        for (let i = 0; i < weekDays.length; i++) {
+          const dayDate = weekDays[i];
+          if (dayDate !== selectedDate) {
+            await loadDayWorklogs(dayDate, settings);
+            // Her günden sonra weeklyHours'u güncelle ki UI'da yavaş yavaş görünsün
+            updateWeeklyHoursFromCache();
+          }
         }
+        
+        setIsLoadingWeek(false);
       }
-      
-      setWeeklyHours(days);
     };
     
-    loadWeeklyHours();
+    loadWeekData();
+  }, [selectedDate, settings.jiraUrl, settings.jiraToken, settings.jiraEmail]);
+
+  // WeeklyHours'u cache'den güncelle (Pazartesi-Pazar sıralaması)
+  const updateWeeklyHoursFromCache = () => {
+    const weekDays = getWeekDays(selectedDate);
+    const dayNames = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
+    
+    const days: { date: string; hours: number; dayName: string }[] = [];
+    
+    for (let i = 0; i < weekDays.length; i++) {
+      const dateStr = weekDays[i];
+      const cached = worklogCacheRef.current.get(dateStr);
+      
+      let totalHours = 0;
+      if (cached) {
+        totalHours = cached.worklogs.reduce((sum, wl) => sum + wl.hours, 0);
+      } else if (dateStr === selectedDate) {
+        totalHours = worklogs.reduce((sum, wl) => sum + wl.hours, 0);
+      }
+      
+      days.push({ date: dateStr, hours: totalHours, dayName: dayNames[i] });
+    }
+    
+    setWeeklyHours(days);
+  };
+
+  // Load weekly hours for chart - seçilen tarihin haftası (Pazartesi-Pazar)
+  useEffect(() => {
+    updateWeeklyHoursFromCache();
   }, [selectedDate, worklogs, settings.jiraUrl, settings.jiraToken]);
 
   // --- Actions ---
@@ -1481,15 +1560,35 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
   const WeeklyChart = () => {
     const maxHours = Math.max(...weeklyHours.map(d => d.hours), settings.targetDailyHours);
     
+    // Haftanın tarih aralığını hesapla
+    const weekRange = useMemo(() => {
+      if (weeklyHours.length === 0) return '';
+      const firstDay = weeklyHours[0];
+      const lastDay = weeklyHours[weeklyHours.length - 1];
+      if (!firstDay || !lastDay) return '';
+      
+      const formatDate = (dateStr: string) => {
+        const [y, m, d] = dateStr.split('-');
+        return `${d}/${m}`;
+      };
+      
+      return `${formatDate(firstDay.date)} - ${formatDate(lastDay.date)}`;
+    }, [weeklyHours]);
+    
     return (
       <section className="surface-card p-5" aria-label="Weekly overview">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-on-surface-variant)' }}>
             Haftalık Özet
           </h2>
-          <span className="text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>
-            Son 7 gün
-          </span>
+          <div className="flex items-center gap-2">
+            {isLoadingWeek && (
+              <RefreshCw size={12} className="animate-spin" style={{ color: 'var(--color-primary-500)' }} />
+            )}
+            <span className="text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>
+              {weekRange || 'Yükleniyor...'}
+            </span>
+          </div>
         </div>
         <div className="flex items-end justify-between gap-1 h-24">
           {weeklyHours.map((day, idx) => {
