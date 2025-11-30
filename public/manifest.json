@@ -1,12 +1,13 @@
 {
   "name": "WorklogPro - Jira Worklog Manager",
   "short_name": "WorklogPro",
-  "description": "Jira worklog'larınızı kolayca yönetin",
+  "description": "Jira worklog'larınızı kolayca yönetin - Modern, hızlı ve kullanıcı dostu",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#1a73e8",
+  "background_color": "#f2f2f7",
+  "theme_color": "#007AFF",
   "orientation": "portrait-primary",
+  "scope": "/",
   "icons": [
     {
       "src": "/favicon.svg",
@@ -16,5 +17,22 @@
     }
   ],
   "categories": ["productivity", "business"],
-  "lang": "tr"
+  "lang": "tr",
+  "prefer_related_applications": false,
+  "shortcuts": [
+    {
+      "name": "Yeni Worklog",
+      "short_name": "Ekle",
+      "description": "Hızlıca yeni worklog ekle",
+      "url": "/?action=add",
+      "icons": [{ "src": "/favicon.svg", "sizes": "96x96" }]
+    },
+    {
+      "name": "Bugün",
+      "short_name": "Bugün",
+      "description": "Bugünün worklog'larını görüntüle",
+      "url": "/?date=today",
+      "icons": [{ "src": "/favicon.svg", "sizes": "96x96" }]
+    }
+  ]
 }

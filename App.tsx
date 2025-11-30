@@ -312,7 +312,119 @@ export default function App() {
     [notificationHistory]
   );
 
+  // Mobile States
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isPulling, setIsPulling] = useState(false);
+  const [pullProgress, setPullProgress] = useState(0);
+  const pullStartY = useRef(0);
+  const mainRef = useRef<HTMLElement>(null);
+
   // --- Effects ---
+
+  // Online/Offline detection
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Pull to refresh
+  useEffect(() => {
+    const main = mainRef.current;
+    if (!main) return;
+
+    let pulling = false;
+    
+    const handleTouchStart = (e: TouchEvent) => {
+      if (window.scrollY === 0 && e.touches.length === 1) {
+        pullStartY.current = e.touches[0].clientY;
+        pulling = true;
+      }
+    };
+    
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!pulling) return;
+      
+      const currentY = e.touches[0].clientY;
+      const diff = currentY - pullStartY.current;
+      
+      if (diff > 0 && window.scrollY === 0) {
+        const progress = Math.min(diff / 100, 1);
+        setPullProgress(progress);
+        setIsPulling(progress > 0.3);
+      }
+    };
+    
+    const handleTouchEnd = async () => {
+      if (isPulling && pullProgress >= 1) {
+        // Trigger refresh
+        await loadData(settings, true);
+        // Haptic feedback simulation
+        if ('vibrate' in navigator) {
+          navigator.vibrate(10);
+        }
+      }
+      setPullProgress(0);
+      setIsPulling(false);
+      pulling = false;
+    };
+    
+    main.addEventListener('touchstart', handleTouchStart, { passive: true });
+    main.addEventListener('touchmove', handleTouchMove, { passive: true });
+    main.addEventListener('touchend', handleTouchEnd);
+    
+    return () => {
+      main.removeEventListener('touchstart', handleTouchStart);
+      main.removeEventListener('touchmove', handleTouchMove);
+      main.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [isPulling, pullProgress, settings]);
+
+  // Swipe left/right for day change
+  useEffect(() => {
+    let touchStartX = 0;
+    let touchEndX = 0;
+    
+    const handleTouchStart = (e: TouchEvent) => {
+      touchStartX = e.touches[0].clientX;
+    };
+    
+    const handleTouchEnd = (e: TouchEvent) => {
+      touchEndX = e.changedTouches[0].clientX;
+      const diff = touchStartX - touchEndX;
+      const threshold = 100; // minimum swipe distance
+      
+      // Only trigger on significant horizontal swipe
+      if (Math.abs(diff) > threshold) {
+        if (diff > 0) {
+          // Swipe left -> next day
+          changeDate(1);
+        } else {
+          // Swipe right -> previous day
+          changeDate(-1);
+        }
+        // Haptic feedback
+        if ('vibrate' in navigator) {
+          navigator.vibrate(5);
+        }
+      }
+    };
+    
+    document.addEventListener('touchstart', handleTouchStart, { passive: true });
+    document.addEventListener('touchend', handleTouchEnd, { passive: true });
+    
+    return () => {
+      document.removeEventListener('touchstart', handleTouchStart);
+      document.removeEventListener('touchend', handleTouchEnd);
+    };
+  }, [selectedDate]);
 
   useEffect(() => {
     if (settings.isDarkTheme) document.documentElement.classList.add('dark');
@@ -1730,7 +1842,24 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
   };
 
   return (
-    <main className="min-h-screen py-6 px-4 md:py-10 md:px-6 animate-fade-in">
+    <main ref={mainRef} className="min-h-screen py-6 px-4 md:py-10 md:px-6 animate-fade-in">
+      
+      {/* Pull to Refresh Indicator */}
+      <div 
+        className={`pull-indicator ${isPulling ? 'visible' : ''} ${loadingState === LoadingState.LOADING ? 'refreshing' : ''}`}
+        style={{ transform: `translateX(-50%) translateY(${pullProgress * 60 - 60}px)` }}
+      >
+        <RefreshCw size={16} className="pull-icon" />
+        {loadingState === LoadingState.LOADING ? 'Yenileniyor...' : 'Yenilemek için bırak'}
+      </div>
+      
+      {/* Offline Indicator */}
+      {!isOnline && (
+        <div className="offline-indicator">
+          <span className="offline-dot" />
+          Çevrimdışı
+        </div>
+      )}
       
       {/* Confetti Effect */}
       <ConfettiEffect />
@@ -2480,8 +2609,8 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
         </div>
       )}
 
-      {/* Toast Notifications - Material Design Style */}
-      <div className="fixed bottom-6 right-6 flex flex-col gap-3 z-50 pointer-events-none" role="alert" aria-live="polite">
+      {/* Toast Notifications - Mobile-friendly positioning */}
+      <div className="fixed bottom-24 lg:bottom-6 right-4 lg:right-6 flex flex-col gap-3 z-50 pointer-events-none max-w-[calc(100vw-2rem)]" role="alert" aria-live="polite">
           {notifications.map((n, index) => (
               <div 
                   key={n.id} 
@@ -2512,31 +2641,57 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
       {/* Mobile Bottom Navigation - Apple Tab Bar Style */}
       <nav className="bottom-nav">
         <button 
-          onClick={() => setSelectedDate(new Date().toISOString().split('T')[0])}
-          className={`bottom-nav-item ${selectedDate === new Date().toISOString().split('T')[0] ? 'active' : ''}`}
+          onClick={() => setSelectedDate(toLocalDateStr(new Date()))}
+          className={`bottom-nav-item haptic-feedback ${selectedDate === toLocalDateStr(new Date()) ? 'active' : ''}`}
         >
           <CalendarIcon size={22} strokeWidth={1.5} />
           <span>Bugün</span>
         </button>
         <button 
-          onClick={() => setIsAddWorklogOpen(true)}
-          className="bottom-nav-item"
+          onClick={() => {
+            if ('vibrate' in navigator) navigator.vibrate(5);
+            setIsHistoryOpen(true);
+          }}
+          className="bottom-nav-item haptic-feedback"
+        >
+          <History size={22} strokeWidth={1.5} />
+          <span>Geçmiş</span>
+        </button>
+        <button 
+          onClick={() => {
+            if ('vibrate' in navigator) navigator.vibrate(5);
+            setIsAddWorklogOpen(true);
+          }}
+          className="bottom-nav-item haptic-feedback"
           style={{ 
             background: 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)', 
             color: 'white',
             borderRadius: 'var(--radius-full)',
-            padding: '0.75rem 1.25rem',
+            padding: '0.5rem 1rem',
             boxShadow: '0 4px 12px rgba(0, 122, 255, 0.3)'
           }}
         >
-          <Plus size={22} strokeWidth={2} />
+          <Plus size={22} strokeWidth={2.5} />
         </button>
         <button 
-          onClick={() => setIsHistoryOpen(true)}
-          className="bottom-nav-item"
+          onClick={() => {
+            if ('vibrate' in navigator) navigator.vibrate(5);
+            loadData(settings, true);
+          }}
+          className={`bottom-nav-item haptic-feedback ${loadingState === LoadingState.LOADING ? 'active' : ''}`}
         >
-          <History size={22} strokeWidth={1.5} />
-          <span>Geçmiş</span>
+          <RefreshCw size={22} strokeWidth={1.5} className={loadingState === LoadingState.LOADING ? 'animate-spin' : ''} />
+          <span>Yenile</span>
+        </button>
+        <button 
+          onClick={() => {
+            if ('vibrate' in navigator) navigator.vibrate(5);
+            setIsSettingsOpen(true);
+          }}
+          className="bottom-nav-item haptic-feedback"
+        >
+          <Settings size={22} strokeWidth={1.5} />
+          <span>Ayarlar</span>
         </button>
       </nav>
 

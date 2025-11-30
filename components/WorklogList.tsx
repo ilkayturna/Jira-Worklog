@@ -1,10 +1,11 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Worklog, LoadingState, WorklogHistoryEntry } from '../types';
-import { Clock, Edit3, Wand2, SpellCheck, Check, X, ExternalLink, Undo2, Redo2 } from 'lucide-react';
+import { Clock, Edit3, Wand2, SpellCheck, Check, X, ExternalLink, Undo2, Redo2, Trash2, Sparkles } from 'lucide-react';
 import { parseSmartTimeInput } from '../utils/adf';
 
 const MAX_HISTORY_SIZE = 20;
+const SWIPE_THRESHOLD = 80; // pixels to trigger action
 
 interface Props {
   worklogs: Worklog[];
@@ -15,6 +16,7 @@ interface Props {
   jiraBaseUrl: string;
   worklogHistories: Map<string, { entries: WorklogHistoryEntry[]; index: number }>;
   onHistoryChange: (id: string, entries: WorklogHistoryEntry[], index: number) => void;
+  onDelete?: (id: string) => Promise<void>;
 }
 
 const getHourIndicator = (hours: number) => {
@@ -33,12 +35,20 @@ const WorklogRow: React.FC<{
     jiraBaseUrl: string;
     history: { entries: WorklogHistoryEntry[]; index: number } | undefined;
     onHistoryChange: (entries: WorklogHistoryEntry[], index: number) => void;
-}> = ({ wl, index, onUpdate, onImprove, onSpellCheck, jiraBaseUrl, history, onHistoryChange }) => {
+    onDelete?: (id: string) => Promise<void>;
+}> = ({ wl, index, onUpdate, onImprove, onSpellCheck, jiraBaseUrl, history, onHistoryChange, onDelete }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [editComment, setEditComment] = useState(wl.comment);
     const [isProcessing, setIsProcessing] = useState(false);
     const [timeStr, setTimeStr] = useState(wl.hours.toFixed(2));
     const [isTimeEditing, setIsTimeEditing] = useState(false);
+    
+    // Swipe state
+    const [swipeOffset, setSwipeOffset] = useState(0);
+    const [isSwiping, setIsSwiping] = useState(false);
+    const touchStartX = useRef(0);
+    const touchStartY = useRef(0);
+    const cardRef = useRef<HTMLElement>(null);
 
     const hourInfo = getHourIndicator(wl.hours);
     
@@ -47,6 +57,64 @@ const WorklogRow: React.FC<{
     const historyIndex = history?.index ?? -1;
     const canUndo = entries.length > 0 && historyIndex < entries.length - 1;
     const canRedo = historyIndex > -1;
+    
+    // Swipe handlers
+    const handleTouchStart = (e: React.TouchEvent) => {
+      if (isEditing || isTimeEditing) return;
+      touchStartX.current = e.touches[0].clientX;
+      touchStartY.current = e.touches[0].clientY;
+      setIsSwiping(true);
+    };
+    
+    const handleTouchMove = (e: React.TouchEvent) => {
+      if (!isSwiping || isEditing || isTimeEditing) return;
+      
+      const currentX = e.touches[0].clientX;
+      const currentY = e.touches[0].clientY;
+      const diffX = currentX - touchStartX.current;
+      const diffY = currentY - touchStartY.current;
+      
+      // If vertical scroll is more prominent, don't swipe
+      if (Math.abs(diffY) > Math.abs(diffX)) {
+        setIsSwiping(false);
+        return;
+      }
+      
+      // Limit swipe range and add resistance at edges
+      const maxSwipe = 150;
+      const resistance = 0.5;
+      let offset = diffX;
+      
+      if (Math.abs(offset) > maxSwipe) {
+        offset = offset > 0 
+          ? maxSwipe + (offset - maxSwipe) * resistance
+          : -maxSwipe + (offset + maxSwipe) * resistance;
+      }
+      
+      setSwipeOffset(offset);
+    };
+    
+    const handleTouchEnd = async () => {
+      if (!isSwiping) return;
+      
+      setIsSwiping(false);
+      
+      // Check if swipe threshold reached
+      if (swipeOffset < -SWIPE_THRESHOLD) {
+        // Swipe left - Edit
+        setIsEditing(true);
+        // Haptic feedback
+        if ('vibrate' in navigator) navigator.vibrate(10);
+      } else if (swipeOffset > SWIPE_THRESHOLD) {
+        // Swipe right - Improve with AI
+        handleImprove();
+        // Haptic feedback
+        if ('vibrate' in navigator) navigator.vibrate(10);
+      }
+      
+      // Reset swipe
+      setSwipeOffset(0);
+    };
 
     useEffect(() => {
         if (!isEditing) setEditComment(wl.comment);
@@ -166,15 +234,60 @@ const WorklogRow: React.FC<{
 
     return (
         <article 
-            className={`group relative surface-card p-4 md:p-5 transition-all duration-200 ${isProcessing ? 'opacity-60' : ''}`}
+            ref={cardRef}
+            className={`group relative overflow-hidden transition-all duration-200 ${isProcessing ? 'opacity-60' : ''}`}
             style={{ animationDelay: `${index * 50}ms` }}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
         >
-            {/* Processing Overlay */}
-            {isProcessing && (
-                <div className="absolute inset-0 flex items-center justify-center z-10 rounded-2xl" style={{ backgroundColor: 'var(--color-surface)', opacity: 0.8 }}>
-                    <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: 'var(--color-primary-500)', borderTopColor: 'transparent' }} />
+            {/* Swipe Actions Background */}
+            <div className="absolute inset-0 flex">
+                {/* Left side - AI Improve (swipe right reveals) */}
+                <div 
+                    className="flex items-center justify-start pl-4 flex-1"
+                    style={{ 
+                        background: 'linear-gradient(135deg, #8b5cf6, #6366f1)',
+                        opacity: swipeOffset > 0 ? Math.min(swipeOffset / SWIPE_THRESHOLD, 1) : 0,
+                        transition: isSwiping ? 'none' : 'opacity 0.2s'
+                    }}
+                >
+                    <div className="flex flex-col items-center text-white">
+                        <Sparkles size={20} />
+                        <span className="text-xs font-medium mt-1">AI</span>
+                    </div>
                 </div>
-            )}
+                
+                {/* Right side - Edit (swipe left reveals) */}
+                <div 
+                    className="flex items-center justify-end pr-4 flex-1"
+                    style={{ 
+                        background: 'linear-gradient(135deg, #007AFF, #5856D6)',
+                        opacity: swipeOffset < 0 ? Math.min(Math.abs(swipeOffset) / SWIPE_THRESHOLD, 1) : 0,
+                        transition: isSwiping ? 'none' : 'opacity 0.2s'
+                    }}
+                >
+                    <div className="flex flex-col items-center text-white">
+                        <Edit3 size={20} />
+                        <span className="text-xs font-medium mt-1">Düzenle</span>
+                    </div>
+                </div>
+            </div>
+            
+            {/* Card Content - moves with swipe */}
+            <div 
+                className="surface-card p-4 md:p-5 relative"
+                style={{ 
+                    transform: `translateX(${swipeOffset}px)`,
+                    transition: isSwiping ? 'none' : 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+                }}
+            >
+                {/* Processing Overlay */}
+                {isProcessing && (
+                    <div className="absolute inset-0 flex items-center justify-center z-10 rounded-2xl" style={{ backgroundColor: 'var(--color-surface)', opacity: 0.8 }}>
+                        <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: 'var(--color-primary-500)', borderTopColor: 'transparent' }} />
+                    </div>
+                )}
             
             {/* Header Row */}
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 sm:gap-4 mb-4">
@@ -355,6 +468,12 @@ const WorklogRow: React.FC<{
                     </button>
                 </div>
             </div>
+            
+            {/* Mobile swipe hint */}
+            <div className="md:hidden text-center py-2 text-xs" style={{ color: 'var(--color-on-surface-variant)', opacity: 0.5 }}>
+                ← Düzenle • AI →
+            </div>
+            </div>{/* End of swipe content div */}
         </article>
     );
 };
