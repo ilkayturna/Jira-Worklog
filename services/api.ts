@@ -51,8 +51,9 @@ export const fetchWorklogs = async (date: string, settings: AppSettings): Promis
 
   const jql = `worklogDate = "${date}" AND worklogAuthor = currentUser()`;
   
-  // POST metodu (v3 API) - 410 Gone hatasını engeller
-  const targetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/search`;
+  // POST metodu ile yeni /search/jql endpoint'i kullan (eski /search endpoint'i 410 Gone döner)
+  // Bkz: https://developer.atlassian.com/changelog/#CHANGE-2046
+  const targetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/search/jql`;
   
   let response;
   try {
@@ -63,8 +64,7 @@ export const fetchWorklogs = async (date: string, settings: AppSettings): Promis
       }, {
           jql: jql,
           fields: ['worklog', 'key', 'summary'],
-          maxResults: 100,
-          validateQuery: false
+          maxResults: 100
       });
   } catch (error) {
       throw new Error("Ağ Hatası: Proxy sunucusuna erişilemiyor.");
