@@ -1085,6 +1085,26 @@ status: devam/test/tamamlandı/beklemede`;
     }
   };
 
+  // Delete worklog
+  const handleDeleteWorklog = async (id: string) => {
+    const wl = worklogs.find(w => w.id === id);
+    if (!wl) return;
+    
+    try {
+      await deleteWorklog(wl.issueKey, id, settings);
+      
+      // Remove from local state
+      setWorklogs(prev => prev.filter(w => w.id !== id));
+      
+      // Invalidate cache
+      invalidateCache(selectedDate);
+      
+      notify('Silindi', `${wl.issueKey} worklog'u başarıyla silindi`, 'success');
+    } catch (e: any) {
+      notify('Silme Başarısız', e.message, 'error');
+    }
+  };
+
   // Clean AI output - remove quotes and unwanted formatting
   const cleanAIOutput = (text: string): string => {
     let cleaned = text.trim();
@@ -2258,6 +2278,7 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
                         jiraBaseUrl={settings.jiraUrl}
                         worklogHistories={worklogHistories}
                         onHistoryChange={handleWorklogHistoryChange}
+                        onDelete={handleDeleteWorklog}
                     />
                 </div>
             </section>

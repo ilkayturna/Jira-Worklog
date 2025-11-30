@@ -235,14 +235,14 @@ const WorklogRow: React.FC<{
     return (
         <article 
             ref={cardRef}
-            className={`group relative overflow-hidden transition-all duration-200 ${isProcessing ? 'opacity-60' : ''}`}
+            className={`group relative overflow-hidden transition-all duration-200 rounded-2xl shadow-sm ${isProcessing ? 'opacity-60' : ''}`}
             style={{ animationDelay: `${index * 50}ms` }}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
         >
             {/* Swipe Actions Background */}
-            <div className="absolute inset-0 flex">
+            <div className="absolute inset-0 flex rounded-2xl overflow-hidden">
                 {/* Left side - AI Improve (swipe right reveals) */}
                 <div 
                     className="flex items-center justify-start pl-4 flex-1"
@@ -466,6 +466,26 @@ const WorklogRow: React.FC<{
                     >
                         <SpellCheck size={14} /> İmla Düzelt
                     </button>
+                    
+                    {/* Delete Button */}
+                    {onDelete && (
+                        <button 
+                            onClick={() => {
+                                if (window.confirm(`"${wl.issueKey}" worklog'unu silmek istediğinize emin misiniz?`)) {
+                                    setIsProcessing(true);
+                                    onDelete(wl.id).finally(() => setIsProcessing(false));
+                                }
+                            }}
+                            className="btn-tonal text-xs px-3 py-2"
+                            style={{ 
+                                backgroundColor: 'rgba(239, 68, 68, 0.1)', 
+                                color: '#ef4444' 
+                            }}
+                            title="Worklog'u sil"
+                        >
+                            <Trash2 size={14} /> Sil
+                        </button>
+                    )}
                 </div>
             </div>
             
@@ -486,7 +506,8 @@ export const WorklogList: React.FC<Props> = ({
     onSpellCheck, 
     jiraBaseUrl,
     worklogHistories,
-    onHistoryChange
+    onHistoryChange,
+    onDelete
 }) => {
     if (loading === LoadingState.LOADING) {
         return (
@@ -524,7 +545,7 @@ export const WorklogList: React.FC<Props> = ({
     }
 
     return (
-        <div className="space-y-4 stagger-animation">
+        <div className="flex flex-col gap-4 stagger-animation">
             {worklogs.map((wl, index) => (
                 <WorklogRow 
                     key={wl.id} 
@@ -536,6 +557,7 @@ export const WorklogList: React.FC<Props> = ({
                     jiraBaseUrl={jiraBaseUrl}
                     history={worklogHistories.get(wl.id)}
                     onHistoryChange={(entries, idx) => onHistoryChange(wl.id, entries, idx)}
+                    onDelete={onDelete}
                 />
             ))}
         </div>
