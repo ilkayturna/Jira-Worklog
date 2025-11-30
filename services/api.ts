@@ -49,11 +49,13 @@ export const fetchWorklogs = async (date: string, settings: AppSettings): Promis
     throw new Error("Jira Bilgileri Eksik: Ayarları kontrol edin.");
   }
 
-  const jql = `worklogDate = "${date}" AND worklogAuthor = currentUser()`;
+  // Önce sadece worklogDate ile dene, sonra client-side filtrele
+  const jql = `worklogDate = "${date}"`;
   
   // DEBUG: JQL sorgusunu konsola yazdır
   console.log('JQL Sorgusu:', jql);
   console.log('Seçili Tarih:', date);
+  console.log('Kullanıcı Email:', settings.jiraEmail);
   
   // POST metodu ile yeni /search/jql endpoint'i kullan (eski /search endpoint'i 410 Gone döner)
   // Bkz: https://developer.atlassian.com/changelog/#CHANGE-2046
