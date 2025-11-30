@@ -345,6 +345,73 @@ export default function App() {
     
     const DAYS_ARRAY = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma'];
     
+    // Smart description generator based on work type keywords
+    const generateSmartDescription = (summary: string, comments: string[]): string => {
+        const lowerSummary = summary.toLowerCase();
+        const lowerComments = comments.join(' ').toLowerCase();
+        const combined = lowerSummary + ' ' + lowerComments;
+        
+        // E-fatura / E-dönüşüm işleri
+        if (combined.includes('e-fatura') || combined.includes('efatura') || combined.includes('e-dönüşüm') || combined.includes('edönüşüm')) {
+            if (combined.includes('kurulum') || combined.includes('uyarlama')) {
+                return 'Kurulum aşamalarına devam edilecek, test ortamı kontrol edilecek';
+            }
+            if (combined.includes('revize') || combined.includes('düzeltme')) {
+                return 'Revizyonlar tamamlanacak, ADD\'ye güncel versiyon iletilecek';
+            }
+            return 'Test edilecek, sorun yoksa ADD onayına sunulacak';
+        }
+        
+        // Rapor işleri
+        if (combined.includes('rapor') || combined.includes('report')) {
+            if (combined.includes('tasarım') || combined.includes('hazırlama') || combined.includes('hazırlanması')) {
+                return 'Tasarım tamamlandı, müşteri onayı bekleniyor';
+            }
+            return 'Rapor kontrol edilecek, revize talebi varsa güncellenecek';
+        }
+        
+        // KDV işleri
+        if (combined.includes('kdv')) {
+            return 'KDV raporu hazırlandı, müşteriden geri dönüş bekleniyor';
+        }
+        
+        // Kurulum / Eğitim işleri
+        if (combined.includes('kurulum') || combined.includes('setup') || combined.includes('installation')) {
+            return 'Kurulum devam edecek, müşteri ile test yapılacak';
+        }
+        if (combined.includes('eğitim') || combined.includes('training')) {
+            return 'Kullanıcı eğitimi planlanacak';
+        }
+        
+        // Bug / Hata işleri
+        if (combined.includes('bug') || combined.includes('hata') || combined.includes('fix') || combined.includes('düzeltme')) {
+            return 'Düzeltme yapıldı, QA testine gönderilecek';
+        }
+        
+        // Test işleri
+        if (combined.includes('test') || combined.includes('qa')) {
+            return 'Test senaryoları çalıştırılacak, sonuçlar raporlanacak';
+        }
+        
+        // Geliştirme işleri
+        if (combined.includes('geliştirme') || combined.includes('development') || combined.includes('özellik') || combined.includes('feature')) {
+            return 'Geliştirme devam edecek, code review yapılacak';
+        }
+        
+        // Entegrasyon işleri
+        if (combined.includes('entegrasyon') || combined.includes('integration') || combined.includes('api')) {
+            return 'Entegrasyon testleri yapılacak, log kontrolleri';
+        }
+        
+        // Web işleri
+        if (combined.includes('web') || combined.includes('portal') || combined.includes('sayfa')) {
+            return 'Web geliştirme devam edecek, test ortamında kontrol edilecek';
+        }
+        
+        // Default - daha akıllı
+        return 'İlgili çalışmalara devam edilecek, durum güncellenecek';
+    };
+    
     // Group worklogs by issue and calculate importance
     const issueMap = new Map<string, { worklog: Worklog; lastDay: Date; totalHours: number; comments: string[] }>();
     
@@ -381,22 +448,37 @@ export default function App() {
         return [];
     }
     
-    // Build simple issue list for prompt
-    const issueList = sortedIssues.map((data, idx) => 
-        `${data.issueKey}: ${data.worklog.summary} (${data.totalHours.toFixed(1)}h)`
-    ).join('\n');
+    // Build detailed issue list for prompt with comments for context
+    const issueList = sortedIssues.map((data, idx) => {
+        const comments = data.comments.slice(0, 3).join(' | ');
+        return `${data.issueKey}: ${data.worklog.summary} (${data.totalHours.toFixed(1)}h geçen hafta)${comments ? ` [Notlar: ${comments}]` : ''}`;
+    }).join('\n');
     
-    // Simpler, more direct prompt
-    const prompt = `Aşağıdaki Jira işleri için haftalık plan oluştur. Her iş için hangi gün yapılacağını ve ne yapılacağını belirt.
+    // Smart prompt that understands work context and predicts next steps
+    const prompt = `Sen bir yazılım ekibinin haftalık planını hazırlayan asistansın. Geçen hafta yapılan işlere bakarak bu hafta ne yapılacağını TAHMİN et.
 
-İŞLER:
+KURAL: Açıklamalar gerçekçi ve spesifik olmalı. "Devam edilecek" gibi genel ifadeler KULLANMA!
+
+ÖRNEK AÇIKLAMALAR:
+- Rapor/tasarım işi → "Müşteriye iletildi, geri dönüş bekleniyor" veya "Revize taleplerine göre güncellenecek"
+- E-fatura/e-dönüşüm işi → "Test ortamında kontrol edilecek, ADD'ye iletilecek"
+- Kurulum/uyarlama işi → "Müşteri sistemine kurulum yapılacak" veya "Eğitim verilecek"
+- Bug/hata düzeltme → "QA testinden geçirilecek" veya "Canlıya alınacak"
+- Geliştirme işi → "Kod review yapılacak" veya "Unit testler yazılacak"
+
+GEÇEN HAFTA YAPILAN İŞLER:
 ${issueList}
 
-Her iş için JSON formatında yanıt ver. Sadece JSON array döndür, başka bir şey yazma:
-[{"issueKey":"ISSUE-1","day":"Pazartesi","status":"devam","description":"yapılacak iş"},{"issueKey":"ISSUE-2","day":"Salı","status":"test","description":"yapılacak iş"}]
+Her iş için SADECE JSON array döndür, başka açıklama yazma:
+[{"issueKey":"XXX-123","day":"Pazartesi","status":"devam","description":"Müşteriye iletildi, revizyonlar için geri dönüş bekleniyor"}]
 
 day: Pazartesi/Salı/Çarşamba/Perşembe/Cuma
-status: devam/test/tamamlandı`;
+status: devam/test/tamamlandı/beklemede
+
+Açıklamalarda:
+- Müşteri adı varsa kullan (örn: "BLF Optik için kurulum devam edecek")
+- İşin türüne göre mantıklı sonraki adım yaz
+- Kısa ve öz tut (max 60 karakter)`;
 
     try {
         console.log('AI Prompt:', prompt);
@@ -428,21 +510,22 @@ status: devam/test/tamamlandı`;
             }
         }
         
-        // If AI failed, create smart fallback based on sorting
+        // If AI failed, create smart fallback based on work type analysis
         if (!jsonData || !Array.isArray(jsonData) || jsonData.length === 0) {
             console.log('AI JSON parsing failed, using smart fallback');
             
-            // Create fallback plan - distribute by importance
+            // Create fallback plan with smart descriptions
             const fallbackItems: WeeklyReportItem[] = sortedIssues.slice(0, 5).map((issue, idx) => {
                 const day = DAYS_ARRAY[Math.min(idx, 4)] as any;
                 const statusGuess = issue.totalHours > 4 ? 'devam' : issue.totalHours > 2 ? 'test' : 'tamamlandı';
+                const smartDesc = generateSmartDescription(issue.worklog.summary, issue.comments);
                 
                 return {
                     issueKey: issue.issueKey,
                     summary: issue.worklog.summary,
                     status: statusGuess,
                     day: day,
-                    description: `${issue.worklog.summary} - devam edilecek`,
+                    description: smartDesc,
                     hours: issue.totalHours
                 };
             });
@@ -471,13 +554,13 @@ status: devam/test/tamamlandı`;
     } catch (e: any) {
         console.error('AI weekly report generation failed:', e);
         
-        // Even on error, provide fallback
+        // Even on error, provide smart fallback
         const fallbackItems: WeeklyReportItem[] = sortedIssues.slice(0, 5).map((issue, idx) => ({
             issueKey: issue.issueKey,
             summary: issue.worklog.summary,
             status: 'devam' as const,
             day: DAYS_ARRAY[Math.min(idx, 4)] as any,
-            description: `${issue.worklog.summary} - devam edilecek`,
+            description: generateSmartDescription(issue.worklog.summary, issue.comments),
             hours: issue.totalHours
         }));
         
