@@ -1177,6 +1177,59 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
                             <ChevronRight size={20}/>
                         </button>
                     </div>
+                    
+                    {/* Week Days Quick Navigation */}
+                    <div className="mt-4 pt-4 border-t" style={{ borderColor: 'var(--color-border)' }}>
+                        <div className="flex gap-1">
+                            {(() => {
+                                const selected = new Date(selectedDate);
+                                const dayOfWeek = selected.getDay();
+                                const monday = new Date(selected);
+                                monday.setDate(selected.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+                                
+                                const days = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
+                                const weekDays = [];
+                                
+                                for (let i = 0; i < 7; i++) {
+                                    const day = new Date(monday);
+                                    day.setDate(monday.getDate() + i);
+                                    const dateStr = day.toISOString().split('T')[0];
+                                    const isSelected = dateStr === selectedDate;
+                                    const isToday = dateStr === new Date().toISOString().split('T')[0];
+                                    const isWeekend = i >= 5;
+                                    
+                                    weekDays.push(
+                                        <button
+                                            key={dateStr}
+                                            onClick={() => setSelectedDate(dateStr)}
+                                            className={`flex-1 py-2 px-1 rounded-lg text-center transition-all ${isSelected ? 'scale-105' : 'hover:scale-102'}`}
+                                            style={{
+                                                backgroundColor: isSelected 
+                                                    ? 'var(--color-primary-600)' 
+                                                    : isToday 
+                                                        ? 'var(--color-primary-100)' 
+                                                        : 'transparent',
+                                                color: isSelected 
+                                                    ? 'white' 
+                                                    : isWeekend 
+                                                        ? 'var(--color-text-tertiary)' 
+                                                        : 'var(--color-text-primary)',
+                                                fontWeight: isSelected || isToday ? 600 : 400
+                                            }}
+                                        >
+                                            <div className="text-xs opacity-70">{days[i]}</div>
+                                            <div className="text-sm font-medium">{day.getDate()}</div>
+                                            {isToday && !isSelected && (
+                                                <div className="w-1 h-1 rounded-full mx-auto mt-0.5" style={{ backgroundColor: 'var(--color-primary-600)' }} />
+                                            )}
+                                        </button>
+                                    );
+                                }
+                                
+                                return weekDays;
+                            })()}
+                        </div>
+                    </div>
                 </section>
 
                 {/* Daily Progress Card - Premium Feel */}
