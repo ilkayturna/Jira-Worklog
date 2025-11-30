@@ -555,19 +555,21 @@ ${wl.comment}
             data: allUndoData
         };
         
-        // Add individual notifications with diff for each change
+        // Add individual entries to history (without toast) for each change
         for (const preview of textChangePreview) {
             const actionName = preview.mode === 'IMPROVE' ? 'İyileştirildi' : 'İmla Düzeltildi';
-            notify(
-                actionName,
-                `${preview.issueKey} worklog metni güncellendi`,
-                'success',
-                undefined, // No individual undo - will use batch
-                { before: preview.before, after: preview.after, issueKey: preview.issueKey }
-            );
+            const historyEntry: NotificationHistoryItem = {
+                id: `${Date.now()}-${preview.worklogId}`,
+                title: actionName,
+                message: `${preview.issueKey} worklog metni güncellendi`,
+                type: 'success',
+                timestamp: Date.now(),
+                diff: { before: preview.before, after: preview.after, issueKey: preview.issueKey }
+            };
+            setNotificationHistory(prev => [historyEntry, ...prev].slice(0, 100));
         }
         
-        // Final notification with batch undo
+        // Final notification with toast + batch undo
         const modeLabel = textChangeMode === 'IMPROVE' ? 'İyileştirme' : 'İmla Düzeltme';
         notify(
             'Toplu İşlem Tamamlandı', 
@@ -1289,6 +1291,7 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
                         onUpdate={handleUpdateWorklog}
                         onImprove={(id) => handleAIAction(id, 'IMPROVE')}
                         onSpellCheck={(id) => handleAIAction(id, 'SPELL')}
+                        jiraBaseUrl={settings.jiraUrl}
                     />
                 </div>
             </section>

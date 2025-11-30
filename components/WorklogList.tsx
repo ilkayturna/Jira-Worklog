@@ -10,6 +10,7 @@ interface Props {
   onUpdate: (id: string, comment?: string, hours?: number) => Promise<void>;
   onImprove: (id: string) => Promise<void>;
   onSpellCheck: (id: string) => Promise<void>;
+  jiraBaseUrl: string;
 }
 
 const getHourIndicator = (hours: number) => {
@@ -25,7 +26,8 @@ const WorklogRow: React.FC<{
     onUpdate: (id: string, comment?: string, hours?: number) => Promise<void>;
     onImprove: (id: string) => Promise<void>;
     onSpellCheck: (id: string) => Promise<void>;
-}> = ({ wl, index, onUpdate, onImprove, onSpellCheck }) => {
+    jiraBaseUrl: string;
+}> = ({ wl, index, onUpdate, onImprove, onSpellCheck, jiraBaseUrl }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [editComment, setEditComment] = useState(wl.comment);
     const [isProcessing, setIsProcessing] = useState(false);
@@ -91,10 +93,11 @@ const WorklogRow: React.FC<{
                 <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-3 flex-wrap">
                         <a 
-                            href={`#${wl.issueKey}`}
+                            href={`${jiraBaseUrl}/browse/${wl.issueKey}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
                             className="inline-flex items-center gap-1.5 font-semibold text-sm hover:underline"
                             style={{ color: 'var(--color-primary-600)' }}
-                            onClick={(e) => e.preventDefault()}
                         >
                             {wl.issueKey}
                             <ExternalLink size={12} className="opacity-50" />
@@ -236,7 +239,7 @@ const WorklogRow: React.FC<{
     );
 };
 
-export const WorklogList: React.FC<Props> = ({ worklogs, loading, onUpdate, onImprove, onSpellCheck }) => {
+export const WorklogList: React.FC<Props> = ({ worklogs, loading, onUpdate, onImprove, onSpellCheck, jiraBaseUrl }) => {
     if (loading === LoadingState.LOADING) {
         return (
             <div className="space-y-4 stagger-animation">
@@ -282,6 +285,7 @@ export const WorklogList: React.FC<Props> = ({ worklogs, loading, onUpdate, onIm
                     onUpdate={onUpdate}
                     onImprove={onImprove}
                     onSpellCheck={onSpellCheck}
+                    jiraBaseUrl={jiraBaseUrl}
                 />
             ))}
         </div>
