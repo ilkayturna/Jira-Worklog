@@ -704,20 +704,26 @@ status: devam/test/tamamlandı/beklemede`;
     try {
         let prompt = '';
         if (mode === 'IMPROVE') {
-            prompt = `Worklog notunu düzenle. SADECE mevcut metindeki bilgileri kullan.
+            prompt = `Sen tecrübeli bir yazılım danışmanısın. Aşağıdaki kısa worklog notunu, bir insanın yazacağı gibi doğal ve profesyonel bir şekilde genişlet.
 
-Mevcut not: "${wl.comment}"
+Talep başlığı: ${wl.summary}
+Mevcut not: ${wl.comment}
 
-MUTLAK KURALLAR:
-1. SADECE mevcut notta yazanları kullan - HİÇBİR ŞEY UYDURMA
-2. Metinde SQL, sorgu, test, kontrol gibi kelimeler YOKSA bunları EKLEME
-3. Cümleleri daha akıcı hale getir, gereksiz tekrarları kaldır
-4. Maksimum 150 karakter
-5. Klişe ifadeler YASAK: "gerçekleştirildi", "sağlandı", "optimize edildi", "tamamlandı"
-6. Doğal Türkçe kullan
-7. Tırnak işareti KOYMA
+YAZIM REHBERİ:
+- Mevcut notu temel al ve bağlamından kopmadan genişlet
+- Talep başlığındaki konuyu kullanarak ne yapıldığını açıkla
+- 2-3 cümle yaz (120-200 karakter)
+- Doğal Türkçe kullan, bir çalışanın günlük raporu gibi yaz
+- Somut fiiller kullan: incelendi, düzeltildi, kontrol edildi, eklendi, güncellendi
+- Metinde geçen teknik terimleri koru
 
-Düzenlenmiş not:`;
+YASAK:
+- "Gerçekleştirildi", "sağlandı", "optimize edildi" gibi klişeler
+- Metinde olmayan özel isimler veya teknik detaylar uydurma (SQL, API, modül adı vb.)
+- Tırnak işareti, madde işareti, emoji
+- "Bu kapsamda", "Bu çalışmada" gibi kalıp girişler
+
+İyileştirilmiş not:`;
         } else {
             prompt = `SADECE yazım hatalarını ve noktalama işaretlerini düzelt. Başka HİÇBİR ŞEY yapma.
 
@@ -811,20 +817,26 @@ ${wl.comment}
         for (const wl of worklogsWithComments) {
             let prompt = '';
             if (mode === 'IMPROVE') {
-                prompt = `Worklog notunu düzenle. SADECE mevcut metindeki bilgileri kullan.
+                prompt = `Sen tecrübeli bir yazılım danışmanısın. Aşağıdaki kısa worklog notunu, bir insanın yazacağı gibi doğal ve profesyonel bir şekilde genişlet.
 
-Mevcut not: "${wl.comment}"
+Talep başlığı: ${wl.summary}
+Mevcut not: ${wl.comment}
 
-MUTLAK KURALLAR:
-1. SADECE mevcut notta yazanları kullan - HİÇBİR ŞEY UYDURMA
-2. Metinde SQL, sorgu, test, kontrol gibi kelimeler YOKSA bunları EKLEME
-3. Cümleleri daha akıcı hale getir, gereksiz tekrarları kaldır
-4. Maksimum 150 karakter
-5. Klişe ifadeler YASAK: "gerçekleştirildi", "sağlandı", "optimize edildi", "tamamlandı"
-6. Doğal Türkçe kullan
-7. Tırnak işareti KOYMA
+YAZIM REHBERİ:
+- Mevcut notu temel al ve bağlamından kopmadan genişlet
+- Talep başlığındaki konuyu kullanarak ne yapıldığını açıkla
+- 2-3 cümle yaz (120-200 karakter)
+- Doğal Türkçe kullan, bir çalışanın günlük raporu gibi yaz
+- Somut fiiller kullan: incelendi, düzeltildi, kontrol edildi, eklendi, güncellendi
+- Metinde geçen teknik terimleri koru
 
-Düzenlenmiş not:`;
+YASAK:
+- "Gerçekleştirildi", "sağlandı", "optimize edildi" gibi klişeler
+- Metinde olmayan özel isimler veya teknik detaylar uydurma (SQL, API, modül adı vb.)
+- Tırnak işareti, madde işareti, emoji
+- "Bu kapsamda", "Bu çalışmada" gibi kalıp girişler
+
+İyileştirilmiş not:`;
             } else {
                 prompt = `SADECE yazım hatalarını ve noktalama işaretlerini düzelt. Başka HİÇBİR ŞEY yapma.
 
