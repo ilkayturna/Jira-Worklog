@@ -1,5 +1,5 @@
-import React from 'react';
-import { X, Bell, Undo2, CheckCircle2, AlertCircle, Info, Clock, Trash2, ChevronRight } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Bell, Undo2, CheckCircle2, AlertCircle, Info, Clock, Trash2, ChevronRight, ChevronDown, GitCompare } from 'lucide-react';
 import { NotificationHistoryItem } from '../types';
 
 interface NotificationHistoryProps {
@@ -9,6 +9,66 @@ interface NotificationHistoryProps {
     onUndo: (notification: NotificationHistoryItem) => void;
     onClear: () => void;
 }
+
+// Diff renderer component
+const DiffView: React.FC<{ before: string; after: string; issueKey?: string }> = ({ before, after, issueKey }) => {
+    const [isExpanded, setIsExpanded] = useState(false);
+    
+    return (
+        <div className="mt-2 rounded-lg overflow-hidden border" style={{ borderColor: 'var(--color-outline-variant)' }}>
+            <button 
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="w-full px-3 py-2 flex items-center justify-between text-xs font-medium"
+                style={{ backgroundColor: 'var(--color-surface-variant)' }}
+            >
+                <span className="flex items-center gap-2">
+                    <GitCompare size={14} />
+                    {issueKey && <span className="font-bold">{issueKey}</span>}
+                    Değişiklikleri Göster
+                </span>
+                {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+            </button>
+            
+            {isExpanded && (
+                <div className="p-3 space-y-2 text-xs" style={{ backgroundColor: 'var(--color-surface)' }}>
+                    {/* Before */}
+                    <div>
+                        <span className="font-semibold text-xs mb-1 block" style={{ color: 'var(--color-error)' }}>
+                            Önceki:
+                        </span>
+                        <div 
+                            className="p-2 rounded border-l-4"
+                            style={{ 
+                                backgroundColor: 'rgba(234, 67, 53, 0.1)', 
+                                borderColor: 'var(--color-error)',
+                                color: 'var(--color-on-surface)'
+                            }}
+                        >
+                            <p className="whitespace-pre-wrap break-words">{before}</p>
+                        </div>
+                    </div>
+                    
+                    {/* After */}
+                    <div>
+                        <span className="font-semibold text-xs mb-1 block" style={{ color: 'var(--color-success)' }}>
+                            Sonraki:
+                        </span>
+                        <div 
+                            className="p-2 rounded border-l-4"
+                            style={{ 
+                                backgroundColor: 'rgba(52, 168, 83, 0.1)', 
+                                borderColor: 'var(--color-success)',
+                                color: 'var(--color-on-surface)'
+                            }}
+                        >
+                            <p className="whitespace-pre-wrap break-words">{after}</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
 
 export const NotificationHistory: React.FC<NotificationHistoryProps> = ({
     isOpen,
@@ -223,6 +283,16 @@ export const NotificationHistory: React.FC<NotificationHistoryProps> = ({
                                                                style={{ color: 'var(--color-on-surface-variant)' }}>
                                                                 {notification.message}
                                                             </p>
+                                                            
+                                                            {/* Show diff for AI changes */}
+                                                            {notification.diff && (
+                                                                <DiffView 
+                                                                    before={notification.diff.before}
+                                                                    after={notification.diff.after}
+                                                                    issueKey={notification.diff.issueKey}
+                                                                />
+                                                            )}
+                                                            
                                                             <span className="text-xs mt-2 flex items-center gap-1"
                                                                   style={{ color: 'var(--color-on-surface-variant)' }}>
                                                                 <Clock size={10} /> {formatTime(notification.timestamp)}

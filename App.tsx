@@ -1,13 +1,13 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Settings, Moon, Sun, Calendar as CalendarIcon, RefreshCw, CheckCircle2, AlertCircle, Info, ChevronLeft, ChevronRight, Copy, Sparkles, Clock, Plus, Bell, History } from 'lucide-react';
+import { Settings, Moon, Sun, Calendar as CalendarIcon, RefreshCw, CheckCircle2, AlertCircle, Info, ChevronLeft, ChevronRight, Copy, Sparkles, Clock, Plus, Bell, History, Brain, Edit3 } from 'lucide-react';
 import { AppSettings, Worklog, LoadingState, Notification, NotificationHistoryItem, WorklogSuggestion, UndoAction, DEFAULT_SYSTEM_PROMPT } from './types';
 import { fetchWorklogs, updateWorklog, callGroq, createWorklog, deleteWorklog } from './services/api';
 import { SettingsModal } from './components/SettingsModal';
 import { WorklogList } from './components/WorklogList';
 import { AddWorklogModal } from './components/AddWorklogModal';
 import { NotificationHistory } from './components/NotificationHistory';
-import { secondsToHours } from './utils/adf';
+import { secondsToHours, formatHours } from './utils/adf';
 
 const APP_NAME = 'WorklogPro';
 const SUGGESTIONS_KEY = `${APP_NAME}_suggestions`;
@@ -31,6 +31,25 @@ const loadSuggestions = (): WorklogSuggestion[] => {
     } catch {
         return [];
     }
+};
+
+// Load notification history from localStorage
+const loadNotificationHistory = (): NotificationHistoryItem[] => {
+    try {
+        const saved = localStorage.getItem(NOTIFICATION_HISTORY_KEY);
+        if (!saved) return [];
+        const parsed = JSON.parse(saved);
+        // Filter out old notifications (older than 7 days)
+        const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        return parsed.filter((n: NotificationHistoryItem) => n.timestamp > sevenDaysAgo);
+    } catch {
+        return [];
+    }
+};
+
+// Save notification history to localStorage
+const saveNotificationHistory = (history: NotificationHistoryItem[]) => {
+    localStorage.setItem(NOTIFICATION_HISTORY_KEY, JSON.stringify(history.slice(0, 100)));
 };
 
 // Save suggestions to localStorage
@@ -94,13 +113,15 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAddWorklogOpen, setIsAddWorklogOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isEditingTarget, setIsEditingTarget] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [worklogs, setWorklogs] = useState<Worklog[]>([]);
   const [loadingState, setLoadingState] = useState<LoadingState>(LoadingState.IDLE);
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [notificationHistory, setNotificationHistory] = useState<NotificationHistoryItem[]>([]);
+  const [notificationHistory, setNotificationHistory] = useState<NotificationHistoryItem[]>(loadNotificationHistory());
   const [suggestions, setSuggestions] = useState<WorklogSuggestion[]>(loadSuggestions());
   const [distributeTarget, setDistributeTarget] = useState<string>(settings.targetDailyHours.toString());
+  const [tempTargetHours, setTempTargetHours] = useState<string>(settings.targetDailyHours.toString());
   
   // Stats
   const totalHours = useMemo(() => worklogs.reduce((acc, wl) => acc + wl.hours, 0), [worklogs]);
@@ -127,11 +148,16 @@ export default function App() {
     }
   }, [selectedDate]);
 
+  // Save notification history when it changes
+  useEffect(() => {
+    saveNotificationHistory(notificationHistory);
+  }, [notificationHistory]);
+
   // --- Actions ---
 
-  const notify = (title: string, message: string, type: Notification['type'] = 'info', undoAction?: UndoAction) => {
+  const notify = (title: string, message: string, type: Notification['type'] = 'info', undoAction?: UndoAction, diff?: { before: string; after: string; issueKey?: string }) => {
     const id = Date.now().toString();
-    const notification: NotificationHistoryItem = { id, title, message, type, timestamp: Date.now(), undoAction };
+    const notification: NotificationHistoryItem = { id, title, message, type, timestamp: Date.now(), undoAction, diff };
     
     // Add to toast notifications
     setNotifications(prev => [...prev, notification]);
@@ -139,6 +165,23 @@ export default function App() {
     
     // Add to history
     setNotificationHistory(prev => [notification, ...prev].slice(0, 100)); // Keep max 100
+  };
+
+  // Update target hours from progress card
+  const handleTargetHoursChange = () => {
+    const newTarget = parseFloat(tempTargetHours);
+    if (isNaN(newTarget) || newTarget <= 0 || newTarget > 24) {
+        setTempTargetHours(settings.targetDailyHours.toString());
+        setIsEditingTarget(false);
+        return;
+    }
+    
+    const newSettings = { ...settings, targetDailyHours: newTarget };
+    setSettings(newSettings);
+    localStorage.setItem(`${APP_NAME}_targetDailyHours`, String(newTarget));
+    setDistributeTarget(newTarget.toString());
+    setIsEditingTarget(false);
+    notify('Hedef Güncellendi', `Günlük hedef ${newTarget} saat olarak ayarlandı.`, 'success');
   };
 
   const handleUndo = async (notification: NotificationHistoryItem) => {
@@ -300,9 +343,20 @@ export default function App() {
             `;
         }
 
+        const originalComment = wl.comment;
         const improvedText = await callGroq(prompt, settings);
         if (improvedText && improvedText.trim() !== wl.comment) {
             await handleUpdateWorklog(id, improvedText.trim());
+            
+            // Notify with diff for history
+            const actionName = mode === 'IMPROVE' ? 'İyileştirildi' : 'İmla Düzeltildi';
+            notify(
+                actionName, 
+                `${wl.issueKey} worklog metni güncellendi`, 
+                'success',
+                undefined,
+                { before: originalComment, after: improvedText.trim(), issueKey: wl.issueKey }
+            );
         } else {
             notify('Bilgi', 'Yapay zeka önemli bir değişiklik önermedi.', 'info');
         }
@@ -310,6 +364,107 @@ export default function App() {
     } catch (e: any) {
         notify('AI Başarısız', e.message, 'error');
     }
+  };
+
+  // AI-powered smart distribution
+  const handleSmartDistribute = async () => {
+     if (loadingState === LoadingState.LOADING) return;
+     
+     const target = parseFloat(distributeTarget) || settings.targetDailyHours;
+     
+     if (worklogs.length === 0) {
+         notify('Hata', 'Dağıtılacak worklog bulunamadı.', 'error');
+         return;
+     }
+
+     if (!settings.groqApiKey) {
+         notify('AI Hatası', 'Akıllı dağıtım için Groq API Anahtarı gerekli', 'error');
+         setIsSettingsOpen(true);
+         return;
+     }
+
+     notify('AI Analiz Ediyor', 'Worklog içerikleri analiz ediliyor...', 'info');
+     
+     try {
+         // Prepare worklog data for AI
+         const worklogData = worklogs.map(wl => ({
+             key: wl.issueKey,
+             summary: wl.summary,
+             comment: wl.comment,
+             currentHours: wl.hours
+         }));
+
+         const prompt = `
+Sen bir iş süresi tahmin uzmanısın. Aşağıdaki worklog kayıtlarını analiz et ve toplam ${target} saati bu işler arasında mantıklı şekilde dağıt.
+
+WORKLOG KAYITLARI:
+${worklogData.map((w, i) => `${i + 1}. ${w.key}: "${w.summary}" - Yorum: "${w.comment}" (Mevcut: ${w.currentHours}h)`).join('\n')}
+
+KURALLAR:
+- Toplam tam olarak ${target} saat olmalı
+- Minimum süre 0.25 saat
+- İşin karmaşıklığına, yorumdaki detaylara göre dağıt
+- Daha detaylı/uzun yorumlar genelde daha fazla süre gerektirir
+
+ÇIKTI FORMAT (sadece JSON, başka bir şey yazma):
+[${worklogData.map((w, i) => `{"index": ${i}, "hours": X.XX}`).join(', ')}]
+
+Örnek çıktı: [{"index": 0, "hours": 2.5}, {"index": 1, "hours": 3.0}, {"index": 2, "hours": 2.5}]
+`;
+
+         const response = await callGroq(prompt, settings, 500);
+         
+         // Parse AI response
+         let distribution: { index: number; hours: number }[];
+         try {
+             // Extract JSON from response
+             const jsonMatch = response.match(/\[[\s\S]*\]/);
+             if (!jsonMatch) throw new Error('JSON bulunamadı');
+             distribution = JSON.parse(jsonMatch[0]);
+         } catch (parseErr) {
+             notify('AI Yanıt Hatası', 'Yapay zeka yanıtı işlenemedi, orantılı dağıtım yapılıyor...', 'warning');
+             // Fall back to proportional
+             handleDistribute('proportional');
+             return;
+         }
+
+         // Validate and adjust
+         const totalAIHours = distribution.reduce((sum, d) => sum + d.hours, 0);
+         const ratio = target / totalAIHours;
+         
+         // Store previous values for undo
+         const undoData = worklogs.map((wl, index) => {
+             const aiHours = distribution.find(d => d.index === index)?.hours || (target / worklogs.length);
+             const adjustedHours = Math.max(0.25, aiHours * ratio);
+             return {
+                 worklogId: wl.id,
+                 issueKey: wl.issueKey,
+                 previousSeconds: wl.seconds,
+                 newSeconds: Math.round(adjustedHours * 3600)
+             };
+         });
+
+         // Apply distribution
+         const promises = worklogs.map(async (wl, index) => {
+             const newSeconds = undoData[index].newSeconds;
+             if (newSeconds !== wl.seconds) {
+                await updateWorklog(wl, settings, undefined, newSeconds);
+             }
+         });
+         
+         await Promise.all(promises);
+         await loadData();
+         
+         // Notify with undo
+         const undoAction: UndoAction = {
+             type: 'BATCH_UPDATE',
+             data: undoData
+         };
+         notify('AI Dağıtım Tamamlandı', `Süreler akıllı şekilde ${target}h hedefe dağıtıldı.`, 'success', undoAction);
+         
+     } catch (e: any) {
+         notify('AI Dağıtım Hatası', e.message, 'error');
+     }
   };
 
   const handleDistribute = async (mode: 'equal' | 'proportional' = 'proportional') => {
@@ -577,18 +732,64 @@ export default function App() {
                     </div>
                     
                     <div className="relative z-10">
-                        <span className="text-white/70 text-xs font-semibold uppercase tracking-wider">
-                            Günlük İlerleme
-                        </span>
+                        <div className="flex items-center justify-between">
+                            <span className="text-white/70 text-xs font-semibold uppercase tracking-wider">
+                                Günlük İlerleme
+                            </span>
+                            {/* Edit Target Button */}
+                            <button 
+                                onClick={() => {
+                                    setTempTargetHours(settings.targetDailyHours.toString());
+                                    setIsEditingTarget(true);
+                                }}
+                                className="p-1.5 rounded-lg hover:bg-white/20 transition-colors"
+                                title="Hedef saati düzenle"
+                            >
+                                <Edit3 size={14} className="text-white/70" />
+                            </button>
+                        </div>
                         
                         {/* Big Number Display */}
                         <div className="flex items-baseline gap-2 mt-3 mb-5">
                             <span className="text-5xl font-bold text-white tracking-tight" style={{ fontFamily: 'var(--font-mono)' }}>
-                                {totalHours.toFixed(1)}
+                                {formatHours(totalHours)}
                             </span>
-                            <span className="text-white/60 text-lg font-medium">
-                                / {settings.targetDailyHours}h
-                            </span>
+                            {isEditingTarget ? (
+                                <div className="flex items-center gap-1">
+                                    <span className="text-white/60 text-lg font-medium">/</span>
+                                    <input
+                                        type="number"
+                                        step="0.5"
+                                        min="0.5"
+                                        max="24"
+                                        value={tempTargetHours}
+                                        onChange={(e) => setTempTargetHours(e.target.value)}
+                                        onBlur={handleTargetHoursChange}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') handleTargetHoursChange();
+                                            if (e.key === 'Escape') {
+                                                setTempTargetHours(settings.targetDailyHours.toString());
+                                                setIsEditingTarget(false);
+                                            }
+                                        }}
+                                        autoFocus
+                                        className="w-16 bg-white/20 border-none rounded px-2 py-0.5 text-white text-lg font-medium text-center focus:outline-none focus:ring-2 focus:ring-white/50"
+                                        style={{ fontFamily: 'var(--font-mono)' }}
+                                    />
+                                    <span className="text-white/60 text-lg font-medium">h</span>
+                                </div>
+                            ) : (
+                                <button 
+                                    onClick={() => {
+                                        setTempTargetHours(settings.targetDailyHours.toString());
+                                        setIsEditingTarget(true);
+                                    }}
+                                    className="text-white/60 text-lg font-medium hover:text-white/80 transition-colors cursor-pointer"
+                                    title="Tıkla düzenle"
+                                >
+                                    / {settings.targetDailyHours}h
+                                </button>
+                            )}
                         </div>
                         
                         {/* Progress Bar */}
@@ -609,7 +810,7 @@ export default function App() {
                             ) : (
                                 <>
                                     <Clock size={16} />
-                                    <span>{(settings.targetDailyHours - totalHours).toFixed(1)} saat kaldı</span>
+                                    <span>{formatHours(settings.targetDailyHours - totalHours)} saat kaldı</span>
                                 </>
                             )}
                         </p>
@@ -676,6 +877,18 @@ export default function App() {
                                 <Clock size={16} /> Eşit
                             </button>
                         </div>
+                        
+                        {/* AI Smart Distribution */}
+                        <button 
+                            onClick={handleSmartDistribute}
+                            className="btn-filled w-full mt-3 ripple text-sm"
+                            style={{ 
+                                background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)',
+                            }}
+                            title="Yapay zeka worklog içeriklerini analiz ederek akıllı dağıtım yapar"
+                        >
+                            <Brain size={16} /> AI Akıllı Dağıtım
+                        </button>
                     </div>
                      
                     {/* Copy Previous Day */}

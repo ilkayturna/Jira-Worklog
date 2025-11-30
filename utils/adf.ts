@@ -60,9 +60,18 @@ export function plainTextToADF(text: string) {
 }
 
 export function secondsToHours(seconds: number): number {
-  const minutes = Math.round(seconds / 60);
-  const hours = minutes / 60;
-  return Math.round(hours * 100) / 100;
+  // Saniyeyi saate çevir, 2 ondalık basamak hassasiyetinde (floor ile aşağı yuvarla)
+  const hours = seconds / 3600;
+  return Math.floor(hours * 100) / 100;
+}
+
+// Display için formatlama - tam sayı gösterir veya ondalık
+export function formatHours(hours: number): string {
+  // Tam sayıysa .0 gösterme, değilse 2 ondalık
+  if (hours === Math.floor(hours)) {
+    return hours.toString();
+  }
+  return hours.toFixed(2);
 }
 
 export function parseSmartTimeInput(input: string): number | null {

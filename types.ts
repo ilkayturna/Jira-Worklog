@@ -34,6 +34,12 @@ export interface Notification {
 export interface NotificationHistoryItem extends Notification {
   undoAction?: UndoAction;
   dismissed?: boolean;
+  // AI değişiklikleri için diff bilgisi
+  diff?: {
+    before: string;
+    after: string;
+    issueKey?: string;
+  };
 }
 
 // Undo action types for reverting operations
