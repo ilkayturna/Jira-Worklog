@@ -1,4 +1,3 @@
-
 export interface Worklog {
   id: string;
   issueKey: string;
@@ -29,6 +28,46 @@ export interface Notification {
   message: string;
   type: 'success' | 'error' | 'warning' | 'info';
   timestamp: number;
+}
+
+// Extended notification with action data for undo capability
+export interface NotificationHistoryItem extends Notification {
+  undoAction?: UndoAction;
+  dismissed?: boolean;
+}
+
+// Undo action types for reverting operations
+export interface UndoAction {
+  type: 'CREATE' | 'UPDATE' | 'BATCH_UPDATE' | 'BATCH_CREATE';
+  data: UndoData[];
+}
+
+export interface UndoData {
+  worklogId: string;
+  issueKey: string;
+  previousSeconds?: number;
+  previousComment?: string;
+  newSeconds?: number;
+  newComment?: string;
+}
+
+// Smart suggestion based on worklog history
+export interface WorklogSuggestion {
+  issueKey: string;
+  summary: string;
+  lastComment: string;
+  avgHours: number;
+  frequency: number; // How many times used
+  lastUsed: string; // Date
+}
+
+// Jira Issue for search results
+export interface JiraIssue {
+  key: string;
+  summary: string;
+  issueType?: string;
+  status?: string;
+  projectName?: string;
 }
 
 export interface HistoryAction {

@@ -1,13 +1,17 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { Settings, Moon, Sun, Calendar as CalendarIcon, RefreshCw, CheckCircle2, AlertCircle, Info, ChevronLeft, ChevronRight, Copy, Sparkles, Clock } from 'lucide-react';
-import { AppSettings, Worklog, LoadingState, Notification, DEFAULT_SYSTEM_PROMPT } from './types';
-import { fetchWorklogs, updateWorklog, callGroq, createWorklog } from './services/api';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { Settings, Moon, Sun, Calendar as CalendarIcon, RefreshCw, CheckCircle2, AlertCircle, Info, ChevronLeft, ChevronRight, Copy, Sparkles, Clock, Plus, Bell, History } from 'lucide-react';
+import { AppSettings, Worklog, LoadingState, Notification, NotificationHistoryItem, WorklogSuggestion, UndoAction, DEFAULT_SYSTEM_PROMPT } from './types';
+import { fetchWorklogs, updateWorklog, callGroq, createWorklog, deleteWorklog } from './services/api';
 import { SettingsModal } from './components/SettingsModal';
 import { WorklogList } from './components/WorklogList';
+import { AddWorklogModal } from './components/AddWorklogModal';
+import { NotificationHistory } from './components/NotificationHistory';
 import { secondsToHours } from './utils/adf';
 
 const APP_NAME = 'WorklogPro';
+const SUGGESTIONS_KEY = `${APP_NAME}_suggestions`;
+const NOTIFICATION_HISTORY_KEY = `${APP_NAME}_notificationHistory`;
 
 const detectJiraUrl = () => {
     const saved = localStorage.getItem(`${APP_NAME}_jiraUrl`);
@@ -17,6 +21,59 @@ const detectJiraUrl = () => {
         return window.location.origin;
     }
     return '';
+};
+
+// Load suggestions from localStorage
+const loadSuggestions = (): WorklogSuggestion[] => {
+    try {
+        const saved = localStorage.getItem(SUGGESTIONS_KEY);
+        return saved ? JSON.parse(saved) : [];
+    } catch {
+        return [];
+    }
+};
+
+// Save suggestions to localStorage
+const saveSuggestions = (suggestions: WorklogSuggestion[]) => {
+    localStorage.setItem(SUGGESTIONS_KEY, JSON.stringify(suggestions.slice(0, 50))); // Keep max 50
+};
+
+// Update suggestions when a worklog is created
+const updateSuggestions = (issueKey: string, summary: string, comment: string, hours: number) => {
+    const suggestions = loadSuggestions();
+    const existingIndex = suggestions.findIndex(s => s.issueKey === issueKey);
+    
+    if (existingIndex >= 0) {
+        // Update existing
+        const existing = suggestions[existingIndex];
+        suggestions[existingIndex] = {
+            ...existing,
+            lastComment: comment || existing.lastComment,
+            avgHours: (existing.avgHours * existing.frequency + hours) / (existing.frequency + 1),
+            frequency: existing.frequency + 1,
+            lastUsed: new Date().toISOString()
+        };
+    } else {
+        // Add new
+        suggestions.unshift({
+            issueKey,
+            summary,
+            lastComment: comment,
+            avgHours: hours,
+            frequency: 1,
+            lastUsed: new Date().toISOString()
+        });
+    }
+    
+    // Sort by frequency and recency
+    suggestions.sort((a, b) => {
+        const freqDiff = b.frequency - a.frequency;
+        if (freqDiff !== 0) return freqDiff;
+        return new Date(b.lastUsed).getTime() - new Date(a.lastUsed).getTime();
+    });
+    
+    saveSuggestions(suggestions);
+    return suggestions;
 };
 
 // Initial State
@@ -35,16 +92,26 @@ const initialSettings: AppSettings = {
 export default function App() {
   const [settings, setSettings] = useState<AppSettings>(initialSettings);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isAddWorklogOpen, setIsAddWorklogOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [worklogs, setWorklogs] = useState<Worklog[]>([]);
   const [loadingState, setLoadingState] = useState<LoadingState>(LoadingState.IDLE);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notificationHistory, setNotificationHistory] = useState<NotificationHistoryItem[]>([]);
+  const [suggestions, setSuggestions] = useState<WorklogSuggestion[]>(loadSuggestions());
   const [distributeTarget, setDistributeTarget] = useState<string>(settings.targetDailyHours.toString());
   
   // Stats
   const totalHours = useMemo(() => worklogs.reduce((acc, wl) => acc + wl.hours, 0), [worklogs]);
   const progress = Math.min((totalHours / settings.targetDailyHours) * 100, 100);
   const isTargetMet = totalHours >= settings.targetDailyHours;
+  
+  // Count undoable notifications
+  const undoableCount = useMemo(() => 
+    notificationHistory.filter(n => n.undoAction && !n.dismissed).length, 
+    [notificationHistory]
+  );
 
   // --- Effects ---
 
@@ -62,10 +129,89 @@ export default function App() {
 
   // --- Actions ---
 
-  const notify = (title: string, message: string, type: Notification['type'] = 'info') => {
+  const notify = (title: string, message: string, type: Notification['type'] = 'info', undoAction?: UndoAction) => {
     const id = Date.now().toString();
-    setNotifications(prev => [...prev, { id, title, message, type, timestamp: Date.now() }]);
+    const notification: NotificationHistoryItem = { id, title, message, type, timestamp: Date.now(), undoAction };
+    
+    // Add to toast notifications
+    setNotifications(prev => [...prev, notification]);
     setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 5000);
+    
+    // Add to history
+    setNotificationHistory(prev => [notification, ...prev].slice(0, 100)); // Keep max 100
+  };
+
+  const handleUndo = async (notification: NotificationHistoryItem) => {
+    if (!notification.undoAction) return;
+    
+    try {
+        const { type, data } = notification.undoAction;
+        
+        if (type === 'CREATE') {
+            // Undo create = delete
+            for (const item of data) {
+                await deleteWorklog(item.issueKey, item.worklogId, settings);
+            }
+            notify('Geri Alındı', 'Eklenen worklog silindi.', 'info');
+        } else if (type === 'UPDATE' || type === 'BATCH_UPDATE') {
+            // Undo update = revert to previous values
+            for (const item of data) {
+                const wl = worklogs.find(w => w.id === item.worklogId);
+                if (wl) {
+                    await updateWorklog(wl, settings, item.previousComment, item.previousSeconds);
+                }
+            }
+            notify('Geri Alındı', `${data.length} işlem geri alındı.`, 'info');
+        } else if (type === 'BATCH_CREATE') {
+            // Undo batch create = delete all
+            for (const item of data) {
+                await deleteWorklog(item.issueKey, item.worklogId, settings);
+            }
+            notify('Geri Alındı', `${data.length} worklog silindi.`, 'info');
+        }
+        
+        // Mark as dismissed in history
+        setNotificationHistory(prev => 
+            prev.map(n => n.id === notification.id ? { ...n, dismissed: true } : n)
+        );
+        
+        // Reload data
+        await loadData();
+        
+    } catch (e: any) {
+        notify('Geri Alma Başarısız', e.message, 'error');
+    }
+  };
+
+  const clearNotificationHistory = () => {
+    setNotificationHistory([]);
+  };
+
+  const handleAddWorklog = async (issueKey: string, hours: number, comment: string) => {
+    const seconds = Math.round(hours * 3600);
+    
+    await createWorklog(issueKey, selectedDate, seconds, comment, settings);
+    
+    // Get the new worklog ID for undo (reload and find the new one)
+    const updatedWorklogs = await fetchWorklogs(selectedDate, settings);
+    const newWorklog = updatedWorklogs.find(wl => 
+        wl.issueKey === issueKey && 
+        !worklogs.some(existing => existing.id === wl.id)
+    );
+    
+    setWorklogs(updatedWorklogs);
+    
+    // Update suggestions
+    const summary = newWorklog?.summary || issueKey;
+    setSuggestions(updateSuggestions(issueKey, summary, comment, hours));
+    
+    // Notify with undo
+    const undoAction: UndoAction = newWorklog ? {
+        type: 'CREATE',
+        data: [{ worklogId: newWorklog.id, issueKey }]
+    } : undefined as any;
+    
+    notify('Worklog Eklendi', `${issueKey}: ${hours}h`, 'success', undoAction);
   };
 
   const saveSettings = (newSettings: AppSettings) => {
@@ -218,6 +364,14 @@ export default function App() {
          }
      }
      
+     // Store previous values for undo
+     const undoData = worklogs.map((wl, index) => ({
+         worklogId: wl.id,
+         issueKey: wl.issueKey,
+         previousSeconds: wl.seconds,
+         newSeconds: newSecondsArray[index]
+     }));
+     
      try {
          // Update all
          const promises = worklogs.map(async (wl, index) => {
@@ -229,7 +383,13 @@ export default function App() {
          
          await Promise.all(promises);
          await loadData();
-         notify('Dağıtıldı', 'Süreler günlük hedefe göre dağıtıldı.', 'success');
+         
+         // Notify with undo capability
+         const undoAction: UndoAction = {
+             type: 'BATCH_UPDATE',
+             data: undoData
+         };
+         notify('Dağıtıldı', `Süreler ${target}h hedefe göre dağıtıldı.`, 'success', undoAction);
      } catch (e: any) {
          notify('Dağıtım Hatası', e.message, 'error');
      }
@@ -257,8 +417,27 @@ export default function App() {
           );
           
           await Promise.all(promises);
-          await loadData();
-          notify('Başarılı', `Dünden ${prevLogs.length} adet worklog kopyalandı.`, 'success');
+          
+          // Get the new worklog IDs for undo
+          const updatedWorklogs = await fetchWorklogs(selectedDate, settings);
+          const newWorklogs = updatedWorklogs.filter(wl => 
+              !worklogs.some(existing => existing.id === wl.id)
+          );
+          
+          setWorklogs(updatedWorklogs);
+          
+          // Create undo action
+          const undoAction: UndoAction = {
+              type: 'BATCH_CREATE',
+              data: newWorklogs.map(wl => ({ worklogId: wl.id, issueKey: wl.issueKey }))
+          };
+          
+          notify('Başarılı', `Dünden ${prevLogs.length} adet worklog kopyalandı.`, 'success', undoAction);
+
+      } catch (e: any) {
+          notify('Kopyalama Başarısız', e.message, 'error');
+      }
+  };
 
       } catch (e: any) {
           notify('Kopyalama Başarısız', e.message, 'error');
@@ -298,6 +477,37 @@ export default function App() {
 
             {/* Header Actions */}
             <div className="flex items-center gap-1">
+                {/* Add Worklog Button */}
+                <button 
+                    onClick={() => setIsAddWorklogOpen(true)} 
+                    className="btn-filled text-sm hidden sm:flex"
+                >
+                    <Plus size={18}/> Worklog Ekle
+                </button>
+                <button 
+                    onClick={() => setIsAddWorklogOpen(true)} 
+                    className="btn-icon sm:hidden"
+                    style={{ backgroundColor: 'var(--color-primary-600)', color: 'white' }}
+                    aria-label="Add worklog"
+                >
+                    <Plus size={20}/>
+                </button>
+                
+                {/* Notification History */}
+                <button 
+                    onClick={() => setIsHistoryOpen(true)} 
+                    className="btn-icon relative"
+                    aria-label="Notification history"
+                >
+                    <Bell size={20}/>
+                    {undoableCount > 0 && (
+                        <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold"
+                              style={{ backgroundColor: 'var(--color-error)', color: 'white' }}>
+                            {undoableCount}
+                        </span>
+                    )}
+                </button>
+                
                 <button 
                     onClick={() => setSettings(s => ({...s, isDarkTheme: !s.isDarkTheme}))} 
                     className="btn-icon"
@@ -490,9 +700,17 @@ export default function App() {
                         <h2 className="text-sm font-semibold" style={{ color: 'var(--color-on-surface)' }}>
                             Worklog Kayıtları
                         </h2>
-                        <span className="chip">
-                            {worklogs.length} kayıt
-                        </span>
+                        <div className="flex items-center gap-2">
+                            <button 
+                                onClick={() => setIsAddWorklogOpen(true)}
+                                className="btn-tonal text-xs py-1.5 px-3"
+                            >
+                                <Plus size={14} /> Ekle
+                            </button>
+                            <span className="chip">
+                                {worklogs.length} kayıt
+                            </span>
+                        </div>
                     </div>
                     <WorklogList 
                         worklogs={worklogs} 
@@ -513,6 +731,25 @@ export default function App() {
         onClose={() => setIsSettingsOpen(false)} 
         settings={settings} 
         onSave={saveSettings} 
+      />
+
+      {/* Add Worklog Modal */}
+      <AddWorklogModal
+        isOpen={isAddWorklogOpen}
+        onClose={() => setIsAddWorklogOpen(false)}
+        onSubmit={handleAddWorklog}
+        settings={settings}
+        suggestions={suggestions}
+        selectedDate={selectedDate}
+      />
+
+      {/* Notification History Panel */}
+      <NotificationHistory
+        isOpen={isHistoryOpen}
+        onClose={() => setIsHistoryOpen(false)}
+        notifications={notificationHistory}
+        onUndo={handleUndo}
+        onClear={clearNotificationHistory}
       />
 
       {/* Toast Notifications - Material Design Style */}

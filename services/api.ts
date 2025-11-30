@@ -1,5 +1,5 @@
 
-import { AppSettings, Worklog } from '../types';
+import { AppSettings, Worklog, JiraIssue } from '../types';
 import { plainTextToADF, parseJiraComment, secondsToHours } from '../utils/adf';
 
 // --- UTILS ---
@@ -179,6 +179,60 @@ export const createWorklog = async (issueKey: string, dateStr: string, seconds: 
 
     if(!response.ok) throw new Error("Worklog oluşturulamadı");
 }
+
+// Issue'ları sil (undo için)
+export const deleteWorklog = async (issueKey: string, worklogId: string, settings: AppSettings) => {
+    const targetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/issue/${issueKey}/worklog/${worklogId}`;
+    
+    const response = await fetchThroughProxy(targetUrl, 'DELETE', {
+        'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
+        'Accept': 'application/json'
+    });
+
+    if(!response.ok) throw new Error("Worklog silinemedi");
+}
+
+// Jira Issue Arama - Akıllı öneri ve yeni worklog eklemek için
+export const searchIssues = async (query: string, settings: AppSettings): Promise<JiraIssue[]> => {
+    if (!settings.jiraUrl || !settings.jiraEmail || !settings.jiraToken) {
+        throw new Error("Jira Bilgileri Eksik");
+    }
+
+    if (!query || query.trim().length < 2) return [];
+
+    // JQL: Issue key ile başlıyorsa direkt ara, değilse summary'de ara
+    const isIssueKey = /^[A-Z]+-\d+$/i.test(query.trim());
+    const jql = isIssueKey 
+        ? `key = "${query.trim().toUpperCase()}"` 
+        : `summary ~ "${query.trim()}*" OR key ~ "${query.trim().toUpperCase()}" ORDER BY updated DESC`;
+
+    const targetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/search/jql`;
+    
+    const response = await fetchThroughProxy(targetUrl, 'POST', {
+        'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+    }, {
+        jql: jql,
+        fields: ['summary', 'issuetype', 'status', 'project'],
+        maxResults: 10
+    });
+
+    if (!response.ok) {
+        return [];
+    }
+
+    const data = await response.json();
+    const issues = data.issues || [];
+
+    return issues.map((issue: any) => ({
+        key: issue.key,
+        summary: issue.fields?.summary || '',
+        issueType: issue.fields?.issuetype?.name || '',
+        status: issue.fields?.status?.name || '',
+        projectName: issue.fields?.project?.name || ''
+    }));
+};
 
 // --- GROQ API (Proxy Üzerinden) ---
 
