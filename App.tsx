@@ -2120,7 +2120,7 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
                     
                     {/* Refresh Button */}
                     <button 
-                        onClick={() => loadData()} 
+                        onClick={() => loadData(settings, true)} 
                         className="btn-outlined w-full"
                         disabled={loadingState === LoadingState.LOADING}
                     >

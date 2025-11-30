@@ -60,9 +60,9 @@ export function plainTextToADF(text: string) {
 }
 
 export function secondsToHours(seconds: number): number {
-  // Saniyeyi saate çevir, 2 ondalık basamak hassasiyetinde (floor ile aşağı yuvarla)
+  // Saniyeyi saate çevir, 2 ondalık basamak hassasiyetinde (round ile yuvarla)
   const hours = seconds / 3600;
-  return Math.floor(hours * 100) / 100;
+  return Math.round(hours * 100) / 100;
 }
 
 // Display için formatlama - tam sayı gösterir veya ondalık
