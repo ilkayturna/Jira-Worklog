@@ -51,6 +51,10 @@ export const fetchWorklogs = async (date: string, settings: AppSettings): Promis
 
   const jql = `worklogDate = "${date}" AND worklogAuthor = currentUser()`;
   
+  // DEBUG: JQL sorgusunu konsola yazdır
+  console.log('JQL Sorgusu:', jql);
+  console.log('Seçili Tarih:', date);
+  
   // POST metodu ile yeni /search/jql endpoint'i kullan (eski /search endpoint'i 410 Gone döner)
   // Bkz: https://developer.atlassian.com/changelog/#CHANGE-2046
   const targetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/search/jql`;
@@ -63,7 +67,7 @@ export const fetchWorklogs = async (date: string, settings: AppSettings): Promis
           'Content-Type': 'application/json'
       }, {
           jql: jql,
-          fields: ['worklog', 'key', 'summary'],
+          fields: ['worklog', 'summary'],
           maxResults: 100
       });
   } catch (error) {
@@ -82,7 +86,11 @@ export const fetchWorklogs = async (date: string, settings: AppSettings): Promis
   }
 
   const data = await response.json();
-  const issues = data.issues || (typeof data === 'string' ? JSON.parse(data).issues : []);
+  // DEBUG: API yanıtını konsola yazdır
+  console.log('API Yanıtı:', data);
+  
+  // Yeni /search/jql endpoint'i issues array döner, eski format ile uyumlu kontrol yap
+  const issues = data.issues || [];
   
   if (!issues) return [];
 
