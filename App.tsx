@@ -338,9 +338,12 @@ export default function App() {
 
   // AI Generate Weekly Report - Smart distribution by importance
   const generateAIWeeklyReport = async (worklogs: Worklog[], weekStart: string): Promise<WeeklyReportItem[]> => {
-    if (!settings.groqApiKey || worklogs.length === 0) return [];
+    if (!settings.groqApiKey || worklogs.length === 0) {
+        notify('Hata', 'Groq API anahtarı veya geçen hafta verisi eksik', 'error');
+        return [];
+    }
     
-    const DAYS = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma'] as const;
+    const DAYS_ARRAY = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma'];
     
     // Group worklogs by issue and calculate importance
     const issueMap = new Map<string, { worklog: Worklog; lastDay: Date; totalHours: number; comments: string[] }>();
@@ -373,63 +376,94 @@ export default function App() {
         .map(([key, data]) => ({ issueKey: key, ...data }))
         .sort((a, b) => b.totalHours - a.totalHours);
     
-    // Create detailed summary for AI
-    const issuesSummary = sortedIssues.map(data => 
-        `- ${data.issueKey}: "${data.worklog.summary}"
-   Toplam: ${data.totalHours.toFixed(1)} saat
-   Son çalışılan gün: ${['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'][data.lastDay.getDay()]}
-   Son yapılan: ${data.comments[data.comments.length - 1] || 'Bilgi yok'}`
-    ).join('\n\n');
-    
-    const prompt = `Sen deneyimli bir proje yöneticisisin. Geçen hafta çalışılan işlere bakarak önümüzdeki hafta için akıllı bir plan oluştur.
-
-GEÇMİŞ HAFTA ÇALIŞMALARI (önem/saat sırasına göre):
-${issuesSummary}
-
-PLANLAMA KURALLARI:
-1. EN ÖNEMLİ (en çok saat harcanan) işler haftanın BAŞINDA (Pazartesi, Salı) olmalı
-2. Daha az önemli işler haftanın ortasına/sonuna atanmalı
-3. Her gün MAX 2-3 iş olsun, dengeli dağıt
-4. Geçen hafta CUMA çalışılan iş bu hafta PAZARTESİ'ye atanmalı (süreklilik)
-5. Description'da İŞİN DEVAMI için ne yapılacağını tahmin et:
-   - "Test edilecek, onay alınacak"
-   - "Müşteri ile görüşülecek, feedback beklenecek"  
-   - "Geliştirme devam edecek, entegrasyon yapılacak"
-   - "Kontrol edilecek, dokümantasyon hazırlanacak"
-   - "Tamamlanacak, canlıya alınacak"
-   gibi iş akışına uygun açıklamalar yaz.
-
-JSON FORMATI (sadece JSON döndür):
-[
-  {"issueKey": "XXX-123", "day": "Pazartesi", "status": "devam", "description": "...yapılacak iş açıklaması..."},
-  {"issueKey": "XXX-456", "day": "Salı", "status": "test", "description": "...yapılacak iş açıklaması..."}
-]
-
-status: "devam" | "test" | "tamamlandı" | "yeni"
-day: "Pazartesi" | "Salı" | "Çarşamba" | "Perşembe" | "Cuma"`;
-
-    try {
-        const response = await callGroq(prompt, settings);
-        const jsonMatch = response.match(/\[[\s\S]*?\]/);
-        if (jsonMatch) {
-            const parsed = JSON.parse(jsonMatch[0]);
-            return parsed.map((item: any) => {
-                const issueData = issueMap.get(item.issueKey);
-                return {
-                    issueKey: item.issueKey,
-                    summary: issueData?.worklog.summary || '',
-                    status: item.status || 'devam',
-                    day: DAYS.includes(item.day) ? item.day : 'Pazartesi',
-                    description: item.description || issueData?.worklog.summary || '',
-                    hours: issueData?.totalHours
-                };
-            });
-        }
-    } catch (e) {
-        console.error('AI weekly report generation failed:', e);
+    if (sortedIssues.length === 0) {
+        notify('Bilgi', 'Geçen hafta işlenmiş worklog bulunamadı', 'info');
+        return [];
     }
     
-    return [];
+    // Create detailed summary for AI
+    const issuesSummary = sortedIssues.map((data, idx) => {
+        const dayNames = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
+        const lastDayName = dayNames[data.lastDay.getDay()] || 'Bilinmiyor';
+        const lastComment = data.comments.length > 0 ? data.comments[data.comments.length - 1] : data.worklog.summary;
+        
+        return `${idx + 1}. ${data.issueKey}
+   Konu: ${data.worklog.summary}
+   Toplam Süre: ${data.totalHours.toFixed(1)} saat
+   Son Gün: ${lastDayName}
+   Son Yapılan: ${lastComment}`;
+    }).join('\n\n');
+    
+    const prompt = `Bir SAP danışmanının geçen hafta çalıştığı işlere bakarak önümüzdeki hafta planı oluştur.
+
+GEÇEN HAFTA İŞLERİ (önem sırasına göre - en çok çalışılan üstte):
+${issuesSummary}
+
+PLAN OLUŞTURMA KURALLARI:
+- En önemli (en çok süre harcanan) iş PAZARTESİ'ye
+- İkinci önemli SALI'ya
+- Diğerleri sırayla ÇARŞAMBA, PERŞEMBE, CUMA'ya dağıt
+- Her iş için "Bu hafta ne yapılacak?" sorusuna cevap ver:
+  Örnek açıklamalar:
+  * "Geliştirme tamamlanacak, test ortamına alınacak"
+  * "Müşteri testi yapılacak, onay alınacak"
+  * "Hata düzeltmeleri yapılacak"
+  * "Dokümantasyon hazırlanacak, eğitim verilecek"
+  * "Canlıya alım yapılacak"
+  * "Analiz devam edecek, tasarım tamamlanacak"
+
+SADECE JSON DÖNDÜR, başka bir şey yazma:
+[
+  {"issueKey": "${sortedIssues[0]?.issueKey || 'XXX-1'}", "day": "Pazartesi", "status": "devam", "description": "Bu hafta yapılacak iş açıklaması"},
+  {"issueKey": "${sortedIssues[1]?.issueKey || 'XXX-2'}", "day": "Salı", "status": "devam", "description": "Bu hafta yapılacak iş açıklaması"}
+]
+
+status değerleri: devam, test, tamamlandı
+day değerleri: Pazartesi, Salı, Çarşamba, Perşembe, Cuma`;
+
+    try {
+        console.log('AI Weekly Report Prompt:', prompt);
+        const response = await callGroq(prompt, settings);
+        console.log('AI Weekly Report Response:', response);
+        
+        // Try to extract JSON array from response
+        const jsonMatch = response.match(/\[\s*\{[\s\S]*\}\s*\]/);
+        
+        if (!jsonMatch) {
+            console.error('No JSON found in response:', response);
+            notify('AI Hatası', 'AI geçerli bir plan oluşturamadı. Tekrar deneyin.', 'error');
+            return [];
+        }
+        
+        const parsed = JSON.parse(jsonMatch[0]);
+        
+        if (!Array.isArray(parsed) || parsed.length === 0) {
+            notify('AI Hatası', 'AI boş plan döndürdü', 'error');
+            return [];
+        }
+        
+        const result: WeeklyReportItem[] = parsed.map((item: any) => {
+            const issueData = issueMap.get(item.issueKey);
+            const validDay = DAYS_ARRAY.includes(item.day) ? item.day : 'Pazartesi';
+            
+            return {
+                issueKey: item.issueKey || 'UNKNOWN',
+                summary: issueData?.worklog.summary || item.issueKey,
+                status: ['devam', 'test', 'tamamlandı', 'yeni'].includes(item.status) ? item.status : 'devam',
+                day: validDay as 'Pazartesi' | 'Salı' | 'Çarşamba' | 'Perşembe' | 'Cuma',
+                description: item.description || 'Devam edilecek',
+                hours: issueData?.totalHours
+            };
+        });
+        
+        notify('Başarılı', `${result.length} görev planlandı`, 'success');
+        return result;
+        
+    } catch (e: any) {
+        console.error('AI weekly report generation failed:', e);
+        notify('AI Hatası', e.message || 'Plan oluşturulamadı', 'error');
+        return [];
+    }
   };
 
   const handleUpdateWorklog = async (id: string, comment?: string, seconds?: number, skipNotification?: boolean) => {
