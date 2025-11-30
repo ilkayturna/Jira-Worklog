@@ -146,12 +146,22 @@ const WorklogRow: React.FC<{
         if (!canRedo) return;
         
         const newIndex = historyIndex - 1;
-        const targetEntry = entries[newIndex]; // newIndex=-1 ise entries[0] (mevcut durum)
         
-        onHistoryChange(entries, newIndex);
-        setIsProcessing(true);
-        await onUpdate(wl.id, targetEntry.comment, targetEntry.seconds, true); // isUndoRedo=true
-        setIsProcessing(false);
+        // newIndex -1 ise en son duruma (entries[0]) dönüyoruz
+        if (newIndex === -1) {
+            // entries[0] mevcut durumu içeriyor (ilk undo'da kaydedildi)
+            const targetEntry = entries[0];
+            onHistoryChange(entries, -1);
+            setIsProcessing(true);
+            await onUpdate(wl.id, targetEntry.comment, targetEntry.seconds, true);
+            setIsProcessing(false);
+        } else {
+            const targetEntry = entries[newIndex];
+            onHistoryChange(entries, newIndex);
+            setIsProcessing(true);
+            await onUpdate(wl.id, targetEntry.comment, targetEntry.seconds, true);
+            setIsProcessing(false);
+        }
     };
 
     return (

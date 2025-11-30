@@ -48,6 +48,41 @@ const loadNotificationHistory = (): NotificationHistoryItem[] => {
     }
 };
 
+// Worklog history key
+const WORKLOG_HISTORY_KEY = `${APP_NAME}_worklogHistories`;
+
+// Load worklog histories from localStorage
+const loadWorklogHistories = (): Map<string, { entries: WorklogHistoryEntry[]; index: number }> => {
+    try {
+        const saved = localStorage.getItem(WORKLOG_HISTORY_KEY);
+        if (!saved) return new Map();
+        const parsed = JSON.parse(saved);
+        // Filter entries older than 24 hours
+        const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+        const filtered: Record<string, { entries: WorklogHistoryEntry[]; index: number }> = {};
+        for (const [key, value] of Object.entries(parsed)) {
+            const historyData = value as { entries: WorklogHistoryEntry[]; index: number };
+            const validEntries = historyData.entries.filter(e => e.timestamp > oneDayAgo);
+            if (validEntries.length > 0) {
+                filtered[key] = { entries: validEntries, index: Math.min(historyData.index, validEntries.length - 1) };
+            }
+        }
+        return new Map(Object.entries(filtered));
+    } catch {
+        return new Map();
+    }
+};
+
+// Save worklog histories to localStorage
+const saveWorklogHistories = (histories: Map<string, { entries: WorklogHistoryEntry[]; index: number }>) => {
+    try {
+        const obj = Object.fromEntries(histories);
+        localStorage.setItem(WORKLOG_HISTORY_KEY, JSON.stringify(obj));
+    } catch {
+        // Ignore storage errors
+    }
+};
+
 // Save notification history to localStorage
 const saveNotificationHistory = (history: NotificationHistoryItem[]) => {
     localStorage.setItem(NOTIFICATION_HISTORY_KEY, JSON.stringify(history.slice(0, 100)));
@@ -142,8 +177,8 @@ export default function App() {
   const [distributeTarget, setDistributeTarget] = useState<string>(settings.targetDailyHours.toString());
   const [tempTargetHours, setTempTargetHours] = useState<string>(settings.targetDailyHours.toString());
   
-  // Worklog history for undo/redo (per worklog)
-  const [worklogHistories, setWorklogHistories] = useState<Map<string, { entries: WorklogHistoryEntry[]; index: number }>>(new Map());
+  // Worklog history for undo/redo (per worklog) - localStorage'dan yükle
+  const [worklogHistories, setWorklogHistories] = useState<Map<string, { entries: WorklogHistoryEntry[]; index: number }>>(loadWorklogHistories());
   
   // Daily cache - aynı gün için tekrar istek atmamak için
   const worklogCacheRef = useRef<Map<string, { worklogs: Worklog[]; timestamp: number }>>(new Map());
@@ -191,6 +226,11 @@ export default function App() {
   useEffect(() => {
     saveNotificationHistory(notificationHistory);
   }, [notificationHistory]);
+
+  // Save worklog histories when it changes
+  useEffect(() => {
+    saveWorklogHistories(worklogHistories);
+  }, [worklogHistories]);
 
   // --- Actions ---
 
@@ -704,26 +744,27 @@ status: devam/test/tamamlandı/beklemede`;
     try {
         let prompt = '';
         if (mode === 'IMPROVE') {
-            prompt = `Sen tecrübeli bir yazılım danışmanısın. Aşağıdaki kısa worklog notunu, bir insanın yazacağı gibi doğal ve profesyonel bir şekilde genişlet.
+            prompt = `Worklog notunu profesyonelleştir ve genişlet.
 
-Talep başlığı: ${wl.summary}
+Talep: ${wl.summary}
 Mevcut not: ${wl.comment}
 
-YAZIM REHBERİ:
-- Mevcut notu temel al ve bağlamından kopmadan genişlet
-- Talep başlığındaki konuyu kullanarak ne yapıldığını açıkla
-- 2-3 cümle yaz (120-200 karakter)
-- Doğal Türkçe kullan, bir çalışanın günlük raporu gibi yaz
-- Somut fiiller kullan: incelendi, düzeltildi, kontrol edildi, eklendi, güncellendi
-- Metinde geçen teknik terimleri koru
+GÖREV:
+- Mevcut notu 2-3 cümleye genişlet (150-250 karakter)
+- Talep başlığındaki konuyu kullanarak bağlam ekle
+- Her eylemi biraz daha açıklayıcı yaz
+- Doğal Türkçe kullan
+
+ÖRNEK:
+Giriş: "Hata düzeltildi"
+Çıkış: "Bildirilen hata incelendi ve kaynağı tespit edildi. Gerekli düzeltmeler yapılarak sorun giderildi."
 
 YASAK:
-- "Gerçekleştirildi", "sağlandı", "optimize edildi" gibi klişeler
-- Metinde olmayan özel isimler veya teknik detaylar uydurma (SQL, API, modül adı vb.)
-- Tırnak işareti, madde işareti, emoji
-- "Bu kapsamda", "Bu çalışmada" gibi kalıp girişler
+- "Gerçekleştirildi", "sağlandı", "optimize edildi", "başarıyla tamamlandı" klişeleri
+- Metinde olmayan teknik terimler (SQL, API, modül adı)
+- Tırnak, emoji, madde işareti
 
-İyileştirilmiş not:`;
+Genişletilmiş not:`;
         } else {
             prompt = `SADECE yazım hatalarını ve noktalama işaretlerini düzelt. Başka HİÇBİR ŞEY yapma.
 
@@ -817,26 +858,27 @@ ${wl.comment}
         for (const wl of worklogsWithComments) {
             let prompt = '';
             if (mode === 'IMPROVE') {
-                prompt = `Sen tecrübeli bir yazılım danışmanısın. Aşağıdaki kısa worklog notunu, bir insanın yazacağı gibi doğal ve profesyonel bir şekilde genişlet.
+                prompt = `Worklog notunu profesyonelleştir ve genişlet.
 
-Talep başlığı: ${wl.summary}
+Talep: ${wl.summary}
 Mevcut not: ${wl.comment}
 
-YAZIM REHBERİ:
-- Mevcut notu temel al ve bağlamından kopmadan genişlet
-- Talep başlığındaki konuyu kullanarak ne yapıldığını açıkla
-- 2-3 cümle yaz (120-200 karakter)
-- Doğal Türkçe kullan, bir çalışanın günlük raporu gibi yaz
-- Somut fiiller kullan: incelendi, düzeltildi, kontrol edildi, eklendi, güncellendi
-- Metinde geçen teknik terimleri koru
+GÖREV:
+- Mevcut notu 2-3 cümleye genişlet (150-250 karakter)
+- Talep başlığındaki konuyu kullanarak bağlam ekle
+- Her eylemi biraz daha açıklayıcı yaz
+- Doğal Türkçe kullan
+
+ÖRNEK:
+Giriş: "Hata düzeltildi"
+Çıkış: "Bildirilen hata incelendi ve kaynağı tespit edildi. Gerekli düzeltmeler yapılarak sorun giderildi."
 
 YASAK:
-- "Gerçekleştirildi", "sağlandı", "optimize edildi" gibi klişeler
-- Metinde olmayan özel isimler veya teknik detaylar uydurma (SQL, API, modül adı vb.)
-- Tırnak işareti, madde işareti, emoji
-- "Bu kapsamda", "Bu çalışmada" gibi kalıp girişler
+- "Gerçekleştirildi", "sağlandı", "optimize edildi", "başarıyla tamamlandı" klişeleri
+- Metinde olmayan teknik terimler (SQL, API, modül adı)
+- Tırnak, emoji, madde işareti
 
-İyileştirilmiş not:`;
+Genişletilmiş not:`;
             } else {
                 prompt = `SADECE yazım hatalarını ve noktalama işaretlerini düzelt. Başka HİÇBİR ŞEY yapma.
 
