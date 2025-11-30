@@ -622,7 +622,7 @@ status: devam/test/tamamlandı/beklemede`;
     }
   };
 
-  const handleUpdateWorklog = async (id: string, comment?: string, seconds?: number, skipNotification?: boolean) => {
+  const handleUpdateWorklog = async (id: string, comment?: string, seconds?: number, skipNotification?: boolean, isUndoRedo?: boolean) => {
     const wl = worklogs.find(w => w.id === id);
     if (!wl) return;
 
@@ -642,6 +642,9 @@ status: devam/test/tamamlandı/beklemede`;
               hours: seconds !== undefined ? secondsToHours(seconds) : w.hours
           };
       }));
+      
+      // Undo/Redo işlemlerinde bildirim gösterme
+      if (isUndoRedo) return;
       
       // Skip notification if called from batch operations
       if (skipNotification) return;
@@ -701,22 +704,20 @@ status: devam/test/tamamlandı/beklemede`;
     try {
         let prompt = '';
         if (mode === 'IMPROVE') {
-            prompt = `Bir yazılım danışmanı olarak worklog notunu yeniden yaz.
+            prompt = `Worklog notunu düzenle. SADECE mevcut metindeki bilgileri kullan.
 
-Talep: ${wl.summary}
-Mevcut not: ${wl.comment}
+Mevcut not: "${wl.comment}"
 
-Yazım kuralları:
-- Mevcut notu detaylandır ve zenginleştir
-- 2-3 cümle ile ne yapıldığını açıkla (100-180 karakter)
-- Doğal ve akıcı Türkçe kullan, kurumsal jargon kullanma
-- "Gerçekleştirildi", "sağlandı", "optimize edildi" gibi klişeler YASAK
-- Yapılan işi somut fiillerle anlat: incelendi, düzeltildi, eklendi, test edildi, kontrol edildi
-- Teknik terimleri koru (SQL, Query, modül adları vb.)
-- Tırnak, madde işareti, emoji kullanma
-- Sadece düz metin yaz, açıklama ekleme
+MUTLAK KURALLAR:
+1. SADECE mevcut notta yazanları kullan - HİÇBİR ŞEY UYDURMA
+2. Metinde SQL, sorgu, test, kontrol gibi kelimeler YOKSA bunları EKLEME
+3. Cümleleri daha akıcı hale getir, gereksiz tekrarları kaldır
+4. Maksimum 150 karakter
+5. Klişe ifadeler YASAK: "gerçekleştirildi", "sağlandı", "optimize edildi", "tamamlandı"
+6. Doğal Türkçe kullan
+7. Tırnak işareti KOYMA
 
-Yeniden yazılmış not:`;
+Düzenlenmiş not:`;
         } else {
             prompt = `SADECE yazım hatalarını ve noktalama işaretlerini düzelt. Başka HİÇBİR ŞEY yapma.
 
@@ -810,22 +811,20 @@ ${wl.comment}
         for (const wl of worklogsWithComments) {
             let prompt = '';
             if (mode === 'IMPROVE') {
-                prompt = `Bir yazılım danışmanı olarak worklog notunu yeniden yaz.
+                prompt = `Worklog notunu düzenle. SADECE mevcut metindeki bilgileri kullan.
 
-Talep: ${wl.summary}
-Mevcut not: ${wl.comment}
+Mevcut not: "${wl.comment}"
 
-Yazım kuralları:
-- Mevcut notu detaylandır ve zenginleştir
-- 2-3 cümle ile ne yapıldığını açıkla (100-180 karakter)
-- Doğal ve akıcı Türkçe kullan, kurumsal jargon kullanma
-- "Gerçekleştirildi", "sağlandı", "optimize edildi" gibi klişeler YASAK
-- Yapılan işi somut fiillerle anlat: incelendi, düzeltildi, eklendi, test edildi, kontrol edildi
-- Teknik terimleri koru (SQL, Query, modül adları vb.)
-- Tırnak, madde işareti, emoji kullanma
-- Sadece düz metin yaz, açıklama ekleme
+MUTLAK KURALLAR:
+1. SADECE mevcut notta yazanları kullan - HİÇBİR ŞEY UYDURMA
+2. Metinde SQL, sorgu, test, kontrol gibi kelimeler YOKSA bunları EKLEME
+3. Cümleleri daha akıcı hale getir, gereksiz tekrarları kaldır
+4. Maksimum 150 karakter
+5. Klişe ifadeler YASAK: "gerçekleştirildi", "sağlandı", "optimize edildi", "tamamlandı"
+6. Doğal Türkçe kullan
+7. Tırnak işareti KOYMA
 
-Yeniden yazılmış not:`;
+Düzenlenmiş not:`;
             } else {
                 prompt = `SADECE yazım hatalarını ve noktalama işaretlerini düzelt. Başka HİÇBİR ŞEY yapma.
 

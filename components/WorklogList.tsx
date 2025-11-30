@@ -9,7 +9,7 @@ const MAX_HISTORY_SIZE = 20;
 interface Props {
   worklogs: Worklog[];
   loading: LoadingState;
-  onUpdate: (id: string, comment?: string, hours?: number) => Promise<void>;
+  onUpdate: (id: string, comment?: string, hours?: number, isUndoRedo?: boolean) => Promise<void>;
   onImprove: (id: string) => Promise<void>;
   onSpellCheck: (id: string) => Promise<void>;
   jiraBaseUrl: string;
@@ -27,7 +27,7 @@ const getHourIndicator = (hours: number) => {
 const WorklogRow: React.FC<{ 
     wl: Worklog; 
     index: number;
-    onUpdate: (id: string, comment?: string, hours?: number) => Promise<void>;
+    onUpdate: (id: string, comment?: string, hours?: number, isUndoRedo?: boolean) => Promise<void>;
     onImprove: (id: string) => Promise<void>;
     onSpellCheck: (id: string) => Promise<void>;
     jiraBaseUrl: string;
@@ -115,27 +115,29 @@ const WorklogRow: React.FC<{
     const handleUndo = async () => {
         if (!canUndo) return;
         
-        const newIndex = historyIndex + 1;
-        const targetEntry = entries[newIndex];
-        
-        // Save current state if we're at the latest
+        // İlk geri alma ise mevcut durumu kaydet
         if (historyIndex === -1) {
             const currentEntry: WorklogHistoryEntry = {
                 comment: wl.comment,
                 seconds: wl.seconds,
                 timestamp: Date.now()
             };
+            // Mevcut durumu başa ekle ve index'i 1 yap (ilk eski kayda git)
             const newEntries = [currentEntry, ...entries].slice(0, MAX_HISTORY_SIZE);
-            onHistoryChange(newEntries, 1); // Start at index 1 since we just added current at 0
+            const targetEntry = newEntries[1]; // Bir önceki durum
             
-            // Apply the previous state
+            onHistoryChange(newEntries, 1);
             setIsProcessing(true);
-            await onUpdate(wl.id, entries[0].comment, entries[0].seconds);
+            await onUpdate(wl.id, targetEntry.comment, targetEntry.seconds, true); // isUndoRedo=true
             setIsProcessing(false);
         } else {
+            // Zaten history'de geziniyoruz, sadece index'i artır
+            const newIndex = historyIndex + 1;
+            const targetEntry = entries[newIndex];
+            
             onHistoryChange(entries, newIndex);
             setIsProcessing(true);
-            await onUpdate(wl.id, targetEntry.comment, targetEntry.seconds);
+            await onUpdate(wl.id, targetEntry.comment, targetEntry.seconds, true); // isUndoRedo=true
             setIsProcessing(false);
         }
     };
@@ -144,15 +146,12 @@ const WorklogRow: React.FC<{
         if (!canRedo) return;
         
         const newIndex = historyIndex - 1;
-        const targetEntry = newIndex === -1 ? null : entries[newIndex];
+        const targetEntry = entries[newIndex]; // newIndex=-1 ise entries[0] (mevcut durum)
         
         onHistoryChange(entries, newIndex);
-        
-        if (targetEntry) {
-            setIsProcessing(true);
-            await onUpdate(wl.id, targetEntry.comment, targetEntry.seconds);
-            setIsProcessing(false);
-        }
+        setIsProcessing(true);
+        await onUpdate(wl.id, targetEntry.comment, targetEntry.seconds, true); // isUndoRedo=true
+        setIsProcessing(false);
     };
 
     return (
