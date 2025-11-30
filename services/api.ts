@@ -5,8 +5,8 @@ import { plainTextToADF, parseJiraComment, secondsToHours } from '../utils/adf';
 // --- UTILS ---
 
 const getAuthHeader = (email: string, token: string) => {
-  // UTF-8 karakter desteği için encodeURIComponent
-  return 'Basic ' + btoa(encodeURIComponent(email) + ':' + token);
+  // Basic Auth: email:token formatında, encode YAPMADAN
+  return 'Basic ' + btoa(email + ':' + token);
 };
 
 const normalizeUrl = (url: string) => {
