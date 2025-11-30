@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Settings, Moon, Sun, Calendar as CalendarIcon, RefreshCw, CheckCircle2, AlertCircle, Info, ChevronLeft, ChevronRight, Copy, Sparkles, Clock, Plus, Bell, History, Brain, Edit3, FileSpreadsheet } from 'lucide-react';
-import { AppSettings, Worklog, LoadingState, Notification, NotificationHistoryItem, WorklogSuggestion, UndoAction, DEFAULT_SYSTEM_PROMPT, TextChangePreview, WeeklyReportItem } from './types';
-import { fetchWorklogs, updateWorklog, callGroq, createWorklog, deleteWorklog } from './services/api';
+import { Settings, Moon, Sun, Calendar as CalendarIcon, RefreshCw, CheckCircle2, AlertCircle, Info, ChevronLeft, ChevronRight, Copy, Sparkles, Clock, Plus, Bell, History, Brain, Edit3, FileSpreadsheet, FileText } from 'lucide-react';
+import { AppSettings, Worklog, LoadingState, Notification, NotificationHistoryItem, WorklogSuggestion, WorklogTemplate, UndoAction, DEFAULT_SYSTEM_PROMPT, TextChangePreview, WeeklyReportItem } from './types';
+import { fetchWorklogs, updateWorklog, callGroq, createWorklog, deleteWorklog, fetchIssueDetails } from './services/api';
 import { SettingsModal } from './components/SettingsModal';
 import { WorklogList } from './components/WorklogList';
 import { AddWorklogModal } from './components/AddWorklogModal';
@@ -13,6 +13,7 @@ import { secondsToHours, formatHours } from './utils/adf';
 const APP_NAME = 'WorklogPro';
 const SUGGESTIONS_KEY = `${APP_NAME}_suggestions`;
 const NOTIFICATION_HISTORY_KEY = `${APP_NAME}_notificationHistory`;
+const TEMPLATES_KEY = `${APP_NAME}_templates`;
 
 const detectJiraUrl = () => {
     const saved = localStorage.getItem(`${APP_NAME}_jiraUrl`);
@@ -32,6 +33,21 @@ const loadSuggestions = (): WorklogSuggestion[] => {
     } catch {
         return [];
     }
+};
+
+// Load templates from localStorage
+const loadTemplates = (): WorklogTemplate[] => {
+    try {
+        const saved = localStorage.getItem(TEMPLATES_KEY);
+        return saved ? JSON.parse(saved) : [];
+    } catch {
+        return [];
+    }
+};
+
+// Save templates to localStorage
+const saveTemplates = (templates: WorklogTemplate[]) => {
+    localStorage.setItem(TEMPLATES_KEY, JSON.stringify(templates.slice(0, 30))); // Keep max 30
 };
 
 // Load notification history from localStorage
@@ -58,20 +74,25 @@ const saveSuggestions = (suggestions: WorklogSuggestion[]) => {
     localStorage.setItem(SUGGESTIONS_KEY, JSON.stringify(suggestions.slice(0, 50))); // Keep max 50
 };
 
-// Update suggestions when a worklog is created
+// Update suggestions when a worklog is created - with min/max tracking
 const updateSuggestions = (issueKey: string, summary: string, comment: string, hours: number) => {
     const suggestions = loadSuggestions();
     const existingIndex = suggestions.findIndex(s => s.issueKey === issueKey);
     
     if (existingIndex >= 0) {
-        // Update existing
+        // Update existing with min/max/total tracking
         const existing = suggestions[existingIndex];
+        const newTotalHours = (existing.totalHours || existing.avgHours * existing.frequency) + hours;
+        const newFrequency = existing.frequency + 1;
         suggestions[existingIndex] = {
             ...existing,
             lastComment: comment || existing.lastComment,
-            avgHours: (existing.avgHours * existing.frequency + hours) / (existing.frequency + 1),
-            frequency: existing.frequency + 1,
-            lastUsed: new Date().toISOString()
+            avgHours: newTotalHours / newFrequency,
+            frequency: newFrequency,
+            lastUsed: new Date().toISOString(),
+            minHours: Math.min(existing.minHours || existing.avgHours, hours),
+            maxHours: Math.max(existing.maxHours || existing.avgHours, hours),
+            totalHours: newTotalHours
         };
     } else {
         // Add new
@@ -81,7 +102,10 @@ const updateSuggestions = (issueKey: string, summary: string, comment: string, h
             lastComment: comment,
             avgHours: hours,
             frequency: 1,
-            lastUsed: new Date().toISOString()
+            lastUsed: new Date().toISOString(),
+            minHours: hours,
+            maxHours: hours,
+            totalHours: hours
         });
     }
     
@@ -106,7 +130,16 @@ const initialSettings: AppSettings = {
   targetDailyHours: parseFloat(localStorage.getItem(`${APP_NAME}_targetDailyHours`) || '8'),
   minHoursPerWorklog: parseFloat(localStorage.getItem(`${APP_NAME}_minHoursPerWorklog`) || '0.25'),
   aiSystemPrompt: localStorage.getItem(`${APP_NAME}_aiSystemPrompt`) || DEFAULT_SYSTEM_PROMPT,
-  isDarkTheme: localStorage.getItem(`${APP_NAME}_isDarkTheme`) !== 'light',
+  isDarkTheme: localStorage.getItem(`${APP_NAME}_isDarkTheme`) === null ? true : localStorage.getItem(`${APP_NAME}_isDarkTheme`) === 'true',
+};
+
+// Varsayılan başlangıç tarihini hesapla - Yerel tarih kullan
+const getDefaultStartDate = (): string => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
 export default function App() {
@@ -116,12 +149,13 @@ export default function App() {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isWeeklyReportOpen, setIsWeeklyReportOpen] = useState(false);
   const [isEditingTarget, setIsEditingTarget] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(getDefaultStartDate());
   const [worklogs, setWorklogs] = useState<Worklog[]>([]);
   const [loadingState, setLoadingState] = useState<LoadingState>(LoadingState.IDLE);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notificationHistory, setNotificationHistory] = useState<NotificationHistoryItem[]>(loadNotificationHistory());
   const [suggestions, setSuggestions] = useState<WorklogSuggestion[]>(loadSuggestions());
+  const [templates, setTemplates] = useState<WorklogTemplate[]>(loadTemplates());
   const [distributeTarget, setDistributeTarget] = useState<string>(settings.targetDailyHours.toString());
   const [tempTargetHours, setTempTargetHours] = useState<string>(settings.targetDailyHours.toString());
   
@@ -249,6 +283,70 @@ export default function App() {
     setNotificationHistory(prev => prev.filter(n => n.id !== id));
   };
 
+  // Template management functions
+  const handleSaveTemplate = (template: Omit<WorklogTemplate, 'id' | 'usageCount' | 'createdAt'>) => {
+    const newTemplate: WorklogTemplate = {
+      ...template,
+      id: Date.now().toString(),
+      usageCount: 0,
+      createdAt: new Date().toISOString()
+    };
+    const updated = [newTemplate, ...templates];
+    setTemplates(updated);
+    saveTemplates(updated);
+    notify('Şablon Kaydedildi', `"${template.name}" şablonu oluşturuldu`, 'success');
+  };
+
+  const handleDeleteTemplate = (id: string) => {
+    const updated = templates.filter(t => t.id !== id);
+    setTemplates(updated);
+    saveTemplates(updated);
+    notify('Şablon Silindi', 'Şablon başarıyla silindi', 'info');
+  };
+
+  const handleUseTemplate = (template: WorklogTemplate) => {
+    // Update usage count
+    const updated = templates.map(t => 
+      t.id === template.id ? { ...t, usageCount: t.usageCount + 1 } : t
+    );
+    setTemplates(updated);
+    saveTemplates(updated);
+  };
+
+  // AI-powered time estimation based on issue summary and historical data
+  const getTimeEstimation = (issueKey: string, summary: string): { estimate: number; confidence: 'high' | 'medium' | 'low'; message: string } | null => {
+    // Check if we have historical data for this specific issue
+    const suggestion = suggestions.find(s => s.issueKey === issueKey);
+    if (suggestion && suggestion.frequency >= 2) {
+      const range = suggestion.maxHours && suggestion.minHours 
+        ? `${suggestion.minHours.toFixed(1)}-${suggestion.maxHours.toFixed(1)}h` 
+        : `~${suggestion.avgHours.toFixed(1)}h`;
+      return {
+        estimate: suggestion.avgHours,
+        confidence: suggestion.frequency >= 5 ? 'high' : 'medium',
+        message: `Bu iş genelde ${range} sürüyor (${suggestion.frequency}x kayıt)`
+      };
+    }
+
+    // Try to match by similar keywords in summary
+    const keywords = summary.toLowerCase().split(/\s+/);
+    const similarSuggestions = suggestions.filter(s => {
+      const suggestionWords = s.summary.toLowerCase().split(/\s+/);
+      return keywords.some(kw => kw.length > 3 && suggestionWords.some(sw => sw.includes(kw) || kw.includes(sw)));
+    });
+
+    if (similarSuggestions.length >= 2) {
+      const avgHours = similarSuggestions.reduce((sum, s) => sum + s.avgHours, 0) / similarSuggestions.length;
+      return {
+        estimate: avgHours,
+        confidence: 'low',
+        message: `Benzer işler genelde ~${avgHours.toFixed(1)}h sürüyor`
+      };
+    }
+
+    return null;
+  };
+
   const handleAddWorklog = async (issueKey: string, hours: number, comment: string) => {
     const seconds = Math.round(hours * 3600);
     
@@ -336,7 +434,7 @@ export default function App() {
     }
   };
 
-  // AI Generate Weekly Report - Smart distribution by importance
+  // AI Generate Weekly Report - Smart distribution by importance with issue descriptions
   const generateAIWeeklyReport = async (worklogs: Worklog[], weekStart: string): Promise<WeeklyReportItem[]> => {
     if (!settings.groqApiKey || worklogs.length === 0) {
         notify('Hata', 'Groq API anahtarı veya geçen hafta verisi eksik', 'error');
@@ -345,75 +443,8 @@ export default function App() {
     
     const DAYS_ARRAY = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma'];
     
-    // Smart description generator based on work type keywords
-    const generateSmartDescription = (summary: string, comments: string[]): string => {
-        const lowerSummary = summary.toLowerCase();
-        const lowerComments = comments.join(' ').toLowerCase();
-        const combined = lowerSummary + ' ' + lowerComments;
-        
-        // E-fatura / E-dönüşüm işleri
-        if (combined.includes('e-fatura') || combined.includes('efatura') || combined.includes('e-dönüşüm') || combined.includes('edönüşüm')) {
-            if (combined.includes('kurulum') || combined.includes('uyarlama')) {
-                return 'Kurulum aşamalarına devam edilecek, test ortamı kontrol edilecek';
-            }
-            if (combined.includes('revize') || combined.includes('düzeltme')) {
-                return 'Revizyonlar tamamlanacak, ADD\'ye güncel versiyon iletilecek';
-            }
-            return 'Test edilecek, sorun yoksa ADD onayına sunulacak';
-        }
-        
-        // Rapor işleri
-        if (combined.includes('rapor') || combined.includes('report')) {
-            if (combined.includes('tasarım') || combined.includes('hazırlama') || combined.includes('hazırlanması')) {
-                return 'Tasarım tamamlandı, müşteri onayı bekleniyor';
-            }
-            return 'Rapor kontrol edilecek, revize talebi varsa güncellenecek';
-        }
-        
-        // KDV işleri
-        if (combined.includes('kdv')) {
-            return 'KDV raporu hazırlandı, müşteriden geri dönüş bekleniyor';
-        }
-        
-        // Kurulum / Eğitim işleri
-        if (combined.includes('kurulum') || combined.includes('setup') || combined.includes('installation')) {
-            return 'Kurulum devam edecek, müşteri ile test yapılacak';
-        }
-        if (combined.includes('eğitim') || combined.includes('training')) {
-            return 'Kullanıcı eğitimi planlanacak';
-        }
-        
-        // Bug / Hata işleri
-        if (combined.includes('bug') || combined.includes('hata') || combined.includes('fix') || combined.includes('düzeltme')) {
-            return 'Düzeltme yapıldı, QA testine gönderilecek';
-        }
-        
-        // Test işleri
-        if (combined.includes('test') || combined.includes('qa')) {
-            return 'Test senaryoları çalıştırılacak, sonuçlar raporlanacak';
-        }
-        
-        // Geliştirme işleri
-        if (combined.includes('geliştirme') || combined.includes('development') || combined.includes('özellik') || combined.includes('feature')) {
-            return 'Geliştirme devam edecek, code review yapılacak';
-        }
-        
-        // Entegrasyon işleri
-        if (combined.includes('entegrasyon') || combined.includes('integration') || combined.includes('api')) {
-            return 'Entegrasyon testleri yapılacak, log kontrolleri';
-        }
-        
-        // Web işleri
-        if (combined.includes('web') || combined.includes('portal') || combined.includes('sayfa')) {
-            return 'Web geliştirme devam edecek, test ortamında kontrol edilecek';
-        }
-        
-        // Default - daha akıllı
-        return 'İlgili çalışmalara devam edilecek, durum güncellenecek';
-    };
-    
     // Group worklogs by issue and calculate importance
-    const issueMap = new Map<string, { worklog: Worklog; lastDay: Date; totalHours: number; comments: string[] }>();
+    const issueMap = new Map<string, { worklog: Worklog; lastDay: Date; totalHours: number; comments: string[]; description?: string; projectName?: string }>();
     
     worklogs.forEach(log => {
         const date = new Date(log.started);
@@ -447,43 +478,60 @@ export default function App() {
         notify('Bilgi', 'Geçen hafta işlenmiş worklog bulunamadı', 'info');
         return [];
     }
-    
-    // Build detailed issue list for prompt with comments for context
-    const issueList = sortedIssues.map((data, idx) => {
-        const comments = data.comments.slice(0, 3).join(' | ');
-        return `${data.issueKey}: ${data.worklog.summary} (${data.totalHours.toFixed(1)}h geçen hafta)${comments ? ` [Notlar: ${comments}]` : ''}`;
-    }).join('\n');
-    
-    // Smart prompt that understands work context and predicts next steps
-    const prompt = `Sen bir yazılım ekibinin haftalık planını hazırlayan asistansın. Geçen hafta yapılan işlere bakarak bu hafta ne yapılacağını TAHMİN et.
 
-KURAL: Açıklamalar gerçekçi ve spesifik olmalı. "Devam edilecek" gibi genel ifadeler KULLANMA!
+    // Fetch issue descriptions from Jira for better context
+    notify('Bilgi', 'Issue detayları Jira\'dan çekiliyor...', 'info');
+    
+    const issueDetailsPromises = sortedIssues.slice(0, 10).map(async (issue) => {
+        const details = await fetchIssueDetails(issue.issueKey, settings);
+        if (details) {
+            issue.description = details.description;
+            issue.projectName = details.projectName;
+        }
+        return issue;
+    });
+    
+    await Promise.all(issueDetailsPromises);
+    
+    // Build detailed issue list for prompt with Jira descriptions
+    const issueList = sortedIssues.slice(0, 10).map((data, idx) => {
+        const comments = data.comments.slice(0, 2).join(' | ');
+        const desc = data.description ? data.description.substring(0, 200) : '';
+        const projectInfo = data.projectName ? `[${data.projectName}]` : '';
+        return `${idx + 1}. ${data.issueKey} ${projectInfo}: ${data.worklog.summary}
+   - Geçen hafta: ${data.totalHours.toFixed(1)} saat çalışıldı
+   - Son notlar: ${comments || 'Yok'}
+   - Jira Açıklaması: ${desc || 'Yok'}`;
+    }).join('\n\n');
+    
+    // Enhanced prompt with issue descriptions for better context
+    const prompt = `Sen deneyimli bir SAP Business One / yazılım danışmanısın. Geçen hafta yapılan işlere ve Jira açıklamalarına bakarak bu hafta için DETAYLI ve SPESİFİK plan hazırla.
 
-ÖRNEK AÇIKLAMALAR:
-- Rapor/tasarım işi → "Müşteriye iletildi, geri dönüş bekleniyor" veya "Revize taleplerine göre güncellenecek"
-- E-fatura/e-dönüşüm işi → "Test ortamında kontrol edilecek, ADD'ye iletilecek"
-- Kurulum/uyarlama işi → "Müşteri sistemine kurulum yapılacak" veya "Eğitim verilecek"
-- Bug/hata düzeltme → "QA testinden geçirilecek" veya "Canlıya alınacak"
-- Geliştirme işi → "Kod review yapılacak" veya "Unit testler yazılacak"
+ÖNEMLİ KURALLAR:
+1. Her açıklama EN AZ 50-80 karakter olmalı
+2. Müşteri/şirket adı varsa MUTLAKA kullan (Jira açıklamasından bul)
+3. "Devam edilecek", "Test edilecek" gibi kısa cevaplar YASAK
+4. Her açıklamada: NE yapılacak + KİME/NEREYE + SONUÇ/HEDEF olmalı
+
+ÖRNEK İYİ AÇIKLAMALAR:
+- "ABC Teknoloji için e-fatura entegrasyonu test ortamında kontrol edilecek, başarılı olursa ADD onayına sunulacak"
+- "XYZ Holding KDV raporu revizyonları tamamlanacak, muhasebe departmanına mail ile iletilecek"
+- "BLF Optik stok modülü kurulumu devam edecek, cuma günü kullanıcı eğitimi planlanacak"
+- "DEF AŞ için hazırlanan Crystal Report tasarımı müşteriye sunulacak, geri bildirim alınacak"
 
 GEÇEN HAFTA YAPILAN İŞLER:
 ${issueList}
 
-Her iş için SADECE JSON array döndür, başka açıklama yazma:
-[{"issueKey":"XXX-123","day":"Pazartesi","status":"devam","description":"Müşteriye iletildi, revizyonlar için geri dönüş bekleniyor"}]
+SADECE JSON array döndür, başka bir şey yazma:
+[{"issueKey":"XXX-123","day":"Pazartesi","status":"devam","description":"Detaylı açıklama buraya..."}]
 
-day: Pazartesi/Salı/Çarşamba/Perşembe/Cuma
-status: devam/test/tamamlandı/beklemede
-
-Açıklamalarda:
-- Müşteri adı varsa kullan (örn: "BLF Optik için kurulum devam edecek")
-- İşin türüne göre mantıklı sonraki adım yaz
-- Kısa ve öz tut (max 60 karakter)`;
+day: Pazartesi/Salı/Çarşamba/Perşembe/Cuma (işleri günlere dengeli dağıt)
+status: devam/test/tamamlandı/beklemede`;
 
     try {
-        console.log('AI Prompt:', prompt);
-        const response = await callGroq(prompt, settings);
-        console.log('AI Response:', response);
+        console.log('AI Weekly Report Prompt:', prompt);
+        const response = await callGroq(prompt, settings, 1000); // Daha uzun yanıt için
+        console.log('AI Weekly Report Response:', response);
         
         // Try multiple patterns to find JSON
         let jsonData = null;
@@ -510,22 +558,38 @@ Açıklamalarda:
             }
         }
         
-        // If AI failed, create smart fallback based on work type analysis
+        // If AI failed, create smart fallback based on issue descriptions
         if (!jsonData || !Array.isArray(jsonData) || jsonData.length === 0) {
             console.log('AI JSON parsing failed, using smart fallback');
             
-            // Create fallback plan with smart descriptions
             const fallbackItems: WeeklyReportItem[] = sortedIssues.slice(0, 5).map((issue, idx) => {
                 const day = DAYS_ARRAY[Math.min(idx, 4)] as any;
                 const statusGuess = issue.totalHours > 4 ? 'devam' : issue.totalHours > 2 ? 'test' : 'tamamlandı';
-                const smartDesc = generateSmartDescription(issue.worklog.summary, issue.comments);
+                
+                // Generate better description using available data
+                let smartDesc = '';
+                const projectName = issue.projectName || '';
+                const summary = issue.worklog.summary.toLowerCase();
+                const desc = (issue.description || '').toLowerCase();
+                
+                if (summary.includes('rapor') || summary.includes('report')) {
+                    smartDesc = `${projectName} için hazırlanan rapor kontrol edilecek, gerekirse revizyon yapılacak ve ilgili birime iletilecek`;
+                } else if (summary.includes('e-fatura') || summary.includes('efatura')) {
+                    smartDesc = `${projectName} e-fatura entegrasyonu test edilecek, sorun yoksa ADD onayı için başvuru yapılacak`;
+                } else if (summary.includes('kurulum') || summary.includes('setup')) {
+                    smartDesc = `${projectName} için kurulum işlemlerine devam edilecek, kullanıcı testleri yapılacak`;
+                } else if (summary.includes('hata') || summary.includes('bug') || summary.includes('fix')) {
+                    smartDesc = `${projectName} sisteminde tespit edilen hata düzeltmesi kontrol edilecek ve canlıya alınacak`;
+                } else {
+                    smartDesc = `${projectName} için ${issue.worklog.summary} çalışmalarına devam edilecek, ilerleme raporu hazırlanacak`;
+                }
                 
                 return {
                     issueKey: issue.issueKey,
                     summary: issue.worklog.summary,
                     status: statusGuess,
                     day: day,
-                    description: smartDesc,
+                    description: smartDesc.trim(),
                     hours: issue.totalHours
                 };
             });
@@ -541,14 +605,14 @@ Açıklamalarda:
             return {
                 issueKey: item.issueKey || 'UNKNOWN',
                 summary: issueData?.worklog.summary || item.issueKey,
-                status: ['devam', 'test', 'tamamlandı', 'yeni'].includes(item.status) ? item.status : 'devam',
+                status: ['devam', 'test', 'tamamlandı', 'yeni', 'beklemede'].includes(item.status) ? item.status : 'devam',
                 day: validDay as 'Pazartesi' | 'Salı' | 'Çarşamba' | 'Perşembe' | 'Cuma',
-                description: item.description || 'Devam edilecek',
+                description: item.description || 'İlgili çalışmalara devam edilecek',
                 hours: issueData?.totalHours
             };
         });
         
-        notify('Başarılı', `${result.length} görev planlandı`, 'success');
+        notify('Başarılı', `${result.length} görev AI ile planlandı`, 'success');
         return result;
         
     } catch (e: any) {
@@ -560,7 +624,7 @@ Açıklamalarda:
             summary: issue.worklog.summary,
             status: 'devam' as const,
             day: DAYS_ARRAY[Math.min(idx, 4)] as any,
-            description: generateSmartDescription(issue.worklog.summary, issue.comments),
+            description: `${issue.projectName || ''} için ${issue.worklog.summary} çalışmalarına devam edilecek`.trim(),
             hours: issue.totalHours
         }));
         
@@ -1277,7 +1341,11 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
                 </button>
                 
                 <button 
-                    onClick={() => setSettings(s => ({...s, isDarkTheme: !s.isDarkTheme}))} 
+                    onClick={() => {
+                        const newDarkTheme = !settings.isDarkTheme;
+                        setSettings(s => ({...s, isDarkTheme: newDarkTheme}));
+                        localStorage.setItem(`${APP_NAME}_isDarkTheme`, String(newDarkTheme));
+                    }} 
                     className="btn-icon"
                     aria-label="Toggle theme"
                 >
@@ -1357,20 +1425,22 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
                                                 backgroundColor: isSelected 
                                                     ? 'var(--color-primary-600)' 
                                                     : isToday 
-                                                        ? 'var(--color-primary-100)' 
+                                                        ? (settings.isDarkTheme ? 'rgba(66, 133, 244, 0.3)' : 'var(--color-primary-100)')
                                                         : 'transparent',
                                                 color: isSelected 
                                                     ? 'white' 
-                                                    : isWeekend 
-                                                        ? 'var(--color-text-tertiary)' 
-                                                        : 'var(--color-text-primary)',
+                                                    : isToday
+                                                        ? (settings.isDarkTheme ? '#93c5fd' : 'var(--color-primary-700)')
+                                                        : isWeekend 
+                                                            ? 'var(--color-text-tertiary)' 
+                                                            : 'var(--color-text-primary)',
                                                 fontWeight: isSelected || isToday ? 600 : 400
                                             }}
                                         >
                                             <div className="text-xs opacity-70">{days[i]}</div>
                                             <div className="text-sm font-medium">{day.getDate()}</div>
                                             {isToday && !isSelected && (
-                                                <div className="w-1 h-1 rounded-full mx-auto mt-0.5" style={{ backgroundColor: 'var(--color-primary-600)' }} />
+                                                <div className="w-1.5 h-1.5 rounded-full mx-auto mt-0.5" style={{ backgroundColor: 'var(--color-primary-500)' }} />
                                             )}
                                         </button>
                                     );
@@ -1531,10 +1601,11 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
                         <div className="space-y-2">
                             <button 
                                 onClick={previewEqualDistribute} 
-                                className="btn-tonal ripple text-sm w-full"
+                                className="btn-filled ripple text-sm w-full"
                                 style={{ 
-                                    backgroundColor: 'var(--color-success-container)', 
-                                    color: 'var(--color-success)' 
+                                    background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
+                                    color: 'white',
+                                    opacity: isDistributing ? 0.7 : 1
                                 }}
                                 title="Tüm worklog'lara eşit süre dağıtır"
                                 disabled={isDistributing}
@@ -1667,7 +1738,12 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
         onSubmit={handleAddWorklog}
         settings={settings}
         suggestions={suggestions}
+        templates={templates}
         selectedDate={selectedDate}
+        onSaveTemplate={handleSaveTemplate}
+        onDeleteTemplate={handleDeleteTemplate}
+        onUseTemplate={handleUseTemplate}
+        getTimeEstimation={getTimeEstimation}
       />
 
       {/* Notification History Panel */}

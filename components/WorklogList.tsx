@@ -88,10 +88,10 @@ const WorklogRow: React.FC<{
             )}
             
             {/* Header Row */}
-            <div className="flex items-start justify-between gap-4 mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 sm:gap-4 mb-4">
                 {/* Issue Info */}
                 <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
                         <a 
                             href={`${jiraBaseUrl}/browse/${wl.issueKey}`}
                             target="_blank"
@@ -103,7 +103,8 @@ const WorklogRow: React.FC<{
                             <ExternalLink size={12} className="opacity-50" />
                         </a>
                         <span 
-                            className="chip text-xs truncate min-w-0"
+                            className="chip text-xs line-clamp-2 sm:truncate"
+                            style={{ maxWidth: '100%' }}
                             title={wl.summary}
                         >
                             {wl.summary}
@@ -112,7 +113,7 @@ const WorklogRow: React.FC<{
                 </div>
 
                 {/* Time Display */}
-                <div className="shrink-0">
+                <div className="shrink-0 self-end sm:self-auto">
                     {isTimeEditing ? (
                         <div className="flex items-center gap-1">
                             <input

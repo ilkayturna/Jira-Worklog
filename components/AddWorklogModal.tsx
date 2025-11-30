@@ -1,7 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Search, Clock, MessageSquare, Plus, Sparkles, History, Loader2, ExternalLink, Zap } from 'lucide-react';
-import { AppSettings, JiraIssue, WorklogSuggestion } from '../types';
+import { X, Search, Clock, MessageSquare, Plus, Sparkles, History, Loader2, ExternalLink, Zap, FileText, Save, Trash2, TrendingUp, AlertCircle } from 'lucide-react';
+import { AppSettings, JiraIssue, WorklogSuggestion, WorklogTemplate } from '../types';
 import { searchIssues } from '../services/api';
+
+interface TimeEstimation {
+    estimate: number;
+    confidence: 'high' | 'medium' | 'low';
+    message: string;
+}
 
 interface AddWorklogModalProps {
     isOpen: boolean;
@@ -9,7 +15,12 @@ interface AddWorklogModalProps {
     onSubmit: (issueKey: string, hours: number, comment: string) => Promise<void>;
     settings: AppSettings;
     suggestions: WorklogSuggestion[];
+    templates: WorklogTemplate[];
     selectedDate: string;
+    onSaveTemplate: (template: Omit<WorklogTemplate, 'id' | 'usageCount' | 'createdAt'>) => void;
+    onDeleteTemplate: (id: string) => void;
+    onUseTemplate: (template: WorklogTemplate) => void;
+    getTimeEstimation: (issueKey: string, summary: string) => TimeEstimation | null;
 }
 
 export const AddWorklogModal: React.FC<AddWorklogModalProps> = ({
@@ -18,7 +29,12 @@ export const AddWorklogModal: React.FC<AddWorklogModalProps> = ({
     onSubmit,
     settings,
     suggestions,
-    selectedDate
+    templates,
+    selectedDate,
+    onSaveTemplate,
+    onDeleteTemplate,
+    onUseTemplate,
+    getTimeEstimation
 }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState<JiraIssue[]>([]);
@@ -28,6 +44,10 @@ export const AddWorklogModal: React.FC<AddWorklogModalProps> = ({
     const [isSearching, setIsSearching] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showSuggestions, setShowSuggestions] = useState(true);
+    const [showTemplates, setShowTemplates] = useState(false);
+    const [showSaveTemplate, setShowSaveTemplate] = useState(false);
+    const [templateName, setTemplateName] = useState('');
+    const [timeEstimation, setTimeEstimation] = useState<TimeEstimation | null>(null);
     const [error, setError] = useState('');
     
     const searchInputRef = useRef<HTMLInputElement>(null);
@@ -42,10 +62,24 @@ export const AddWorklogModal: React.FC<AddWorklogModalProps> = ({
             setHours('1');
             setComment('');
             setShowSuggestions(true);
+            setShowTemplates(false);
+            setShowSaveTemplate(false);
+            setTemplateName('');
+            setTimeEstimation(null);
             setError('');
             setTimeout(() => searchInputRef.current?.focus(), 100);
         }
     }, [isOpen]);
+
+    // Update time estimation when issue changes
+    useEffect(() => {
+        if (selectedIssue) {
+            const estimation = getTimeEstimation(selectedIssue.key, selectedIssue.summary);
+            setTimeEstimation(estimation);
+        } else {
+            setTimeEstimation(null);
+        }
+    }, [selectedIssue, getTimeEstimation]);
 
     // Debounced search
     const handleSearch = useCallback(async (query: string) => {
@@ -84,6 +118,7 @@ export const AddWorklogModal: React.FC<AddWorklogModalProps> = ({
         setSearchQuery(issue.key);
         setSearchResults([]);
         setShowSuggestions(false);
+        setShowTemplates(false);
     };
 
     const handleSelectSuggestion = (suggestion: WorklogSuggestion) => {
@@ -92,7 +127,42 @@ export const AddWorklogModal: React.FC<AddWorklogModalProps> = ({
         setComment(suggestion.lastComment);
         setHours(suggestion.avgHours.toFixed(1));
         setShowSuggestions(false);
+        setShowTemplates(false);
         setSearchResults([]);
+    };
+
+    const handleSelectTemplate = (template: WorklogTemplate) => {
+        if (template.issueKey) {
+            setSelectedIssue({ key: template.issueKey, summary: template.name });
+            setSearchQuery(template.issueKey);
+        }
+        setComment(template.comment);
+        setHours(template.defaultHours.toString());
+        setShowTemplates(false);
+        setShowSuggestions(false);
+        onUseTemplate(template);
+    };
+
+    const handleSaveAsTemplate = () => {
+        if (!templateName.trim() || !comment.trim()) {
+            setError('Şablon adı ve yorum gerekli');
+            return;
+        }
+        onSaveTemplate({
+            name: templateName,
+            issueKey: selectedIssue?.key,
+            comment: comment,
+            defaultHours: parseFloat(hours) || 1,
+            category: selectedIssue?.key?.split('-')[0] // Project key as category
+        });
+        setShowSaveTemplate(false);
+        setTemplateName('');
+    };
+
+    const handleApplyEstimation = () => {
+        if (timeEstimation) {
+            setHours(timeEstimation.estimate.toFixed(1));
+        }
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -283,6 +353,108 @@ export const AddWorklogModal: React.FC<AddWorklogModalProps> = ({
                             </div>
                         )}
 
+                        {/* Templates Section */}
+                        {!selectedIssue && searchQuery.length < 2 && templates.length > 0 && (
+                            <div className="space-y-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowTemplates(!showTemplates)}
+                                    className="flex items-center gap-2 w-full text-left"
+                                >
+                                    <FileText size={14} style={{ color: 'var(--color-secondary-600)' }} />
+                                    <label className="text-xs font-semibold uppercase tracking-wider cursor-pointer" 
+                                           style={{ color: 'var(--color-on-surface-variant)' }}>
+                                        Kayıtlı Şablonlar ({templates.length})
+                                    </label>
+                                </button>
+                                {showTemplates && (
+                                    <div className="space-y-2 max-h-32 overflow-y-auto">
+                                        {templates.map((template) => (
+                                            <div
+                                                key={template.id}
+                                                className="flex items-center gap-2 p-3 rounded-xl border group"
+                                                style={{ 
+                                                    backgroundColor: 'var(--color-surface-variant)', 
+                                                    borderColor: 'var(--color-outline-variant)' 
+                                                }}
+                                            >
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleSelectTemplate(template)}
+                                                    className="flex-1 text-left"
+                                                >
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <span className="text-sm font-medium" style={{ color: 'var(--color-on-surface)' }}>
+                                                            {template.name}
+                                                        </span>
+                                                        {template.issueKey && (
+                                                            <span className="text-xs px-1.5 py-0.5 rounded" 
+                                                                  style={{ backgroundColor: 'var(--color-tertiary-container)', color: 'var(--color-on-surface)' }}>
+                                                                {template.issueKey}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-xs truncate" style={{ color: 'var(--color-on-surface-variant)' }}>
+                                                        {template.comment} • {template.defaultHours}h
+                                                    </p>
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onDeleteTemplate(template.id)}
+                                                    className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30 transition-all"
+                                                    style={{ color: 'var(--color-error)' }}
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Time Estimation - AI Suggestion */}
+                        {timeEstimation && selectedIssue && (
+                            <div 
+                                className="flex items-center gap-3 p-3 rounded-xl border cursor-pointer hover:scale-[1.01] transition-all"
+                                onClick={handleApplyEstimation}
+                                style={{ 
+                                    backgroundColor: timeEstimation.confidence === 'high' 
+                                        ? 'var(--color-success-container, rgba(34, 197, 94, 0.1))' 
+                                        : timeEstimation.confidence === 'medium'
+                                        ? 'var(--color-warning-container, rgba(234, 179, 8, 0.1))'
+                                        : 'var(--color-surface-variant)',
+                                    borderColor: timeEstimation.confidence === 'high'
+                                        ? 'rgba(34, 197, 94, 0.3)'
+                                        : timeEstimation.confidence === 'medium'
+                                        ? 'rgba(234, 179, 8, 0.3)'
+                                        : 'var(--color-outline-variant)'
+                                }}
+                            >
+                                <TrendingUp size={18} style={{ 
+                                    color: timeEstimation.confidence === 'high' 
+                                        ? '#22c55e' 
+                                        : timeEstimation.confidence === 'medium'
+                                        ? '#eab308'
+                                        : 'var(--color-on-surface-variant)' 
+                                }} />
+                                <div className="flex-1">
+                                    <p className="text-sm font-medium" style={{ color: 'var(--color-on-surface)' }}>
+                                        {timeEstimation.message}
+                                    </p>
+                                    <p className="text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>
+                                        Tıklayarak {timeEstimation.estimate.toFixed(1)}h uygulayın
+                                    </p>
+                                </div>
+                                <span 
+                                    className="text-lg font-bold"
+                                    style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-primary-600)' }}
+                                >
+                                    {timeEstimation.estimate.toFixed(1)}h
+                                </span>
+                            </div>
+                        )}
+
                         {/* Time & Comment */}
                         <div className="grid grid-cols-3 gap-4">
                             <div className="space-y-2">
@@ -324,6 +496,47 @@ export const AddWorklogModal: React.FC<AddWorklogModalProps> = ({
                                 </div>
                             </div>
                         </div>
+
+                        {/* Save as Template */}
+                        {comment.trim() && (
+                            <div className="space-y-2">
+                                {showSaveTemplate ? (
+                                    <div className="flex items-center gap-2 p-3 rounded-xl border" 
+                                         style={{ backgroundColor: 'var(--color-surface-variant)', borderColor: 'var(--color-outline-variant)' }}>
+                                        <input
+                                            type="text"
+                                            value={templateName}
+                                            onChange={(e) => setTemplateName(e.target.value)}
+                                            placeholder="Şablon adı..."
+                                            className="input-filled flex-1 text-sm py-1.5"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={handleSaveAsTemplate}
+                                            className="btn-filled py-1.5 px-3 text-sm"
+                                        >
+                                            <Save size={14} /> Kaydet
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => { setShowSaveTemplate(false); setTemplateName(''); }}
+                                            className="btn-text py-1.5 px-2"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowSaveTemplate(true)}
+                                        className="text-xs flex items-center gap-1.5 hover:underline"
+                                        style={{ color: 'var(--color-primary-600)' }}
+                                    >
+                                        <Save size={12} /> Şablon olarak kaydet
+                                    </button>
+                                )}
+                            </div>
+                        )}
 
                         {/* Error */}
                         {error && (

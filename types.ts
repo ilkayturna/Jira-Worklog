@@ -75,6 +75,21 @@ export interface WorklogSuggestion {
   avgHours: number;
   frequency: number; // How many times used
   lastUsed: string; // Date
+  minHours?: number; // Minimum hours logged
+  maxHours?: number; // Maximum hours logged
+  totalHours?: number; // Total hours logged historically
+}
+
+// Worklog template for quick entry
+export interface WorklogTemplate {
+  id: string;
+  name: string;
+  issueKey?: string; // Optional - can be generic
+  comment: string;
+  defaultHours: number;
+  category?: string; // e.g., "Meeting", "Development", "Testing"
+  usageCount: number;
+  createdAt: string;
 }
 
 // Jira Issue for search results
@@ -84,6 +99,7 @@ export interface JiraIssue {
   issueType?: string;
   status?: string;
   projectName?: string;
+  description?: string; // Jira'daki issue açıklaması
 }
 
 export interface HistoryAction {

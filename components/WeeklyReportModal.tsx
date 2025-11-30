@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { X, FileSpreadsheet, Download, Plus, Trash2, Check, ChevronLeft, ChevronRight, Wand2, GripVertical } from 'lucide-react';
+import { X, FileSpreadsheet, Download, Plus, Trash2, Check, ChevronLeft, ChevronRight, Wand2, GripVertical, RefreshCw } from 'lucide-react';
 import { Worklog, WeeklyReportItem, AppSettings } from '../types';
 import * as XLSX from 'xlsx';
 
@@ -248,6 +248,17 @@ export const WeeklyReportModal: React.FC<Props> = ({
                     </div>
                     
                     <div className="flex items-center gap-2">
+                        {/* Refresh Button */}
+                        <button
+                            onClick={() => { setItems([]); loadLastWeekWorklogs(); }}
+                            disabled={isLoading}
+                            className="flex items-center gap-2 px-3 py-2 rounded-xl font-medium transition-all hover:scale-105 disabled:opacity-50"
+                            style={{ backgroundColor: 'var(--color-surface-container)', color: 'var(--color-text-primary)' }}
+                            title="Listeyi yenile"
+                        >
+                            <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
+                        </button>
+                        
                         {settings.groqApiKey && lastWeekWorklogs.length > 0 && (
                             <button
                                 onClick={handleAIGenerate}

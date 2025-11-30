@@ -214,7 +214,7 @@ export const searchIssues = async (query: string, settings: AppSettings): Promis
         'Content-Type': 'application/json'
     }, {
         jql: jql,
-        fields: ['summary', 'issuetype', 'status', 'project'],
+        fields: ['summary', 'issuetype', 'status', 'project', 'description'],
         maxResults: 10
     });
 
@@ -230,8 +230,37 @@ export const searchIssues = async (query: string, settings: AppSettings): Promis
         summary: issue.fields?.summary || '',
         issueType: issue.fields?.issuetype?.name || '',
         status: issue.fields?.status?.name || '',
-        projectName: issue.fields?.project?.name || ''
+        projectName: issue.fields?.project?.name || '',
+        description: parseJiraComment(issue.fields?.description) || ''
     }));
+};
+
+// Issue detaylarını çek (description dahil) - Haftalık rapor için
+export const fetchIssueDetails = async (issueKey: string, settings: AppSettings): Promise<{ description: string; summary: string; projectName: string } | null> => {
+    if (!settings.jiraUrl || !settings.jiraEmail || !settings.jiraToken) {
+        return null;
+    }
+
+    try {
+        const targetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/issue/${issueKey}?fields=description,summary,project`;
+        
+        const response = await fetchThroughProxy(targetUrl, 'GET', {
+            'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
+            'Accept': 'application/json'
+        });
+
+        if (!response.ok) return null;
+
+        const data = await response.json();
+        return {
+            description: parseJiraComment(data.fields?.description) || '',
+            summary: data.fields?.summary || '',
+            projectName: data.fields?.project?.name || ''
+        };
+    } catch (e) {
+        console.error('Failed to fetch issue details:', e);
+        return null;
+    }
 };
 
 // --- GROQ API (Proxy Üzerinden) ---
