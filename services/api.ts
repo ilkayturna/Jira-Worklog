@@ -5,7 +5,8 @@ import { plainTextToADF, parseJiraComment, secondsToHours } from '../utils/adf';
 // --- UTILS ---
 
 const getAuthHeader = (email: string, token: string) => {
-  return 'Basic ' + btoa(`${email}:${token}`);
+  // UTF-8 karakter desteği için encodeURIComponent
+  return 'Basic ' + btoa(encodeURIComponent(email) + ':' + token);
 };
 
 const normalizeUrl = (url: string) => {
@@ -27,7 +28,14 @@ const fetchThroughProxy = async (targetUrl: string, method: string, headers: any
     };
 
     if (body) {
-        options.body = body; // JSON.stringify yapma, proxy.js halledecek veya caller obje vermeli
+        // DÜZELTME: Browser fetch API'si body'yi otomatik stringify YAPMAZ.
+        // Eğer body bir obje ise ve content-type json ise, manuel stringify yapmalıyız.
+        // Aksi takdirde sunucuya "[object Object]" gider ve 500 hatası alınır.
+        if (typeof body === 'object') {
+            options.body = JSON.stringify(body);
+        } else {
+            options.body = body;
+        }
     }
 
     const response = await fetch(proxyUrl, options);
@@ -43,17 +51,11 @@ export const fetchWorklogs = async (date: string, settings: AppSettings): Promis
 
   const jql = `worklogDate = "${date}" AND worklogAuthor = currentUser()`;
   
-  // FIX: GET method deprecated (410 Gone). Switched to POST.
-  // URL sonuna / koymuyoruz.
+  // POST metodu (v3 API) - 410 Gone hatasını engeller
   const targetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/search`;
   
   let response;
   try {
-      // Body'yi obje olarak gönderiyoruz, fetchThroughProxy->fetch bunu JSON.stringify yapacak
-      // Ancak fetchThroughProxy fonksiyonunu yukarıda düzelttik, burada manuel stringify yapmıyoruz,
-      // çünkü browser fetch API'sine body obje verilmez, string verilir.
-      // Düzeltme: Caller (burası) stringify yapsın.
-      
       response = await fetchThroughProxy(targetUrl, 'POST', {
           'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
           'Accept': 'application/json',
@@ -62,7 +64,7 @@ export const fetchWorklogs = async (date: string, settings: AppSettings): Promis
           jql: jql,
           fields: ['worklog', 'key', 'summary'],
           maxResults: 100,
-          validateQuery: false // Sorgu doğrulamasını esnek tut
+          validateQuery: false
       });
   } catch (error) {
       throw new Error("Ağ Hatası: Proxy sunucusuna erişilemiyor.");
@@ -86,6 +88,7 @@ export const fetchWorklogs = async (date: string, settings: AppSettings): Promis
 
   const allWorklogs: Worklog[] = [];
 
+  // Paralel istekleri sınırla veya hepsini gönder (Vercel serverless olduğu için hepsini göndermek genelde ok)
   const promises = issues.map(async (issue: any) => {
     try {
       const wlTargetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/issue/${issue.key}/worklog`;
@@ -101,7 +104,11 @@ export const fetchWorklogs = async (date: string, settings: AppSettings): Promis
 
       logs.forEach((wl: any) => {
          const wlStartedDate = wl.started.split('T')[0];
-         if (wlStartedDate === date) {
+         // Sadece o güne ait ve bana ait olanları al
+         // (Not: Search JQL zaten currentUser ve date filtreliyor ama worklog endpoint'i tüm worklogları döner, filtre şart)
+         const isMe = wl.author?.emailAddress === settings.jiraEmail || wl.author?.accountId;
+         
+         if (wlStartedDate === date && isMe) {
              allWorklogs.push({
                  id: wl.id,
                  issueKey: issue.key,
@@ -116,7 +123,7 @@ export const fetchWorklogs = async (date: string, settings: AppSettings): Promis
          }
       });
     } catch (e) {
-        console.error(`Failed to fetch worklogs for ${issue.key}`, e);
+        console.error(`Worklogları çekerken hata (${issue.key})`, e);
     }
   });
 
@@ -146,7 +153,7 @@ export const updateWorklog = async (wl: Worklog, settings: AppSettings, newComme
     }, body);
 
     if (!response.ok) {
-        throw new Error(`Failed to update worklog (${response.status})`);
+        throw new Error(`Worklog güncellenemedi (${response.status})`);
     }
 };
 
@@ -167,13 +174,13 @@ export const createWorklog = async (issueKey: string, dateStr: string, seconds: 
         'Content-Type': 'application/json'
     }, body);
 
-    if(!response.ok) throw new Error("Failed to create worklog");
+    if(!response.ok) throw new Error("Worklog oluşturulamadı");
 }
 
 // --- GROQ API (Proxy Üzerinden) ---
 
 export const callGroq = async (prompt: string, settings: AppSettings, maxTokens = 300): Promise<string> => {
-    if (!settings.groqApiKey) throw new Error("Groq API Key missing");
+    if (!settings.groqApiKey) throw new Error("Groq API Anahtarı eksik");
 
     const targetUrl = 'https://api.groq.com/openai/v1/chat/completions';
     
@@ -187,7 +194,7 @@ export const callGroq = async (prompt: string, settings: AppSettings, maxTokens 
         temperature: 0.3
     });
 
-    if (!response.ok) throw new Error("Groq API failed");
+    if (!response.ok) throw new Error("Yapay zeka servisi yanıt vermedi");
     const json = await response.json();
     return json.choices?.[0]?.message?.content || '';
 };

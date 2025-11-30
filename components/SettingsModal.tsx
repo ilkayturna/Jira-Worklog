@@ -27,30 +27,30 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose, settings, onSa
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Settings & API Configuration">
+    <Modal isOpen={isOpen} onClose={onClose} title="Ayarlar & Yapılandırma">
       <div className="space-y-6">
         
         {/* Jira Settings */}
         <section className="space-y-4 p-4 bg-slate-100 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
-          <h3 className="text-sm font-bold text-jira-blue uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 pb-2">Jira Connection</h3>
+          <h3 className="text-sm font-bold text-jira-blue uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 pb-2">Jira Bağlantısı</h3>
           <div className="grid gap-4">
             <div>
-              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Jira Instance URL</label>
+              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Jira URL Adresi</label>
               <input 
                 name="jiraUrl"
                 value={formData.jiraUrl}
                 onChange={handleChange}
-                placeholder="https://your-company.atlassian.net"
+                placeholder="https://sirketiniz.atlassian.net"
                 className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-sm focus:ring-2 focus:ring-jira-blue focus:border-transparent"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Email Address</label>
+              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">E-posta Adresi</label>
               <input 
                 name="jiraEmail"
                 value={formData.jiraEmail}
                 onChange={handleChange}
-                placeholder="you@company.com"
+                placeholder="adiniz@sirket.com"
                 className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-sm focus:ring-2 focus:ring-jira-blue focus:border-transparent"
               />
             </div>
@@ -64,17 +64,17 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose, settings, onSa
                 placeholder="Atlassian API Token"
                 className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-sm focus:ring-2 focus:ring-jira-blue focus:border-transparent"
               />
-              <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noreferrer" className="text-xs text-jira-blue hover:underline mt-1 inline-block">Create API Token &rarr;</a>
+              <a href="https://id.atlassian.com/manage-profile/security/api-tokens" target="_blank" rel="noreferrer" className="text-xs text-jira-blue hover:underline mt-1 inline-block">API Token Oluştur &rarr;</a>
             </div>
           </div>
         </section>
 
         {/* AI Settings */}
         <section className="space-y-4 p-4 bg-slate-100 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
-          <h3 className="text-sm font-bold text-purple-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 pb-2">AI Configuration (Groq)</h3>
+          <h3 className="text-sm font-bold text-purple-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 pb-2">Yapay Zeka (Groq)</h3>
           <div className="grid gap-4">
             <div>
-              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Groq API Key</label>
+              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Groq API Anahtarı</label>
               <input 
                 name="groqApiKey"
                 type="password"
@@ -83,7 +83,7 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose, settings, onSa
                 placeholder="gsk_..."
                 className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-sm focus:ring-2 focus:ring-purple-500 focus:border-transparent"
               />
-              <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="text-xs text-purple-500 hover:underline mt-1 inline-block">Get Groq Key &rarr;</a>
+              <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="text-xs text-purple-500 hover:underline mt-1 inline-block">Groq Anahtarı Al &rarr;</a>
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Model</label>
@@ -93,15 +93,15 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose, settings, onSa
                 onChange={handleChange}
                 className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md text-sm focus:ring-2 focus:ring-purple-500"
               >
-                <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile (Recommended)</option>
-                <option value="llama-3.1-8b-instant">llama-3.1-8b-instant (Faster)</option>
+                <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile (Önerilen)</option>
+                <option value="llama-3.1-8b-instant">llama-3.1-8b-instant (Hızlı)</option>
                 <option value="mixtral-8x7b-32768">mixtral-8x7b-32768</option>
               </select>
             </div>
             <div>
                 <div className="flex justify-between items-center mb-1">
-                    <label className="block text-xs font-medium text-slate-500 dark:text-slate-400">System Prompt</label>
-                    <button onClick={handleResetPrompt} className="text-xs text-slate-400 hover:text-purple-500 flex items-center gap-1"><RefreshCw size={10}/> Reset Default</button>
+                    <label className="block text-xs font-medium text-slate-500 dark:text-slate-400">Sistem Promptu</label>
+                    <button onClick={handleResetPrompt} className="text-xs text-slate-400 hover:text-purple-500 flex items-center gap-1"><RefreshCw size={10}/> Varsayılana Dön</button>
                 </div>
                 <textarea 
                     name="aiSystemPrompt"
@@ -116,10 +116,10 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose, settings, onSa
 
         {/* General */}
         <section className="space-y-4 p-4 bg-slate-100 dark:bg-slate-900/50 rounded-lg border border-slate-200 dark:border-slate-700">
-          <h3 className="text-sm font-bold text-emerald-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 pb-2">Preferences</h3>
+          <h3 className="text-sm font-bold text-emerald-500 uppercase tracking-wider border-b border-slate-200 dark:border-slate-700 pb-2">Tercihler</h3>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Daily Target (Hours)</label>
+              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Günlük Hedef (Saat)</label>
               <input 
                 name="targetDailyHours"
                 type="number"
@@ -130,7 +130,7 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose, settings, onSa
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Min. Worklog (Hours)</label>
+              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">Min. Worklog (Saat)</label>
               <input 
                 name="minHoursPerWorklog"
                 type="number"
@@ -145,12 +145,12 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose, settings, onSa
         </section>
         
         <div className="flex justify-end gap-3 pt-4">
-            <button onClick={onClose} className="px-4 py-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium text-sm">Cancel</button>
+            <button onClick={onClose} className="px-4 py-2 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 font-medium text-sm">İptal</button>
             <button 
                 onClick={() => onSave(formData)}
                 className="px-4 py-2 rounded-lg bg-jira-blue hover:bg-blue-700 text-white font-medium text-sm flex items-center gap-2 shadow-lg shadow-blue-900/20"
             >
-                <Save size={16} /> Save Configuration
+                <Save size={16} /> Kaydet
             </button>
         </div>
       </div>

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Worklog, LoadingState } from '../types';
 import { Clock, Edit2, Wand2, SpellCheck, Undo2, Check, X } from 'lucide-react';
@@ -84,7 +85,7 @@ const WorklogRow: React.FC<{
                         <a 
                             href="#" 
                             className="font-bold text-jira-blue hover:underline text-sm"
-                            onClick={(e) => e.preventDefault()} // Prevent default since we don't have real URL in demo
+                            onClick={(e) => e.preventDefault()}
                         >
                             {wl.issueKey}
                         </a>
@@ -112,7 +113,7 @@ const WorklogRow: React.FC<{
                                 className="flex items-center gap-2 px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                             >
                                 <div className={`w-2.5 h-2.5 rounded-full ${getHourColor(wl.hours)}`}></div>
-                                <span className="font-mono font-bold text-sm text-slate-700 dark:text-slate-300">{wl.hours.toFixed(2)}h</span>
+                                <span className="font-mono font-bold text-sm text-slate-700 dark:text-slate-300">{wl.hours.toFixed(2)}s</span>
                             </button>
                         )}
                     </div>
@@ -138,7 +139,7 @@ const WorklogRow: React.FC<{
                         onClick={() => setIsEditing(true)}
                         className="p-3 text-sm text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/50 rounded-md border border-transparent hover:border-slate-200 dark:hover:border-slate-700 cursor-pointer transition-colors whitespace-pre-wrap leading-relaxed"
                     >
-                        {wl.comment || <span className="italic text-slate-400">No comment provided...</span>}
+                        {wl.comment || <span className="italic text-slate-400">Açıklama girilmemiş...</span>}
                     </div>
                 )}
             </div>
@@ -150,14 +151,14 @@ const WorklogRow: React.FC<{
                     disabled={!wl.comment}
                     className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 rounded hover:bg-purple-100 dark:hover:bg-purple-900/40 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                    <Wand2 size={12} /> AI Improve
+                    <Wand2 size={12} /> AI İyileştir
                 </button>
                 <button 
                     onClick={handleSpellCheck}
                     disabled={!wl.comment}
                     className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 rounded hover:bg-blue-100 dark:hover:bg-blue-900/40 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
-                    <SpellCheck size={12} /> Spell Fix
+                    <SpellCheck size={12} /> İmla Düzelt
                 </button>
             </div>
         </div>
@@ -181,8 +182,8 @@ export const WorklogList: React.FC<Props> = ({ worklogs, loading, onUpdate, onIm
                 <div className="bg-slate-200 dark:bg-slate-800 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3">
                     <Clock className="text-slate-400" />
                 </div>
-                <h3 className="text-slate-900 dark:text-slate-100 font-medium">No worklogs found</h3>
-                <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Try changing the date or check your Jira connection.</p>
+                <h3 className="text-slate-900 dark:text-slate-100 font-medium">Worklog Bulunamadı</h3>
+                <p className="text-slate-500 dark:text-slate-400 text-sm mt-1">Tarihi değiştirin veya Jira bağlantınızı kontrol edin.</p>
             </div>
         );
     }

@@ -74,7 +74,7 @@ export default function App() {
         localStorage.setItem(`${APP_NAME}_${key}`, String(value));
     });
     setIsSettingsOpen(false);
-    notify('Settings Saved', 'Your configuration has been updated.', 'success');
+    notify('Ayarlar Kaydedildi', 'Yapılandırmanız güncellendi.', 'success');
     
     // Reload data immediately if credentials are present
     if (newSettings.jiraUrl && newSettings.jiraEmail && newSettings.jiraToken) {
@@ -95,8 +95,8 @@ export default function App() {
     } catch (e: any) {
       console.error(e);
       setLoadingState(LoadingState.ERROR);
-      notify('Error Loading Data', e.message, 'error');
-      if(e.message.includes('Credentials')) {
+      notify('Veri Yükleme Hatası', e.message, 'error');
+      if(e.message.includes('Bilgileri Eksik') || e.message.includes('401')) {
           setIsSettingsOpen(true);
       }
     }
@@ -119,9 +119,9 @@ export default function App() {
               hours: seconds !== undefined ? secondsToHours(seconds) : w.hours
           };
       }));
-      notify('Updated', 'Worklog updated successfully', 'success');
+      notify('Güncellendi', 'Kayıt başarıyla güncellendi', 'success');
     } catch (e: any) {
-      notify('Update Failed', e.message, 'error');
+      notify('Güncelleme Başarısız', e.message, 'error');
       loadData(); // Revert
     }
   };
@@ -131,7 +131,7 @@ export default function App() {
     if(!wl || !wl.comment) return;
 
     if (!settings.groqApiKey) {
-        notify('AI Error', 'Groq API Key is missing in settings', 'error');
+        notify('AI Hatası', 'Ayarlarda Groq API Anahtarı eksik', 'error');
         setIsSettingsOpen(true);
         return;
     }
@@ -140,16 +140,16 @@ export default function App() {
         let prompt = '';
         if (mode === 'IMPROVE') {
             prompt = `
-            CONTEXT: Jira Issue Summary: "${wl.summary}".
-            TASK: ${settings.aiSystemPrompt}
-            INPUT TEXT: "${wl.comment}"
-            OUTPUT: Only the improved text. No markdown, no quotes.
+            BAĞLAM: Jira Talep Özeti: "${wl.summary}".
+            GÖREV: ${settings.aiSystemPrompt}
+            GİRDİ METİN: "${wl.comment}"
+            ÇIKTI: Sadece iyileştirilmiş metin. Markdown yok, tırnak işareti yok.
             `;
         } else {
              prompt = `
-            TASK: Fix spelling and grammar only. Do not change meaning. Do not add content.
-            INPUT TEXT: "${wl.comment}"
-            OUTPUT: Only the fixed text.
+            GÖREV: Sadece imla ve gramer hatalarını düzelt. Anlamı değiştirme. Ekstra içerik ekleme.
+            GİRDİ METİN: "${wl.comment}"
+            ÇIKTI: Sadece düzeltilmiş metin.
             `;
         }
 
@@ -157,11 +157,11 @@ export default function App() {
         if (improvedText && improvedText.trim() !== wl.comment) {
             await handleUpdateWorklog(id, improvedText.trim());
         } else {
-            notify('AI Info', 'No significant changes suggested by AI.', 'info');
+            notify('Bilgi', 'Yapay zeka önemli bir değişiklik önermedi.', 'info');
         }
 
     } catch (e: any) {
-        notify('AI Failed', e.message, 'error');
+        notify('AI Başarısız', e.message, 'error');
     }
   };
 
@@ -173,11 +173,11 @@ export default function App() {
      const diff = target - currentTotal;
 
      if (Math.abs(diff) < 0.05) {
-         notify('Target Met', 'Hours are already perfectly distributed!', 'success');
+         notify('Hedef Tamam', 'Saatler zaten hedefe uygun!', 'success');
          return;
      }
 
-     notify('Distributing', 'Calculating best distribution...', 'info');
+     notify('Dağıtılıyor', 'En iyi dağılım hesaplanıyor...', 'info');
      
      // Simple algorithm for now (proportional distribution)
      const distributable = [...worklogs];
@@ -202,9 +202,9 @@ export default function App() {
          
          await Promise.all(promises);
          await loadData();
-         notify('Distributed', 'Time distributed to meet daily target.', 'success');
+         notify('Dağıtıldı', 'Süreler günlük hedefe göre dağıtıldı.', 'success');
      } catch (e: any) {
-         notify('Distribution Error', e.message, 'error');
+         notify('Dağıtım Hatası', e.message, 'error');
      }
   };
 
@@ -215,12 +215,12 @@ export default function App() {
       if (date.getDay() === 0) date.setDate(date.getDate() - 2);
       const prevDateStr = date.toISOString().split('T')[0];
       
-      notify('Copying', `Fetching worklogs from ${prevDateStr}...`, 'info');
+      notify('Kopyalanıyor', `${prevDateStr} tarihinden kayıtlar alınıyor...`, 'info');
       
       try {
           const prevLogs = await fetchWorklogs(prevDateStr, settings);
           if (prevLogs.length === 0) {
-              notify('No Logs', 'No worklogs found on previous business day.', 'warning');
+              notify('Kayıt Yok', 'Önceki iş gününde worklog bulunamadı.', 'warning');
               return;
           }
           
@@ -231,10 +231,10 @@ export default function App() {
           
           await Promise.all(promises);
           await loadData();
-          notify('Success', `Copied ${prevLogs.length} worklogs from yesterday.`, 'success');
+          notify('Başarılı', `Dünden ${prevLogs.length} adet worklog kopyalandı.`, 'success');
 
       } catch (e: any) {
-          notify('Copy Failed', e.message, 'error');
+          notify('Kopyalama Başarısız', e.message, 'error');
       }
   };
 
@@ -259,8 +259,8 @@ export default function App() {
                     <CalendarIcon className="text-white" size={24} />
                 </div>
                 <div>
-                    <h1 className="text-xl font-bold text-slate-900 dark:text-slate-50 tracking-tight">Worklog Manager Pro</h1>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Jira Edition</p>
+                    <h1 className="text-xl font-bold text-slate-900 dark:text-slate-50 tracking-tight">Worklog Yöneticisi Pro</h1>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Jira Entegrasyonu</p>
                 </div>
             </div>
 
@@ -282,7 +282,7 @@ export default function App() {
                 
                 {/* Date Picker Card */}
                 <div className="bg-white dark:bg-slate-900 p-5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 block">Active Date</label>
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 block">Seçili Tarih</label>
                     <div className="flex items-center gap-2 mb-4">
                         <button onClick={() => changeDate(-1)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"><ChevronLeft size={18}/></button>
                         <input 
@@ -301,10 +301,10 @@ export default function App() {
                         <Clock size={80} />
                     </div>
                     <div className="relative z-10">
-                        <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Daily Progress</span>
+                        <span className="text-slate-400 text-xs font-bold uppercase tracking-wider">Günlük İlerleme</span>
                         <div className="flex items-baseline gap-1 mt-2 mb-4">
                             <span className="text-4xl font-extrabold tracking-tighter">{totalHours.toFixed(2)}</span>
-                            <span className="text-slate-400 font-medium">/ {settings.targetDailyHours}h</span>
+                            <span className="text-slate-400 font-medium">/ {settings.targetDailyHours}s</span>
                         </div>
                         
                         <div className="w-full bg-slate-700/50 h-3 rounded-full overflow-hidden backdrop-blur-sm">
@@ -315,7 +315,7 @@ export default function App() {
                         </div>
                         <p className="mt-3 text-xs text-slate-300 flex items-center gap-2">
                             {isTargetMet ? <CheckCircle2 size={14} className="text-emerald-400"/> : <Info size={14} />}
-                            {isTargetMet ? 'Daily target reached!' : `${(settings.targetDailyHours - totalHours).toFixed(2)}h remaining`}
+                            {isTargetMet ? 'Günlük hedef tamam!' : `${(settings.targetDailyHours - totalHours).toFixed(2)}s kaldı`}
                         </p>
                     </div>
                 </div>
@@ -323,13 +323,13 @@ export default function App() {
                 {/* Quick Actions */}
                 <div className="bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-3">
                      <button onClick={() => loadData()} className="w-full flex items-center justify-center gap-2 p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-sm font-medium transition-colors text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                        <RefreshCw size={16} className={loadingState === LoadingState.LOADING ? 'animate-spin' : ''}/> Refresh Data
+                        <RefreshCw size={16} className={loadingState === LoadingState.LOADING ? 'animate-spin' : ''}/> Verileri Yenile
                      </button>
                      <button onClick={handleDistribute} className="w-full flex items-center justify-center gap-2 p-2.5 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 text-sm font-medium transition-colors text-indigo-700 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-900/50">
-                        <Sparkles size={16} /> Smart Distribute
+                        <Sparkles size={16} /> Akıllı Dağıt
                      </button>
                      <button onClick={copyPreviousDay} className="w-full flex items-center justify-center gap-2 p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-sm font-medium transition-colors text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                        <Copy size={16} /> Copy from Yesterday
+                        <Copy size={16} /> Dünden Kopyala
                      </button>
                 </div>
             </div>
