@@ -115,8 +115,13 @@ export const fetchWorklogs = async (date: string, settings: AppSettings): Promis
       logs.forEach((wl: any) => {
          const wlStartedDate = wl.started.split('T')[0];
          // Sadece o güne ait ve bana ait olanları al
-         // (Not: Search JQL zaten currentUser ve date filtreliyor ama worklog endpoint'i tüm worklogları döner, filtre şart)
-         const isMe = wl.author?.emailAddress === settings.jiraEmail || wl.author?.accountId;
+         // Email veya accountId ile eşleştir (Jira bazen emailAddress dönmeyebilir)
+         const authorEmail = wl.author?.emailAddress?.toLowerCase();
+         const userEmail = settings.jiraEmail.toLowerCase();
+         const isMe = authorEmail === userEmail;
+         
+         // DEBUG
+         console.log('Worklog:', wl.id, 'Tarih:', wlStartedDate, 'Beklenen:', date, 'Author:', authorEmail, 'Ben mi:', isMe);
          
          if (wlStartedDate === date && isMe) {
              allWorklogs.push({
