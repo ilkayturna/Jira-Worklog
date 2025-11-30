@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Settings, Moon, Sun, Calendar as CalendarIcon, RefreshCw, CheckCircle2, AlertCircle, Info, ChevronLeft, ChevronRight, Copy, Sparkles, Clock, Plus, Bell, History, Brain, Edit3 } from 'lucide-react';
-import { AppSettings, Worklog, LoadingState, Notification, NotificationHistoryItem, WorklogSuggestion, UndoAction, DEFAULT_SYSTEM_PROMPT } from './types';
+import { AppSettings, Worklog, LoadingState, Notification, NotificationHistoryItem, WorklogSuggestion, UndoAction, DEFAULT_SYSTEM_PROMPT, TextChangePreview } from './types';
 import { fetchWorklogs, updateWorklog, callGroq, createWorklog, deleteWorklog } from './services/api';
 import { SettingsModal } from './components/SettingsModal';
 import { WorklogList } from './components/WorklogList';
@@ -103,9 +103,9 @@ const initialSettings: AppSettings = {
   groqApiKey: localStorage.getItem(`${APP_NAME}_groqApiKey`) || '',
   groqModel: localStorage.getItem(`${APP_NAME}_groqModel`) || 'llama-3.3-70b-versatile',
   targetDailyHours: parseFloat(localStorage.getItem(`${APP_NAME}_targetDailyHours`) || '8'),
-  minHoursPerWorklog: parseFloat(localStorage.getItem(`${APP_NAME}_minHours`) || '0.25'),
-  aiSystemPrompt: localStorage.getItem(`${APP_NAME}_aiPrompt`) || DEFAULT_SYSTEM_PROMPT,
-  isDarkTheme: localStorage.getItem(`${APP_NAME}_theme`) !== 'light',
+  minHoursPerWorklog: parseFloat(localStorage.getItem(`${APP_NAME}_minHoursPerWorklog`) || '0.25'),
+  aiSystemPrompt: localStorage.getItem(`${APP_NAME}_aiSystemPrompt`) || DEFAULT_SYSTEM_PROMPT,
+  isDarkTheme: localStorage.getItem(`${APP_NAME}_isDarkTheme`) !== 'light',
 };
 
 export default function App() {
@@ -130,6 +130,11 @@ export default function App() {
     targetHours: number;
   } | null>(null);
   const [isDistributing, setIsDistributing] = useState(false);
+  
+  // AI Text Change Preview State
+  const [textChangePreview, setTextChangePreview] = useState<TextChangePreview[] | null>(null);
+  const [isAIProcessing, setIsAIProcessing] = useState(false);
+  const [textChangeMode, setTextChangeMode] = useState<'IMPROVE' | 'SPELL' | null>(null);
   
   // Stats
   const totalHours = useMemo(() => worklogs.reduce((acc, wl) => acc + wl.hours, 0), [worklogs]);
@@ -371,6 +376,109 @@ export default function App() {
 
     } catch (e: any) {
         notify('AI Başarısız', e.message, 'error');
+    }
+  };
+
+  // Batch AI Preview - Tüm worklog'ları önizleme ile göster
+  const previewBatchAI = async (mode: 'IMPROVE' | 'SPELL') => {
+    if (isAIProcessing) return;
+    
+    const worklogsWithComments = worklogs.filter(wl => wl.comment && wl.comment.trim().length > 0);
+    
+    if (worklogsWithComments.length === 0) {
+        notify('Hata', 'İşlenecek yorum içeren worklog bulunamadı.', 'error');
+        return;
+    }
+
+    if (!settings.groqApiKey) {
+        notify('AI Hatası', 'Ayarlarda Groq API Anahtarı eksik', 'error');
+        setIsSettingsOpen(true);
+        return;
+    }
+
+    setIsAIProcessing(true);
+    setTextChangeMode(mode);
+    const actionName = mode === 'IMPROVE' ? 'İyileştirme' : 'İmla Düzeltme';
+    notify('AI İşleniyor', `${worklogsWithComments.length} worklog için ${actionName.toLowerCase()} hazırlanıyor...`, 'info');
+    
+    try {
+        const previews: TextChangePreview[] = [];
+        
+        for (const wl of worklogsWithComments) {
+            let prompt = '';
+            if (mode === 'IMPROVE') {
+                prompt = `
+                BAĞLAM: Jira Talep Özeti: "${wl.summary}".
+                GÖREV: ${settings.aiSystemPrompt}
+                GİRDİ METİN: "${wl.comment}"
+                ÇIKTI: Sadece iyileştirilmiş metin. Markdown yok, tırnak işareti yok.
+                `;
+            } else {
+                prompt = `
+                GÖREV: Sadece imla ve gramer hatalarını düzelt. Anlamı değiştirme. Ekstra içerik ekleme.
+                GİRDİ METİN: "${wl.comment}"
+                ÇIKTI: Sadece düzeltilmiş metin.
+                `;
+            }
+
+            const improvedText = await callGroq(prompt, settings);
+            if (improvedText && improvedText.trim() !== wl.comment) {
+                previews.push({
+                    worklogId: wl.id,
+                    issueKey: wl.issueKey,
+                    summary: wl.summary,
+                    before: wl.comment,
+                    after: improvedText.trim(),
+                    mode
+                });
+            }
+        }
+        
+        if (previews.length === 0) {
+            notify('Bilgi', 'Yapay zeka önemli değişiklikler önermedi.', 'info');
+            setIsAIProcessing(false);
+            return;
+        }
+        
+        setTextChangePreview(previews);
+        
+    } catch (e: any) {
+        notify('AI Başarısız', e.message, 'error');
+    } finally {
+        setIsAIProcessing(false);
+    }
+  };
+
+  // Apply batch AI changes
+  const applyTextChanges = async () => {
+    if (!textChangePreview || textChangePreview.length === 0) return;
+    
+    setIsAIProcessing(true);
+    
+    try {
+        for (const preview of textChangePreview) {
+            await handleUpdateWorklog(preview.worklogId, preview.after);
+            
+            // Add to notification history with diff
+            const actionName = preview.mode === 'IMPROVE' ? 'İyileştirildi' : 'İmla Düzeltildi';
+            notify(
+                actionName,
+                `${preview.issueKey} worklog metni güncellendi`,
+                'success',
+                undefined,
+                { before: preview.before, after: preview.after, issueKey: preview.issueKey }
+            );
+        }
+        
+        const modeLabel = textChangeMode === 'IMPROVE' ? 'İyileştirme' : 'İmla Düzeltme';
+        notify('Toplu İşlem Tamamlandı', `${textChangePreview.length} worklog ${modeLabel.toLowerCase()} uygulandı.`, 'success');
+        setTextChangePreview(null);
+        setTextChangeMode(null);
+        
+    } catch (e: any) {
+        notify('Uygulama Hatası', e.message, 'error');
+    } finally {
+        setIsAIProcessing(false);
     }
   };
 
@@ -997,6 +1105,50 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
                             </button>
                         </div>
                     </div>
+                    
+                    {/* AI Text Operations */}
+                    <div className="pt-4 border-t" style={{ borderColor: 'var(--color-outline-variant)' }}>
+                        <label className="text-xs font-semibold uppercase tracking-wider block mb-3" style={{ color: 'var(--color-on-surface-variant)' }}>
+                            Toplu AI İşlemleri
+                        </label>
+                        <div className="space-y-2">
+                            <button 
+                                onClick={() => previewBatchAI('SPELL')}
+                                className="btn-outlined w-full ripple text-sm"
+                                style={{ borderColor: '#f59e0b', color: '#f59e0b' }}
+                                title="Tüm worklog yorumlarının imla ve gramer hatalarını düzeltir"
+                                disabled={isAIProcessing}
+                            >
+                                {isAIProcessing && textChangeMode === 'SPELL' ? (
+                                    <>
+                                        <RefreshCw size={16} className="animate-spin" /> İşleniyor...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Edit3 size={16} /> Tümünün İmlasını Düzelt
+                                    </>
+                                )}
+                            </button>
+                            
+                            <button 
+                                onClick={() => previewBatchAI('IMPROVE')}
+                                className="btn-outlined w-full ripple text-sm"
+                                style={{ borderColor: '#8b5cf6', color: '#8b5cf6' }}
+                                title="Tüm worklog yorumlarını AI ile iyileştirir"
+                                disabled={isAIProcessing}
+                            >
+                                {isAIProcessing && textChangeMode === 'IMPROVE' ? (
+                                    <>
+                                        <RefreshCw size={16} className="animate-spin" /> İşleniyor...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Sparkles size={16} /> Tümünü İyileştir
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
                      
                     {/* Copy Previous Day */}
                     <button 
@@ -1197,6 +1349,151 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
                                 </>
                             )}
                         </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {/* Text Change Preview Modal - AI İyileştirme/İmla Önizleme */}
+      {textChangePreview && textChangePreview.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setTextChangePreview(null)}>
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+            
+            <div 
+                className="relative w-full max-w-3xl animate-scale-in"
+                onClick={e => e.stopPropagation()}
+            >
+                <div className="surface-card p-0 overflow-hidden" style={{ boxShadow: 'var(--elevation-4)' }}>
+                    
+                    {/* Header */}
+                    <div className="px-6 py-5 border-b" style={{ borderColor: 'var(--color-outline-variant)' }}>
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl flex items-center justify-center" 
+                                     style={{ 
+                                         background: textChangeMode === 'IMPROVE' 
+                                             ? 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)'
+                                             : 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
+                                     }}>
+                                    {textChangeMode === 'IMPROVE' ? (
+                                        <Sparkles size={22} className="text-white" />
+                                    ) : (
+                                        <Edit3 size={22} className="text-white" />
+                                    )}
+                                </div>
+                                <div>
+                                    <h2 className="text-lg font-semibold" style={{ color: 'var(--color-on-surface)' }}>
+                                        {textChangeMode === 'IMPROVE' ? 'Metin İyileştirme Önizleme' : 'İmla Düzeltme Önizleme'}
+                                    </h2>
+                                    <p className="text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>
+                                        {textChangePreview.length} worklog değişecek
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Body - Preview List */}
+                    <div className="p-4 max-h-[60vh] overflow-y-auto">
+                        <div className="space-y-4">
+                            {textChangePreview.map((item, index) => (
+                                <div 
+                                    key={index}
+                                    className="rounded-xl border overflow-hidden"
+                                    style={{ borderColor: 'var(--color-outline-variant)' }}
+                                >
+                                    {/* Issue Header */}
+                                    <div className="px-4 py-3 border-b" style={{ 
+                                        backgroundColor: 'var(--color-surface-variant)',
+                                        borderColor: 'var(--color-outline-variant)'
+                                    }}>
+                                        <span className="text-xs font-bold px-2 py-0.5 rounded mr-2" 
+                                              style={{ backgroundColor: 'var(--color-primary-container)', color: 'var(--color-primary-600)' }}>
+                                            {item.issueKey}
+                                        </span>
+                                        <span className="text-sm" style={{ color: 'var(--color-on-surface)' }}>
+                                            {item.summary}
+                                        </span>
+                                    </div>
+                                    
+                                    {/* Diff View */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
+                                        {/* Before - Kırmızı */}
+                                        <div className="p-4 border-b md:border-b-0 md:border-r" style={{ 
+                                            backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                                            borderColor: 'var(--color-outline-variant)'
+                                        }}>
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <span className="text-xs font-semibold px-2 py-0.5 rounded" 
+                                                      style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#ef4444' }}>
+                                                    ÖNCEKİ
+                                                </span>
+                                            </div>
+                                            <p className="text-sm leading-relaxed whitespace-pre-wrap" 
+                                               style={{ 
+                                                   color: 'var(--color-on-surface)',
+                                                   textDecoration: 'line-through',
+                                                   textDecorationColor: 'rgba(239, 68, 68, 0.5)'
+                                               }}>
+                                                {item.before}
+                                            </p>
+                                        </div>
+                                        
+                                        {/* After - Yeşil */}
+                                        <div className="p-4" style={{ backgroundColor: 'rgba(34, 197, 94, 0.08)' }}>
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <span className="text-xs font-semibold px-2 py-0.5 rounded" 
+                                                      style={{ backgroundColor: 'rgba(34, 197, 94, 0.2)', color: '#22c55e' }}>
+                                                    YENİ
+                                                </span>
+                                            </div>
+                                            <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--color-on-surface)' }}>
+                                                {item.after}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="px-6 py-4 border-t flex items-center justify-between" style={{ borderColor: 'var(--color-outline-variant)' }}>
+                        <p className="text-sm" style={{ color: 'var(--color-on-surface-variant)' }}>
+                            <span className="font-semibold">{textChangePreview.length}</span> değişiklik uygulanacak
+                        </p>
+                        <div className="flex items-center gap-3">
+                            <button 
+                                onClick={() => {
+                                    setTextChangePreview(null);
+                                    setTextChangeMode(null);
+                                }} 
+                                className="btn-text"
+                            >
+                                İptal
+                            </button>
+                            <button 
+                                onClick={applyTextChanges}
+                                className="btn-filled ripple"
+                                disabled={isAIProcessing}
+                                style={textChangeMode === 'IMPROVE' ? { 
+                                    background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)'
+                                } : {
+                                    background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
+                                }}
+                            >
+                                {isAIProcessing ? (
+                                    <>
+                                        <RefreshCw size={18} className="animate-spin" /> Uygulanıyor...
+                                    </>
+                                ) : (
+                                    <>
+                                        <CheckCircle2 size={18} /> Tümünü Uygula
+                                    </>
+                                )}
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

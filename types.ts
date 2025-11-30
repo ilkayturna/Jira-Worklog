@@ -57,6 +57,16 @@ export interface UndoData {
   newComment?: string;
 }
 
+// AI Text Change Preview for showing before/after
+export interface TextChangePreview {
+  worklogId: string;
+  issueKey: string;
+  summary: string;
+  before: string;
+  after: string;
+  mode: 'IMPROVE' | 'SPELL';
+}
+
 // Smart suggestion based on worklog history
 export interface WorklogSuggestion {
   issueKey: string;
