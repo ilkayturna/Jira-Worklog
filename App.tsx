@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Settings, Moon, Sun, Calendar as CalendarIcon, RefreshCw, CheckCircle2, AlertCircle, Info, ChevronLeft, ChevronRight, Copy, Sparkles, Clock, Plus, Bell, History, Brain, Edit3, FileSpreadsheet, FileText } from 'lucide-react';
-import { AppSettings, Worklog, LoadingState, Notification, NotificationHistoryItem, WorklogSuggestion, WorklogTemplate, UndoAction, DEFAULT_SYSTEM_PROMPT, TextChangePreview, WeeklyReportItem } from './types';
+import { AppSettings, Worklog, LoadingState, Notification, NotificationHistoryItem, WorklogSuggestion, UndoAction, DEFAULT_SYSTEM_PROMPT, TextChangePreview, WeeklyReportItem } from './types';
 import { fetchWorklogs, updateWorklog, callGroq, createWorklog, deleteWorklog, fetchIssueDetails } from './services/api';
 import { SettingsModal } from './components/SettingsModal';
 import { WorklogList } from './components/WorklogList';
@@ -13,7 +13,6 @@ import { secondsToHours, formatHours } from './utils/adf';
 const APP_NAME = 'WorklogPro';
 const SUGGESTIONS_KEY = `${APP_NAME}_suggestions`;
 const NOTIFICATION_HISTORY_KEY = `${APP_NAME}_notificationHistory`;
-const TEMPLATES_KEY = `${APP_NAME}_templates`;
 
 const detectJiraUrl = () => {
     const saved = localStorage.getItem(`${APP_NAME}_jiraUrl`);
@@ -33,21 +32,6 @@ const loadSuggestions = (): WorklogSuggestion[] => {
     } catch {
         return [];
     }
-};
-
-// Load templates from localStorage
-const loadTemplates = (): WorklogTemplate[] => {
-    try {
-        const saved = localStorage.getItem(TEMPLATES_KEY);
-        return saved ? JSON.parse(saved) : [];
-    } catch {
-        return [];
-    }
-};
-
-// Save templates to localStorage
-const saveTemplates = (templates: WorklogTemplate[]) => {
-    localStorage.setItem(TEMPLATES_KEY, JSON.stringify(templates.slice(0, 30))); // Keep max 30
 };
 
 // Load notification history from localStorage
@@ -155,7 +139,6 @@ export default function App() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [notificationHistory, setNotificationHistory] = useState<NotificationHistoryItem[]>(loadNotificationHistory());
   const [suggestions, setSuggestions] = useState<WorklogSuggestion[]>(loadSuggestions());
-  const [templates, setTemplates] = useState<WorklogTemplate[]>(loadTemplates());
   const [distributeTarget, setDistributeTarget] = useState<string>(settings.targetDailyHours.toString());
   const [tempTargetHours, setTempTargetHours] = useState<string>(settings.targetDailyHours.toString());
   
@@ -281,36 +264,6 @@ export default function App() {
 
   const deleteNotification = (id: string) => {
     setNotificationHistory(prev => prev.filter(n => n.id !== id));
-  };
-
-  // Template management functions
-  const handleSaveTemplate = (template: Omit<WorklogTemplate, 'id' | 'usageCount' | 'createdAt'>) => {
-    const newTemplate: WorklogTemplate = {
-      ...template,
-      id: Date.now().toString(),
-      usageCount: 0,
-      createdAt: new Date().toISOString()
-    };
-    const updated = [newTemplate, ...templates];
-    setTemplates(updated);
-    saveTemplates(updated);
-    notify('Şablon Kaydedildi', `"${template.name}" şablonu oluşturuldu`, 'success');
-  };
-
-  const handleDeleteTemplate = (id: string) => {
-    const updated = templates.filter(t => t.id !== id);
-    setTemplates(updated);
-    saveTemplates(updated);
-    notify('Şablon Silindi', 'Şablon başarıyla silindi', 'info');
-  };
-
-  const handleUseTemplate = (template: WorklogTemplate) => {
-    // Update usage count
-    const updated = templates.map(t => 
-      t.id === template.id ? { ...t, usageCount: t.usageCount + 1 } : t
-    );
-    setTemplates(updated);
-    saveTemplates(updated);
   };
 
   // AI-powered time estimation based on issue summary and historical data
@@ -1745,11 +1698,7 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
         onSubmit={handleAddWorklog}
         settings={settings}
         suggestions={suggestions}
-        templates={templates}
         selectedDate={selectedDate}
-        onSaveTemplate={handleSaveTemplate}
-        onDeleteTemplate={handleDeleteTemplate}
-        onUseTemplate={handleUseTemplate}
         getTimeEstimation={getTimeEstimation}
       />
 
