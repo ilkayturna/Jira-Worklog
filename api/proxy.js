@@ -21,7 +21,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Gelen istekteki body ve headerları al (Authorization hariç, onu manuel ekleyeceğiz)
     const options = {
       method: req.method,
       headers: {
@@ -30,28 +29,42 @@ export default async function handler(req, res) {
       },
     };
 
-    // Frontend'den gelen Authorization header'ını proxy isteğine ekle
+    // Authorization header'ını ilet
     if (req.headers.authorization) {
       options.headers['Authorization'] = req.headers.authorization;
     }
 
-    if (req.body && Object.keys(req.body).length > 0) {
-      options.body = JSON.stringify(req.body);
+    // Body (Payload) aktarımı - Kritik düzeltme
+    if (req.method !== 'GET' && req.method !== 'HEAD') {
+        if (req.body) {
+            // Vercel bazen body'yi obje olarak parse eder, bazen string bırakır.
+            // Jira API'sine string olarak göndermeliyiz.
+            options.body = typeof req.body === 'object' ? JSON.stringify(req.body) : req.body;
+        }
     }
 
-    // Jira'ya veya Groq'a asıl isteği yap
+    // Jira'ya asıl isteği yap
     const response = await fetch(url, options);
     
     // Yanıtı parse et
     let data;
     const contentType = response.headers.get("content-type");
-    if (contentType && contentType.indexOf("application/json") !== -1) {
+    if (contentType && contentType.includes("application/json")) {
        data = await response.json();
     } else {
        data = await response.text();
     }
 
-    // Durum kodunu ve veriyi geri döndür
+    if (!response.ok) {
+        // Hata durumunda detaylı bilgi dön
+        return res.status(response.status).json({
+            error: 'Jira API Error',
+            status: response.status,
+            details: data
+        });
+    }
+
+    // Başarılı yanıt
     res.status(response.status).json(data);
 
   } catch (error) {

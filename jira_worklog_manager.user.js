@@ -2,7 +2,7 @@
 // ==UserScript==
 // @name         Jira Worklog Yöneticisi Pro (Full Türkçe)
 // @namespace    http://tampermonkey.net/
-// @version      10.1
+// @version      10.2
 // @description  Jira workloglarını yönetmek, AI ile iyileştirmek, süreleri akıllı dağıtmak ve geçmişi yönetmek için kapsamlı araç.
 // @author       İlkay Turna
 // @match        https://*.atlassian.net/*
@@ -71,7 +71,7 @@
         rootDiv.style.overflowY = 'auto';
         document.body.appendChild(rootDiv);
 
-        // Başlatıcı Buton (Sayfanın sağ altına eklenir)
+        // Başlatıcı Buton
         const toggleBtn = document.createElement('button');
         toggleBtn.innerHTML = `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20M2 12h20"/></svg> Worklogs`;
         Object.assign(toggleBtn.style, {
@@ -176,7 +176,6 @@
             // --- API KATMANI ---
             const getAuth = (email, token) => 'Basic ' + btoa(email + ':' + token);
             const getBaseUrl = (saved) => {
-                // Eğer kaydedilmiş yoksa ve Jira sayfasındaysak, mevcut origin'i al
                 if (!saved && window.location.hostname.includes('atlassian.net')) return window.location.origin;
                 return saved || '';
             };
@@ -189,7 +188,7 @@
             const fetchWorklogs = async (date, set) => {
                 const jql = 'worklogDate = "' + date + '" AND worklogAuthor = currentUser()';
                 
-                // POST metodu ile arama (v3 API)
+                // POST metodu ile arama (v3 API) - 410 Gone hatasını çözer
                 const url = buildUrl(set.jiraUrl, '/rest/api/3/search');
                 const res = await fetch(url, {
                     method: 'POST',
@@ -205,7 +204,11 @@
                     })
                 });
                 
-                if(!res.ok) throw new Error("API Hatası (" + res.status + "): " + res.statusText);
+                if(!res.ok) {
+                    let err = res.statusText;
+                    try { err = JSON.stringify(await res.json()); } catch(e){}
+                    throw new Error("API Hatası (" + res.status + "): " + err);
+                }
                 const data = await res.json();
                 const results = [];
 
@@ -216,7 +219,7 @@
                         if(!wlRes.ok) return;
                         const wlData = await wlRes.json();
                         wlData.worklogs.forEach(wl => {
-                            const isMe = wl.author?.emailAddress === set.jiraEmail || wl.author?.accountId; // Basit kontrol
+                            const isMe = wl.author?.emailAddress === set.jiraEmail || wl.author?.accountId;
                             if(wl.started.startsWith(date) && isMe) {
                                 results.push({
                                     id: wl.id, issueKey: issue.key, summary: issue.fields.summary,

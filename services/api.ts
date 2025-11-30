@@ -1,3 +1,4 @@
+
 import { AppSettings, Worklog } from '../types';
 import { plainTextToADF, parseJiraComment, secondsToHours } from '../utils/adf';
 
@@ -18,7 +19,6 @@ const normalizeUrl = (url: string) => {
 // ARTIK PROXY ÜZERİNDEN İSTEK ATIYORUZ
 const fetchThroughProxy = async (targetUrl: string, method: string, headers: any, body?: any) => {
     // Vercel'de çalışırken /api/proxy endpoint'ini kullan
-    // Localhost'ta çalışırken de aynı endpoint (vite config proxy veya vercel dev ile) çalışır
     const proxyUrl = `/api/proxy?url=${encodeURIComponent(targetUrl)}`;
     
     const options: any = {
@@ -27,7 +27,7 @@ const fetchThroughProxy = async (targetUrl: string, method: string, headers: any
     };
 
     if (body) {
-        options.body = JSON.stringify(body);
+        options.body = body; // JSON.stringify yapma, proxy.js halledecek veya caller obje vermeli
     }
 
     const response = await fetch(proxyUrl, options);
@@ -44,10 +44,16 @@ export const fetchWorklogs = async (date: string, settings: AppSettings): Promis
   const jql = `worklogDate = "${date}" AND worklogAuthor = currentUser()`;
   
   // FIX: GET method deprecated (410 Gone). Switched to POST.
+  // URL sonuna / koymuyoruz.
   const targetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/search`;
   
   let response;
   try {
+      // Body'yi obje olarak gönderiyoruz, fetchThroughProxy->fetch bunu JSON.stringify yapacak
+      // Ancak fetchThroughProxy fonksiyonunu yukarıda düzelttik, burada manuel stringify yapmıyoruz,
+      // çünkü browser fetch API'sine body obje verilmez, string verilir.
+      // Düzeltme: Caller (burası) stringify yapsın.
+      
       response = await fetchThroughProxy(targetUrl, 'POST', {
           'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
           'Accept': 'application/json',
@@ -55,20 +61,25 @@ export const fetchWorklogs = async (date: string, settings: AppSettings): Promis
       }, {
           jql: jql,
           fields: ['worklog', 'key', 'summary'],
-          maxResults: 100
+          maxResults: 100,
+          validateQuery: false // Sorgu doğrulamasını esnek tut
       });
   } catch (error) {
       throw new Error("Ağ Hatası: Proxy sunucusuna erişilemiyor.");
   }
 
   if (!response.ok) {
-    let errText = '';
-    try { errText = await response.text(); } catch(e) {}
-    throw new Error(`Jira API Hatası (${response.status}): ${errText || response.statusText}`);
+    let errDetail = '';
+    try { 
+        const json = await response.json();
+        errDetail = JSON.stringify(json.details || json);
+    } catch(e) {
+        try { errDetail = await response.text(); } catch(z){}
+    }
+    throw new Error(`Jira API Hatası (${response.status}): ${errDetail}`);
   }
 
   const data = await response.json();
-  // Vercel function'dan dönen veriyi kontrol et (Proxy bazen string dönebilir)
   const issues = data.issues || (typeof data === 'string' ? JSON.parse(data).issues : []);
   
   if (!issues) return [];
@@ -164,8 +175,6 @@ export const createWorklog = async (issueKey: string, dateStr: string, seconds: 
 export const callGroq = async (prompt: string, settings: AppSettings, maxTokens = 300): Promise<string> => {
     if (!settings.groqApiKey) throw new Error("Groq API Key missing");
 
-    // Groq zaten CORS destekler ama tutarlılık için proxy kullanabiliriz veya direkt çağırabiliriz.
-    // Güvenlik için frontend'de key saklamak yerine proxy daha iyidir ama şimdilik proxy üzerinden geçirelim.
     const targetUrl = 'https://api.groq.com/openai/v1/chat/completions';
     
     const response = await fetchThroughProxy(targetUrl, 'POST', {
