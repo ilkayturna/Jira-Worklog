@@ -1408,12 +1408,19 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
                                 const days = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
                                 const weekDays = [];
                                 
+                                // Helper function for local date string (YYYY-MM-DD)
+                                const toLocalDateStr = (d: Date) => {
+                                    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                                };
+                                
+                                const todayStr = toLocalDateStr(new Date());
+                                
                                 for (let i = 0; i < 7; i++) {
                                     const day = new Date(monday);
                                     day.setDate(monday.getDate() + i);
-                                    const dateStr = day.toISOString().split('T')[0];
+                                    const dateStr = toLocalDateStr(day);
                                     const isSelected = dateStr === selectedDate;
-                                    const isToday = dateStr === new Date().toISOString().split('T')[0];
+                                    const isToday = dateStr === todayStr;
                                     const isWeekend = i >= 5;
                                     
                                     weekDays.push(
