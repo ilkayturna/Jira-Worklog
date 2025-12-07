@@ -1210,24 +1210,7 @@ YASAK:
 
 Genişletilmiş not:`;
         } else {
-            prompt = `Sen bir yazım ve noktalama düzeltme uzmanısın. Aşağıdaki Türkçe metinde SADECE:
-1. Yanlış yazılmış kelimeleri düzelt
-2. Eksik veya yanlış noktalama işaretleri düzelt
-
-KESİN YASAK:
-- Hiç kelime ekleme
-- Hiç kelime çıkarma
-- Hiç kelime sırasını değiştirme
-- Cümle yapısını değiştirme
-- Metni kısaltma
-- Metin başında veya sonunda hiçbir şey yazma
-- Düzeltilmiş:, Not:, Çıktı: gibi önek ekleme
-- Tırnak veya başka karakterler ekleme
-
-ORİJİNAL METİN:
-"${wl.comment}"
-
-Sadece metin içeriğini düzenle, başka hiçbir şey ekleme. Sadece düzeltilmiş metni ver:`;
+            prompt = `Yazım hatalarını ve noktalama işaretlerini düzelt. Başka değişiklik yapma. Metni tam aynı tut.\n\n"${wl.comment}"\n\nDüzeltilmiş:`;
         }
 
         const originalComment = wl.comment;
@@ -1324,24 +1307,7 @@ YASAK:
 
 Genişletilmiş not:`;
             } else {
-                prompt = `Sen bir yazım ve noktalama düzeltme uzmanısın. Aşağıdaki Türkçe metinde SADECE:
-1. Yanlış yazılmış kelimeleri düzelt
-2. Eksik veya yanlış noktalama işaretleri düzelt
-
-KESİN YASAK:
-- Hiç kelime ekleme
-- Hiç kelime çıkarma
-- Hiç kelime sırasını değiştirme
-- Cümle yapısını değiştirme
-- Metni kısaltma
-- Metin başında veya sonunda hiçbir şey yazma
-- Düzeltilmiş:, Not:, Çıktı: gibi önek ekleme
-- Tırnak veya başka karakterler ekleme
-
-ORİJİNAL METİN:
-"${wl.comment}"
-
-Sadece metin içeriğini düzenle, başka hiçbir şey ekleme. Sadece düzeltilmiş metni ver:`;
+                prompt = `Yazım hatalarını ve noktalama işaretlerini düzelt. Başka değişiklik yapma. Metni tam aynı tut.\n\n"${wl.comment}"\n\nDüzeltilmiş:`;
             }
 
             const rawResponse = await callGroq(prompt, settings);
