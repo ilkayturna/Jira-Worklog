@@ -1210,24 +1210,24 @@ YASAK:
 
 Genişletilmiş not:`;
         } else {
-            prompt = `SADECE yazım hatalarını ve noktalama işaretlerini düzelt. Başka HİÇBİR ŞEY yapma.
+            prompt = `Sen bir yazım ve noktalama düzeltme uzmanısın. Aşağıdaki Türkçe metinde SADECE:
+1. Yanlış yazılmış kelimeleri düzelt
+2. Eksik veya yanlış noktalama işaretleri düzelt
 
-KURALLAR:
-- Sadece yanlış yazılmış kelimeleri düzelt
-- Noktalama işaretlerini düzelt (virgül, nokta, ünlem, soru işareti)
+KESİN YASAK:
 - Hiç kelime ekleme
-- Hiç kelime çıkarma  
-- Hiç kelime değiştirme (sadece yazım hatası varsa düzelt)
-- Metni yeniden yazma
-- Başına "Düzeltilmiş:", "Düzeltme:" gibi hiçbir şey ekleme
-- Sonuna hiçbir şey ekleme
-- Metnin başına veya sonuna tırnak işareti KOYMA
-- Sadece düzeltilmiş metni döndür, başka hiçbir şey yazma
+- Hiç kelime çıkarma
+- Hiç kelime sırasını değiştirme
+- Cümle yapısını değiştirme
+- Metni kısaltma
+- Metin başında veya sonunda hiçbir şey yazma
+- Düzeltilmiş:, Not:, Çıktı: gibi önek ekleme
+- Tırnak veya başka karakterler ekleme
 
-METİN:
-${wl.comment}
+ORİJİNAL METİN:
+"${wl.comment}"
 
-ÇIKTI (sadece düzeltilmiş metin):`;
+Sadece metin içeriğini düzenle, başka hiçbir şey ekleme. Sadece düzeltilmiş metni ver:`;
         }
 
         const originalComment = wl.comment;
@@ -1324,24 +1324,24 @@ YASAK:
 
 Genişletilmiş not:`;
             } else {
-                prompt = `SADECE yazım hatalarını ve noktalama işaretlerini düzelt. Başka HİÇBİR ŞEY yapma.
+                prompt = `Sen bir yazım ve noktalama düzeltme uzmanısın. Aşağıdaki Türkçe metinde SADECE:
+1. Yanlış yazılmış kelimeleri düzelt
+2. Eksik veya yanlış noktalama işaretleri düzelt
 
-KURALLAR:
-- Sadece yanlış yazılmış kelimeleri düzelt
-- Noktalama işaretlerini düzelt (virgül, nokta, ünlem, soru işareti)
+KESİN YASAK:
 - Hiç kelime ekleme
 - Hiç kelime çıkarma
-- Hiç kelime değiştirme (sadece yazım hatası varsa düzelt)
-- Metni yeniden yazma
-- Başına "Düzeltilmiş:", "Düzeltme:" gibi hiçbir şey ekleme
-- Sonuna hiçbir şey ekleme
-- Metnin başına veya sonuna tırnak işareti KOYMA
-- Sadece düzeltilmiş metni döndür, başka hiçbir şey yazma
+- Hiç kelime sırasını değiştirme
+- Cümle yapısını değiştirme
+- Metni kısaltma
+- Metin başında veya sonunda hiçbir şey yazma
+- Düzeltilmiş:, Not:, Çıktı: gibi önek ekleme
+- Tırnak veya başka karakterler ekleme
 
-METİN:
-${wl.comment}
+ORİJİNAL METİN:
+"${wl.comment}"
 
-ÇIKTI (sadece düzeltilmiş metin):`;
+Sadece metin içeriğini düzenle, başka hiçbir şey ekleme. Sadece düzeltilmiş metni ver:`;
             }
 
             const rawResponse = await callGroq(prompt, settings);
