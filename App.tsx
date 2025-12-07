@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Settings, Moon, Sun, Calendar as CalendarIcon, RefreshCw, CheckCircle2, AlertCircle, Info, ChevronLeft, ChevronRight, Copy, Sparkles, Clock, Plus, Bell, History, Brain, Edit3, FileSpreadsheet, FileText } from 'lucide-react';
 import { AppSettings, Worklog, LoadingState, Notification, NotificationHistoryItem, WorklogSuggestion, UndoAction, DEFAULT_SYSTEM_PROMPT, TextChangePreview, WeeklyReportItem, WorklogHistoryEntry } from './types';
-import { fetchWorklogs, updateWorklog, callGroq, createWorklog, deleteWorklog, fetchIssueDetails } from './services/api';
+import { fetchWorklogs, updateWorklog, callGroq, createWorklog, deleteWorklog, fetchIssueDetails, fetchWeekWorklogs } from './services/api';
 import { SettingsModal } from './components/SettingsModal';
 import { WorklogList } from './components/WorklogList';
 import { AddWorklogModal } from './components/AddWorklogModal';
@@ -277,9 +277,13 @@ export default function App() {
   const worklogCacheRef = useRef<Map<string, { worklogs: Worklog[]; timestamp: number }>>(new Map());
   const CACHE_TTL = 5 * 60 * 1000; // 5 dakika cache süresi
   
+  // Hafta cache'i - tüm hafta verilerini sakla (date -> worklogs)
+  const weekWorklogsCacheRef = useRef<Map<string, Worklog[]>>(new Map());
+  const weekCacheMondayRef = useRef<string | null>(null);
+  const [isLoadingWeek, setIsLoadingWeek] = useState(false);
+  
   // Mevcut haftayı takip et (Pazartesi tarihi)
   const currentWeekMondayRef = useRef<string>(getWeekMonday(selectedDate));
-  const [isLoadingWeek, setIsLoadingWeek] = useState(false);
   
   // Distribution Preview State
   const [distributionPreview, setDistributionPreview] = useState<{
@@ -434,9 +438,17 @@ export default function App() {
   useEffect(() => {
     // Only load if all credentials are present to prevent errors
     if(settings.jiraUrl && settings.jiraToken && settings.jiraEmail) {
-        loadData();
+        const weekMonday = getWeekMonday(selectedDate);
+        // Eğer hafta değişiyorsa, tüm hafta verilerini yükle
+        if (weekCacheMondayRef.current !== weekMonday) {
+            loadData(settings, true);
+            currentWeekMondayRef.current = weekMonday;
+        } else {
+            // Aksi takdirde sadece o günün verilerini cache'ten al
+            loadData(settings, false);
+        }
     }
-  }, [selectedDate]);
+  }, [selectedDate, settings]);
 
   // Save notification history when it changes
   useEffect(() => {
@@ -731,6 +743,9 @@ export default function App() {
     const summary = newWorklog?.summary || issueKey;
     setSuggestions(updateSuggestions(issueKey, summary, comment, hours));
     
+    // Invalidate cache
+    invalidateCache(selectedDate);
+    
     // Notify with undo
     const undoAction: UndoAction = newWorklog ? {
         type: 'CREATE',
@@ -755,44 +770,75 @@ export default function App() {
     }
   };
 
+  // Hafta başında tüm hafta verilerini paralel olarak çek
+  const loadWeekData = async (mondayDate: string, currentSettings?: AppSettings) => {
+    const settings_to_use = currentSettings || settings;
+    if (!settings_to_use.jiraUrl || !settings_to_use.jiraEmail || !settings_to_use.jiraToken) {
+        return;
+    }
+
+    setIsLoadingWeek(true);
+    try {
+      const weekData: Map<string, Worklog[]> = await fetchWeekWorklogs(mondayDate, settings_to_use);
+      
+      // Cache'e kaydet - weekData zaten Map
+      weekWorklogsCacheRef.current.clear();
+      weekData.forEach((value, key) => {
+        weekWorklogsCacheRef.current.set(key, value);
+      });
+      weekCacheMondayRef.current = mondayDate;
+      
+      // Mevcut günün verilerini state'e koy
+      const todayWorklogs = weekData.get(selectedDate) || [];
+      setWorklogs(todayWorklogs);
+      setLoadingState(LoadingState.SUCCESS);
+    } catch (e: any) {
+      console.error(e);
+      setLoadingState(LoadingState.ERROR);
+      notify('Hafta Verisi Yükleme Hatası', e.message, 'error');
+      if(e.message.includes('Bilgileri Eksik') || e.message.includes('401')) {
+          setIsSettingsOpen(true);
+      }
+    } finally {
+      setIsLoadingWeek(false);
+    }
+  };
+
   const loadData = async (currentSettings = settings, forceRefresh = false) => {
     if (!currentSettings.jiraUrl || !currentSettings.jiraEmail || !currentSettings.jiraToken) {
         return;
     }
 
-    // Cache kontrolü
-    const cached = worklogCacheRef.current.get(selectedDate);
-    if (!forceRefresh && cached && (Date.now() - cached.timestamp) < CACHE_TTL) {
-        setWorklogs(cached.worklogs);
-        setLoadingState(LoadingState.SUCCESS);
+    const weekMonday = getWeekMonday(selectedDate);
+    
+    // Eğer haftanın başında değişim varsa, tüm hafta verilerini çek
+    if (forceRefresh || weekCacheMondayRef.current !== weekMonday) {
+        await loadWeekData(weekMonday, currentSettings);
+        currentWeekMondayRef.current = weekMonday;
         return;
     }
-
-    setLoadingState(LoadingState.LOADING);
-    try {
-      const data = await fetchWorklogs(selectedDate, currentSettings);
-      setWorklogs(data);
-      
-      // Cache'e kaydet
-      worklogCacheRef.current.set(selectedDate, {
-        worklogs: data,
-        timestamp: Date.now()
-      });
-      
-      setLoadingState(LoadingState.SUCCESS);
-    } catch (e: any) {
-      console.error(e);
-      setLoadingState(LoadingState.ERROR);
-      notify('Veri Yükleme Hatası', e.message, 'error');
-      if(e.message.includes('Bilgileri Eksik') || e.message.includes('401')) {
-          setIsSettingsOpen(true);
-      }
+    
+    // Aksi takdirde cache'ten al
+    const cachedWeekData = weekWorklogsCacheRef.current.get(selectedDate);
+    if (cachedWeekData) {
+        setWorklogs(cachedWeekData);
+        setLoadingState(LoadingState.SUCCESS);
+    } else {
+        // Haftanın cache'i var ama bu tarih yok (hata durumu), hafta verilerini yeniden yükle
+        await loadWeekData(weekMonday, currentSettings);
     }
   };
 
   // Cache'i invalidate et (worklog eklendiğinde/güncellendiğinde)
   const invalidateCache = (date: string) => {
     worklogCacheRef.current.delete(date);
+    // Ayrıca hafta cache'ini de temizle - o haftayı yeniden load etmeye zorla
+    weekWorklogsCacheRef.current.delete(date);
+    // Eğer hafta cache'i boşaldıysa veya tarih haftaya ait ise, mondayRef'i sıfırla
+    const weekMonday = getWeekMonday(date);
+    if (weekCacheMondayRef.current === weekMonday) {
+      weekCacheMondayRef.current = null; // Hafta cache'ini invalidate et
+    }
   };
 
   // Worklog history change handler
@@ -805,7 +851,7 @@ export default function App() {
   };
 
   // Fetch worklogs for a date range (for weekly report)
-  const fetchWeekWorklogs = async (startDate: string, endDate: string): Promise<Worklog[]> => {
+  const fetchDateRangeWorklogs = async (startDate: string, endDate: string): Promise<Worklog[]> => {
     if (!settings.jiraUrl || !settings.jiraEmail || !settings.jiraToken) {
         return [];
     }
@@ -1079,6 +1125,9 @@ status: devam/test/tamamlandı/beklemede`;
       } else {
         notify('Güncellendi', 'Kayıt başarıyla güncellendi', 'success');
       }
+      
+      // Invalidate cache
+      invalidateCache(selectedDate);
     } catch (e: any) {
       notify('Güncelleme Başarısız', e.message, 'error');
       loadData(); // Revert
@@ -2320,7 +2369,7 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
         isOpen={isWeeklyReportOpen}
         onClose={() => setIsWeeklyReportOpen(false)}
         settings={settings}
-        onFetchWeekWorklogs={fetchWeekWorklogs}
+        onFetchWeekWorklogs={fetchDateRangeWorklogs}
         onAIGenerate={settings.groqApiKey ? generateAIWeeklyReport : undefined}
       />
 

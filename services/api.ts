@@ -134,6 +134,40 @@ export const fetchWorklogs = async (date: string, settings: AppSettings): Promis
   return allWorklogs;
 };
 
+// Tüm hafta için worklog'ları paralel olarak çek (Pazartesi-Pazar)
+export const fetchWeekWorklogs = async (mondayDateStr: string, settings: AppSettings): Promise<Map<string, Worklog[]>> => {
+  if (!settings.jiraUrl || !settings.jiraEmail || !settings.jiraToken) {
+    throw new Error("Jira Bilgileri Eksik: Ayarları kontrol edin.");
+  }
+
+  // Pazartesi'den başlayarak 7 gün için tarih listesi oluştur
+  const weekDays: string[] = [];
+  const monday = new Date(mondayDateStr);
+  for (let i = 0; i < 7; i++) {
+    const day = new Date(monday);
+    day.setDate(monday.getDate() + i);
+    weekDays.push(`${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`);
+  }
+
+  // Her gün için paralel olarak fetch yap
+  const promises = weekDays.map(date => 
+    fetchWorklogs(date, settings).catch(e => {
+      console.error(`${date} tarihinde worklog çekerken hata:`, e);
+      return [];
+    })
+  );
+
+  const results = await Promise.all(promises);
+  
+  // Sonuçları Map'e dönüştür: date -> worklogs
+  const weekMap = new Map<string, Worklog[]>();
+  weekDays.forEach((date, index) => {
+    weekMap.set(date, results[index]);
+  });
+
+  return weekMap;
+};
+
 export const updateWorklog = async (wl: Worklog, settings: AppSettings, newComment?: string, newSeconds?: number) => {
     const body: any = {
         started: wl.started,
