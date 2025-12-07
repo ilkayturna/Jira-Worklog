@@ -18,7 +18,7 @@ const normalizeUrl = (url: string) => {
 }
 
 // ARTIK PROXY ÜZERİNDEN İSTEK ATIYORUZ
-const fetchThroughProxy = async (targetUrl: string, method: string, headers: any, body?: any) => {
+const fetchThroughProxy = async (targetUrl: string, method: string, headers: any, body?: any, retries = 3, backoff = 1000) => {
     // Vercel'de çalışırken /api/proxy endpoint'ini kullan
     const proxyUrl = `/api/proxy?url=${encodeURIComponent(targetUrl)}`;
     
@@ -38,8 +38,23 @@ const fetchThroughProxy = async (targetUrl: string, method: string, headers: any
         }
     }
 
-    const response = await fetch(proxyUrl, options);
-    return response;
+    for (let i = 0; i < retries; i++) {
+        try {
+            const response = await fetch(proxyUrl, options);
+            
+            // 429 (Too Many Requests) veya 5xx hatalarında retry yap
+            if (response.status === 429 || response.status >= 500) {
+                throw new Error(`Retryable error: ${response.status}`);
+            }
+            
+            return response;
+        } catch (error) {
+            if (i === retries - 1) throw error;
+            // Exponential backoff
+            await new Promise(resolve => setTimeout(resolve, backoff * Math.pow(2, i)));
+        }
+    }
+    throw new Error("Max retries reached");
 };
 
 // --- JIRA API ---

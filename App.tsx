@@ -1,191 +1,33 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Settings, Moon, Sun, Calendar as CalendarIcon, RefreshCw, CheckCircle2, AlertCircle, Info, ChevronLeft, ChevronRight, Copy, Sparkles, Clock, Plus, Bell, History, Brain, Edit3, FileSpreadsheet, FileText } from 'lucide-react';
-import { AppSettings, Worklog, LoadingState, Notification, NotificationHistoryItem, WorklogSuggestion, UndoAction, DEFAULT_SYSTEM_PROMPT, TextChangePreview, WeeklyReportItem, WorklogHistoryEntry } from './types';
-import { fetchWorklogs, updateWorklog, callGroq, createWorklog, deleteWorklog, fetchIssueDetails, fetchWeekWorklogs } from './services/api';
+import { Calendar as CalendarIcon, RefreshCw, CheckCircle2, AlertCircle, Info, Sparkles, Plus, History, Brain, Edit3, Clock } from 'lucide-react';
+import { AppSettings, Worklog, LoadingState, Notification, NotificationHistoryItem, WorklogSuggestion, UndoAction, TextChangePreview, WeeklyReportItem, WorklogHistoryEntry } from './types';
+import { fetchWorklogs, updateWorklog, callGroq, createWorklog, deleteWorklog, fetchIssueDetails } from './services/api';
 import { SettingsModal } from './components/SettingsModal';
 import { WorklogList } from './components/WorklogList';
 import { AddWorklogModal } from './components/AddWorklogModal';
 import { MagicCommandBar } from './components/MagicCommandBar';
 import { NotificationHistory } from './components/NotificationHistory';
 import { WeeklyReportModal } from './components/WeeklyReportModal';
-import { secondsToHours, formatHours } from './utils/adf';
+import { Header } from './components/Header';
+import { Sidebar } from './components/Sidebar';
+import { formatHours } from './utils/adf';
 import { useSettings } from './hooks/useSettings';
 import { useWorklogs } from './hooks/useWorklogs';
 import { useNotifications } from './hooks/useNotifications';
-import { APP_NAME, SUGGESTIONS_KEY, NOTIFICATION_HISTORY_KEY, WORKLOG_HISTORY_KEY } from './constants';
+import { SUGGESTIONS_KEY, NOTIFICATION_HISTORY_KEY, WORKLOG_HISTORY_KEY } from './constants';
 import { toLocalDateStr, getWeekMonday, getWeekDays } from './utils/date';
+import { computeWordDiff, DiffPart } from './utils/diff';
+import { loadSuggestions, loadWorklogHistories, saveWorklogHistories, saveNotificationHistory, updateSuggestions } from './utils/storage';
 
 // Diff helper - kelime bazlı karşılaştırma
-interface DiffPart {
-  text: string;
-  type: 'unchanged' | 'added' | 'removed';
-}
-
-const computeWordDiff = (before: string, after: string): { beforeParts: DiffPart[], afterParts: DiffPart[] } => {
-  const beforeWords = before.split(/(\s+)/);
-  const afterWords = after.split(/(\s+)/);
-  
-  // Simple LCS-based diff for words
-  const m = beforeWords.length;
-  const n = afterWords.length;
-  
-  // Build LCS table
-  const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
-  for (let i = 1; i <= m; i++) {
-    for (let j = 1; j <= n; j++) {
-      if (beforeWords[i - 1] === afterWords[j - 1]) {
-        dp[i][j] = dp[i - 1][j - 1] + 1;
-      } else {
-        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
-      }
-    }
-  }
-  
-  // Backtrack to find diff
-  const beforeParts: DiffPart[] = [];
-  const afterParts: DiffPart[] = [];
-  
-  let i = m, j = n;
-  const beforeResult: DiffPart[] = [];
-  const afterResult: DiffPart[] = [];
-  
-  while (i > 0 || j > 0) {
-    if (i > 0 && j > 0 && beforeWords[i - 1] === afterWords[j - 1]) {
-      beforeResult.unshift({ text: beforeWords[i - 1], type: 'unchanged' });
-      afterResult.unshift({ text: afterWords[j - 1], type: 'unchanged' });
-      i--; j--;
-    } else if (j > 0 && (i === 0 || dp[i][j - 1] >= dp[i - 1][j])) {
-      afterResult.unshift({ text: afterWords[j - 1], type: 'added' });
-      j--;
-    } else if (i > 0) {
-      beforeResult.unshift({ text: beforeWords[i - 1], type: 'removed' });
-      i--;
-    }
-  }
-  
-  // Merge consecutive same-type parts
-  const mergeParts = (parts: DiffPart[]): DiffPart[] => {
-    const merged: DiffPart[] = [];
-    for (const part of parts) {
-      if (merged.length > 0 && merged[merged.length - 1].type === part.type) {
-        merged[merged.length - 1].text += part.text;
-      } else {
-        merged.push({ ...part });
-      }
-    }
-    return merged;
-  };
-  
-  return {
-    beforeParts: mergeParts(beforeResult),
-    afterParts: mergeParts(afterResult)
-  };
-};
+// Moved to utils/diff.ts
 
 // Load suggestions from localStorage
-const loadSuggestions = (): WorklogSuggestion[] => {
-    try {
-        const saved = localStorage.getItem(SUGGESTIONS_KEY);
-        return saved ? JSON.parse(saved) : [];
-    } catch {
-        return [];
-    }
-};
+// Moved to utils/storage.ts
 
-// Load notification history from localStorage
-// Imported from hooks/useNotifications
 
-// Worklog history key
-// const WORKLOG_HISTORY_KEY = `${APP_NAME}_worklogHistories`; // Imported from constants
 
-// Load worklog histories from localStorage
-const loadWorklogHistories = (): Map<string, { entries: WorklogHistoryEntry[]; index: number }> => {
-    try {
-        const saved = localStorage.getItem(WORKLOG_HISTORY_KEY);
-        if (!saved) return new Map();
-        const parsed = JSON.parse(saved);
-        // Filter entries older than 24 hours
-        const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
-        const filtered: Record<string, { entries: WorklogHistoryEntry[]; index: number }> = {};
-        for (const [key, value] of Object.entries(parsed)) {
-            const historyData = value as { entries: WorklogHistoryEntry[]; index: number };
-            const validEntries = historyData.entries.filter(e => e.timestamp > oneDayAgo);
-            if (validEntries.length > 0) {
-                filtered[key] = { entries: validEntries, index: Math.min(historyData.index, validEntries.length - 1) };
-            }
-        }
-        return new Map(Object.entries(filtered));
-    } catch {
-        return new Map();
-    }
-};
-
-// Save worklog histories to localStorage
-const saveWorklogHistories = (histories: Map<string, { entries: WorklogHistoryEntry[]; index: number }>) => {
-    try {
-        const obj = Object.fromEntries(histories);
-        localStorage.setItem(WORKLOG_HISTORY_KEY, JSON.stringify(obj));
-    } catch {
-        // Ignore storage errors
-    }
-};
-
-// Save notification history to localStorage
-const saveNotificationHistory = (history: NotificationHistoryItem[]) => {
-    localStorage.setItem(NOTIFICATION_HISTORY_KEY, JSON.stringify(history.slice(0, 100)));
-};
-
-// Save suggestions to localStorage
-const saveSuggestions = (suggestions: WorklogSuggestion[]) => {
-    localStorage.setItem(SUGGESTIONS_KEY, JSON.stringify(suggestions.slice(0, 50))); // Keep max 50
-};
-
-// Update suggestions when a worklog is created - with min/max tracking
-const updateSuggestions = (issueKey: string, summary: string, comment: string, hours: number) => {
-    const suggestions = loadSuggestions();
-    const existingIndex = suggestions.findIndex(s => s.issueKey === issueKey);
-    
-    if (existingIndex >= 0) {
-        // Update existing with min/max/total tracking
-        const existing = suggestions[existingIndex];
-        const newTotalHours = (existing.totalHours || existing.avgHours * existing.frequency) + hours;
-        const newFrequency = existing.frequency + 1;
-        suggestions[existingIndex] = {
-            ...existing,
-            lastComment: comment || existing.lastComment,
-            avgHours: newTotalHours / newFrequency,
-            frequency: newFrequency,
-            lastUsed: new Date().toISOString(),
-            minHours: Math.min(existing.minHours || existing.avgHours, hours),
-            maxHours: Math.max(existing.maxHours || existing.avgHours, hours),
-            totalHours: newTotalHours
-        };
-    } else {
-        // Add new
-        suggestions.unshift({
-            issueKey,
-            summary,
-            lastComment: comment,
-            avgHours: hours,
-            frequency: 1,
-            lastUsed: new Date().toISOString(),
-            minHours: hours,
-            maxHours: hours,
-            totalHours: hours
-        });
-    }
-    
-    // Sort by frequency and recency
-    suggestions.sort((a, b) => {
-        const freqDiff = b.frequency - a.frequency;
-        if (freqDiff !== 0) return freqDiff;
-        return new Date(b.lastUsed).getTime() - new Date(a.lastUsed).getTime();
-    });
-    
-    saveSuggestions(suggestions);
-    return suggestions;
-};
 
 // Varsayılan başlangıç tarihini hesapla - Yerel tarih kullan
 const getDefaultStartDate = (): string => {
@@ -195,15 +37,6 @@ const getDefaultStartDate = (): string => {
   const day = String(now.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
-
-// Helper: Local date string (YYYY-MM-DD)
-// Imported from utils/date
-
-// Helper: Haftanın Pazartesi gününü bul
-// Imported from utils/date
-
-// Helper: Haftanın tüm günlerini al (Pazartesi-Pazar)
-// Imported from utils/date
 
 export default function App() {
   const { 
@@ -1517,89 +1350,6 @@ KURALLAR:
      }
   };
 
-  const handleDistribute = async (mode: 'equal' | 'proportional' = 'proportional') => {
-     if (loadingState === LoadingState.LOADING) return;
-     
-     const target = settings.targetDailyHours;
-     const currentTotal = worklogs.reduce((sum, wl) => sum + wl.hours, 0);
-     
-     if (worklogs.length === 0) {
-         notify('Hata', 'Dağıtılacak worklog bulunamadı.', 'error');
-         return;
-     }
-
-     if (Math.abs(target - currentTotal) < 0.01 && mode === 'proportional') {
-         notify('Hedef Tamam', 'Saatler zaten hedefe uygun!', 'success');
-         return;
-     }
-
-     notify('Dağıtılıyor', `${target} saat hedefe göre dağıtılıyor...`, 'info');
-     
-     const targetSeconds = Math.round(target * 3600);
-     const minSeconds = Math.round(settings.minHoursPerWorklog * 3600);
-     const count = worklogs.length;
-     
-     let newSecondsArray: number[] = [];
-     
-     if (mode === 'equal') {
-         // Eşit dağıtım: Her worklog'a eşit süre
-         const perLog = Math.floor(targetSeconds / count);
-         const remainder = targetSeconds % count;
-         newSecondsArray = worklogs.map((_, i) => perLog + (i < remainder ? 1 : 0));
-     } else {
-         // Orantılı dağıtım: Mevcut oranları koruyarak hedefe ulaş
-         const totalCurrentSeconds = worklogs.reduce((sum, wl) => sum + wl.seconds, 0);
-         if (totalCurrentSeconds === 0) {
-             // Tümü 0 ise eşit dağıt
-             const perLog = Math.floor(targetSeconds / count);
-             const remainder = targetSeconds % count;
-             newSecondsArray = worklogs.map((_, i) => perLog + (i < remainder ? 1 : 0));
-         } else {
-             const ratio = targetSeconds / totalCurrentSeconds;
-             let distributed = 0;
-             newSecondsArray = worklogs.map((wl, i) => {
-                 if (i === count - 1) {
-                     // Son eleman: kalanı al (yuvarlama hatasını düzelt)
-                     return Math.max(minSeconds, targetSeconds - distributed);
-                 }
-                 const newSec = Math.max(minSeconds, Math.round(wl.seconds * ratio));
-                 distributed += newSec;
-                 return newSec;
-             });
-         }
-     }
-     
-     // Store previous values for undo
-     const undoData = worklogs.map((wl, index) => ({
-         worklogId: wl.id,
-         issueKey: wl.issueKey,
-         previousSeconds: wl.seconds,
-         newSeconds: newSecondsArray[index]
-     }));
-     
-     try {
-         // Update all
-         const promises = worklogs.map(async (wl, index) => {
-             const newSeconds = newSecondsArray[index];
-             if (newSeconds !== wl.seconds) {
-                await updateWorklog(wl, settings, undefined, newSeconds);
-             }
-         });
-         
-         await Promise.all(promises);
-         await loadData();
-         
-         // Notify with undo capability
-         const undoAction: UndoAction = {
-             type: 'BATCH_UPDATE',
-             data: undoData
-         };
-         notify('Dağıtıldı', `Süreler ${target}h hedefe göre dağıtıldı.`, 'success', undoAction);
-     } catch (e: any) {
-         notify('Dağıtım Hatası', e.message, 'error');
-     }
-  };
-
   const copyPreviousDay = async () => {
       const date = new Date(selectedDate);
       date.setDate(date.getDate() - 1);
@@ -1688,112 +1438,6 @@ KURALLAR:
     );
   };
 
-  // Weekly Chart Component
-  const WeeklyChart = () => {
-    const maxHours = Math.max(...weeklyHours.map(d => d.hours), settings.targetDailyHours);
-    
-    // Haftanın tarih aralığını hesapla
-    const weekRange = useMemo(() => {
-      if (weeklyHours.length === 0) return '';
-      const firstDay = weeklyHours[0];
-      const lastDay = weeklyHours[weeklyHours.length - 1];
-      if (!firstDay || !lastDay) return '';
-      
-      const formatDate = (dateStr: string) => {
-        const [y, m, d] = dateStr.split('-');
-        return `${d}/${m}`;
-      };
-      
-      return `${formatDate(firstDay.date)} - ${formatDate(lastDay.date)}`;
-    }, [weeklyHours]);
-    
-    return (
-      <section className="surface-card p-5" aria-label="Weekly overview">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-on-surface-variant)' }}>
-            Haftalık Özet
-          </h2>
-          <div className="flex items-center gap-2">
-            {isLoadingWeek && (
-              <RefreshCw size={12} className="animate-spin" style={{ color: 'var(--color-primary-500)' }} />
-            )}
-            <span className="text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>
-              {weekRange || 'Yükleniyor...'}
-            </span>
-          </div>
-        </div>
-        <div className="flex items-end justify-between gap-1 h-24">
-          {weeklyHours.map((day, idx) => {
-            const heightPercent = maxHours > 0 ? (day.hours / maxHours) * 100 : 0;
-            const isToday = day.date === selectedDate;
-            const metTarget = day.hours >= settings.targetDailyHours;
-            
-            return (
-              <div key={day.date} className="flex flex-col items-center flex-1 gap-1">
-                <div 
-                  className="w-full relative group cursor-pointer"
-                  style={{ height: '80px' }}
-                  onClick={() => setSelectedDate(day.date)}
-                >
-                  {/* Target line */}
-                  <div 
-                    className="absolute w-full border-t border-dashed"
-                    style={{ 
-                      bottom: `${(settings.targetDailyHours / maxHours) * 100}%`,
-                      borderColor: 'var(--color-warning)',
-                      opacity: 0.5
-                    }}
-                  />
-                  {/* Bar */}
-                  <div 
-                    className={`chart-bar absolute bottom-0 w-full ${settings.isDarkTheme && metTarget ? 'glow-success' : ''}`}
-                    style={{ 
-                      height: `${Math.max(heightPercent, 4)}%`,
-                      backgroundColor: metTarget 
-                        ? 'var(--color-success)' 
-                        : isToday 
-                        ? 'var(--color-primary-500)' 
-                        : 'var(--color-primary-300)',
-                      opacity: isToday ? 1 : 0.7
-                    }}
-                  />
-                  {/* Tooltip */}
-                  <div 
-                    className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10 whitespace-nowrap px-2 py-1 rounded text-xs font-medium"
-                    style={{ 
-                      backgroundColor: 'var(--color-surface-container-high)',
-                      color: 'var(--color-on-surface)',
-                      boxShadow: 'var(--elevation-2)'
-                    }}
-                  >
-                    {day.hours.toFixed(1)}h
-                  </div>
-                </div>
-                <span 
-                  className={`text-xs font-medium ${isToday ? 'font-bold' : ''}`}
-                  style={{ color: isToday ? 'var(--color-primary-600)' : 'var(--color-on-surface-variant)' }}
-                >
-                  {day.dayName}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-        {/* Legend */}
-        <div className="flex items-center justify-center gap-4 mt-3 pt-3 border-t" style={{ borderColor: 'var(--color-outline-variant)' }}>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: 'var(--color-success)' }} />
-            <span className="text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>Hedef ✓</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <div className="w-3 h-0.5 border-t border-dashed" style={{ borderColor: 'var(--color-warning)', width: '12px' }} />
-            <span className="text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>{settings.targetDailyHours}h hedef</span>
-          </div>
-        </div>
-      </section>
-    );
-  };
-
   return (
     <main ref={mainRef} className="min-h-screen py-6 px-4 md:py-10 md:px-6 animate-fade-in">
       
@@ -1838,364 +1482,45 @@ KURALLAR:
       {/* Main Container - Clean Google-style layout */}
       <div className="w-full max-w-5xl mx-auto space-y-6">
         
-        {/* Header - Apple Glassmorphism */}
-        <header className="apple-header">
-            <div className="flex items-center gap-4">
-                {/* Apple-style Logo */}
-                <div className="w-12 h-12 md:w-14 md:h-14 rounded-[18px] flex items-center justify-center shadow-lg" style={{ background: 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)' }}>
-                    <CalendarIcon className="text-white" size={28} strokeWidth={1.5} />
-                </div>
-                <div>
-                    <h1 className="text-2xl md:text-[28px] font-bold" style={{ color: 'var(--color-on-surface)', letterSpacing: '-0.03em' }}>
-                        Worklog
-                    </h1>
-                    <p className="text-[13px] mt-0.5" style={{ color: 'var(--color-on-surface-variant)', letterSpacing: '-0.01em' }}>
-                        Jira Cloud ile senkronize
-                    </p>
-                </div>
-            </div>
-
-            {/* Header Actions */}
-            <div className="flex items-center gap-1">
-                {/* Add Worklog Button - Apple style */}
-                <button 
-                    onClick={() => setIsAddWorklogOpen(true)} 
-                    className="hidden sm:flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-full transition-all hover:scale-[1.02] active:scale-[0.98]"
-                    style={{ background: 'linear-gradient(135deg, #007AFF 0%, #0055d4 100%)', color: 'white' }}
-                >
-                    <Plus size={16} strokeWidth={2.5}/> Yeni
-                </button>
-                <button 
-                    onClick={() => setIsAddWorklogOpen(true)} 
-                    className="btn-icon sm:hidden"
-                    style={{ backgroundColor: 'var(--color-primary-600)', color: 'white' }}
-                    aria-label="Add worklog"
-                >
-                    <Plus size={20}/>
-                </button>
-                
-                {/* Weekly Report */}
-                <button 
-                    onClick={() => setIsWeeklyReportOpen(true)} 
-                    className="btn-icon"
-                    aria-label="Weekly report"
-                    title="Haftalık Rapor Oluştur"
-                >
-                    <FileSpreadsheet size={20}/>
-                </button>
-                
-                {/* Notification History */}
-                <button 
-                    onClick={() => setIsHistoryOpen(true)} 
-                    className="btn-icon relative"
-                    aria-label="Notification history"
-                >
-                    <Bell size={20}/>
-                    {undoableCount > 0 && (
-                        <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold"
-                              style={{ backgroundColor: 'var(--color-error)', color: 'white' }}>
-                            {undoableCount}
-                        </span>
-                    )}
-                </button>
-                
-                <button 
-                    onClick={toggleTheme} 
-                    className="btn-icon"
-                    aria-label="Toggle theme"
-                >
-                    {settings.isDarkTheme ? <Sun size={20}/> : <Moon size={20}/>}
-                </button>
-                <button 
-                    onClick={() => setIsSettingsOpen(true)} 
-                    className="btn-icon"
-                    aria-label="Settings"
-                >
-                    <Settings size={20} />
-                </button>
-            </div>
-        </header>
+        <Header 
+            setIsAddWorklogOpen={setIsAddWorklogOpen}
+            setIsWeeklyReportOpen={setIsWeeklyReportOpen}
+            setIsHistoryOpen={setIsHistoryOpen}
+            setIsSettingsOpen={setIsSettingsOpen}
+            toggleTheme={toggleTheme}
+            isDarkTheme={settings.isDarkTheme}
+            undoableCount={undoableCount}
+        />
 
         {/* Dashboard Grid - Responsive */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             
             {/* Left Sidebar: Controls & Stats */}
-            <aside className="lg:col-span-4 space-y-5">
-                
-                {/* Date Picker Card - Apple style */}
-                <section className="surface-card p-5" aria-label="Date selection">
-                    <h2 className="text-[11px] font-semibold uppercase tracking-wide mb-4" style={{ color: 'var(--color-on-surface-variant)', letterSpacing: '0.05em' }}>
-                        Tarih
-                    </h2>
-                    <div className="flex items-center gap-2">
-                        <button 
-                            onClick={() => changeDate(-1)} 
-                            className="btn-icon"
-                            aria-label="Previous day"
-                        >
-                            <ChevronLeft size={20}/>
-                        </button>
-                        <input 
-                            type="date" 
-                            value={selectedDate} 
-                            onChange={(e) => setSelectedDate(e.target.value)}
-                            className="input-filled flex-1 text-center font-medium"
-                            style={{ fontFamily: 'var(--font-mono)' }}
-                        />
-                        <button 
-                            onClick={() => changeDate(1)} 
-                            className="btn-icon"
-                            aria-label="Next day"
-                        >
-                            <ChevronRight size={20}/>
-                        </button>
-                    </div>
-                    
-                    {/* Week Days - Apple Segmented Control Style */}
-                    <div className="mt-5 pt-5 border-t" style={{ borderColor: 'var(--color-outline-variant)' }}>
-                        <div className="apple-segmented-control">
-                            {(() => {
-                                const selected = new Date(selectedDate);
-                                const dayOfWeek = selected.getDay();
-                                const monday = new Date(selected);
-                                monday.setDate(selected.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
-                                
-                                const days = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
-                                const weekDays = [];
-                                
-                                // Helper function for local date string (YYYY-MM-DD)
-                                const toLocalDateStr = (d: Date) => {
-                                    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-                                };
-                                
-                                const todayStr = toLocalDateStr(new Date());
-                                
-                                for (let i = 0; i < 7; i++) {
-                                    const day = new Date(monday);
-                                    day.setDate(monday.getDate() + i);
-                                    const dateStr = toLocalDateStr(day);
-                                    const isSelected = dateStr === selectedDate;
-                                    const isToday = dateStr === todayStr;
-                                    const isWeekend = i >= 5;
-                                    
-                                    weekDays.push(
-                                        <button
-                                            key={dateStr}
-                                            onClick={() => setSelectedDate(dateStr)}
-                                            className={`apple-segment-item ${isSelected ? 'active' : ''} ${isToday ? 'today' : ''}`}
-                                        >
-                                            <span className="day-label">{days[i]}</span>
-                                            <span className="day-number">{day.getDate()}</span>
-                                            {isToday && <span className="today-dot" />}
-                                        </button>
-                                    );
-                                }
-                                
-                                return weekDays;
-                            })()}
-                        </div>
-                    </div>
-                </section>
-
-                {/* Daily Progress - Apple Activity Ring Style */}
-                <section className="apple-progress-card" aria-label="Daily progress">
-                    <div className="flex items-center gap-5">
-                        {/* Apple Activity Ring */}
-                        <div className="apple-progress-ring flex-shrink-0">
-                            <svg viewBox="0 0 100 100" className="w-20 h-20">
-                                {/* Background Ring */}
-                                <circle
-                                    cx="50" cy="50" r="42"
-                                    fill="none"
-                                    stroke="var(--color-outline-variant)"
-                                    strokeWidth="8"
-                                />
-                                {/* Progress Ring */}
-                                <circle
-                                    cx="50" cy="50" r="42"
-                                    fill="none"
-                                    stroke={isTargetMet ? '#30d158' : '#007AFF'}
-                                    strokeWidth="8"
-                                    strokeLinecap="round"
-                                    strokeDasharray={`${Math.min(progress, 100) * 2.64} 264`}
-                                    transform="rotate(-90 50 50)"
-                                    style={{ transition: 'stroke-dasharray 1s ease-out' }}
-                                />
-                            </svg>
-                            <span className="absolute inset-0 flex items-center justify-center text-sm font-bold" style={{ color: 'var(--color-on-surface)' }}>
-                                {Math.round(Math.min(progress, 100))}%
-                            </span>
-                        </div>
-                        
-                        {/* Text Info */}
-                        <div className="flex-1 min-w-0">
-                            <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--color-on-surface-variant)', letterSpacing: '0.05em' }}>
-                                Günlük İlerleme
-                            </p>
-                            <div className="flex items-baseline gap-1 mt-1">
-                                <span className="text-[32px] font-bold tracking-tight" style={{ color: 'var(--color-on-surface)', letterSpacing: '-0.03em' }}>
-                                    {formatHours(totalHours)}
-                                </span>
-                                {isEditingTarget ? (
-                                    <div className="flex items-center gap-1">
-                                        <span style={{ color: 'var(--color-on-surface-variant)' }}>/</span>
-                                        <input
-                                            type="number"
-                                            step="0.5"
-                                            min="0.5"
-                                            max="24"
-                                            value={tempTargetHours}
-                                            onChange={(e) => setTempTargetHours(e.target.value)}
-                                            onBlur={handleTargetHoursChange}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter') handleTargetHoursChange();
-                                                if (e.key === 'Escape') {
-                                                    setTempTargetHours(settings.targetDailyHours.toString());
-                                                    setIsEditingTarget(false);
-                                                }
-                                            }}
-                                            autoFocus
-                                            className="w-12 bg-transparent border-b-2 px-1 py-0.5 text-base font-semibold text-center focus:outline-none"
-                                            style={{ borderColor: 'var(--color-primary-500)', color: 'var(--color-on-surface)' }}
-                                        />
-                                    </div>
-                                ) : (
-                                    <button 
-                                        onClick={() => {
-                                            setTempTargetHours(settings.targetDailyHours.toString());
-                                            setIsEditingTarget(true);
-                                        }}
-                                        className="text-base font-medium transition-opacity hover:opacity-70"
-                                        style={{ color: 'var(--color-on-surface-variant)' }}
-                                    >
-                                        / {settings.targetDailyHours}h
-                                    </button>
-                                )}
-                            </div>
-                            <p className="text-[13px] mt-1" style={{ color: isTargetMet ? 'var(--color-success)' : 'var(--color-on-surface-variant)' }}>
-                                {isTargetMet ? '✓ Hedef tamamlandı' : `${formatHours(settings.targetDailyHours - totalHours)} kaldı`}
-                            </p>
-                        </div>
-                    </div>
-                </section>
-
-                {/* Quick Actions Card */}
-                <section className="surface-card p-5 space-y-4" aria-label="Quick actions">
-                    <h2 className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: 'var(--color-on-surface-variant)', letterSpacing: '0.05em' }}>
-                        İşlemler
-                    </h2>
-                    
-                    {/* Refresh Button */}
-                    <button 
-                        onClick={() => loadData(true)} 
-                        className="btn-outlined w-full"
-                        disabled={loadingState === LoadingState.LOADING}
-                    >
-                        <RefreshCw size={16} className={loadingState === LoadingState.LOADING ? 'animate-spin' : ''}/> 
-                        Yenile
-                    </button>
-                     
-                    {/* Distribution Section */}
-                    <div className="pt-4 border-t" style={{ borderColor: 'var(--color-outline-variant)' }}>
-                        <label className="text-[11px] font-semibold uppercase tracking-wide block mb-3" style={{ color: 'var(--color-on-surface-variant)', letterSpacing: '0.05em' }}>
-                            Dağıtım ({settings.targetDailyHours}h)
-                        </label>
-                        
-                        {/* Distribution Buttons */}
-                        <div className="space-y-2">
-                            <button 
-                                onClick={previewEqualDistribute} 
-                                className="btn-filled w-full text-sm"
-                                style={{ 
-                                    background: 'linear-gradient(135deg, #30d158 0%, #34c759 100%)',
-                                    color: 'white',
-                                    opacity: isDistributing ? 0.7 : 1
-                                }}
-                                title="Tüm worklog'lara eşit süre dağıtır"
-                                disabled={isDistributing}
-                            >
-                                <Clock size={16} /> Eşit
-                            </button>
-                            
-                            {/* AI Smart Distribution */}
-                            <button 
-                                onClick={previewSmartDistribute}
-                                className="btn-filled w-full text-sm"
-                                style={{ 
-                                    background: 'linear-gradient(135deg, #af52de 0%, #5856d6 100%)',
-                                }}
-                                title="Yapay zeka worklog içeriklerini analiz ederek akıllı dağıtım yapar"
-                                disabled={isDistributing}
-                            >
-                                {isDistributing ? (
-                                    <>
-                                        <RefreshCw size={16} className="animate-spin" /> Analiz...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Brain size={16} /> Akıllı
-                                    </>
-                                )}
-                            </button>
-                        </div>
-                    </div>
-                    
-                    {/* AI Text Operations */}
-                    <div className="pt-4 border-t" style={{ borderColor: 'var(--color-outline-variant)' }}>
-                        <label className="text-[11px] font-semibold uppercase tracking-wide block mb-3" style={{ color: 'var(--color-on-surface-variant)', letterSpacing: '0.05em' }}>
-                            AI
-                        </label>
-                        <div className="space-y-2">
-                            <button 
-                                onClick={() => previewBatchAI('SPELL')}
-                                className="btn-outlined w-full text-sm"
-                                style={{ borderColor: '#ff9f0a', color: '#ff9f0a' }}
-                                title="Tüm worklog yorumlarının imla ve gramer hatalarını düzeltir"
-                                disabled={isAIProcessing}
-                            >
-                                {isAIProcessing && textChangeMode === 'SPELL' ? (
-                                    <>
-                                        <RefreshCw size={16} className="animate-spin" /> İşleniyor...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Edit3 size={16} /> Tümünün İmlasını Düzelt
-                                    </>
-                                )}
-                            </button>
-                            
-                            <button 
-                                onClick={() => previewBatchAI('IMPROVE')}
-                                className="btn-outlined w-full ripple text-sm"
-                                style={{ borderColor: '#8b5cf6', color: '#8b5cf6' }}
-                                title="Tüm worklog yorumlarını AI ile iyileştirir"
-                                disabled={isAIProcessing}
-                            >
-                                {isAIProcessing && textChangeMode === 'IMPROVE' ? (
-                                    <>
-                                        <RefreshCw size={16} className="animate-spin" /> İşleniyor...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Sparkles size={16} /> Tümünü İyileştir
-                                    </>
-                                )}
-                            </button>
-                        </div>
-                    </div>
-                     
-                    {/* Copy Previous Day */}
-                    <button 
-                        onClick={copyPreviousDay} 
-                        className="btn-text w-full ripple"
-                    >
-                        <Copy size={18} /> Dünden Kopyala
-                    </button>
-                </section>
-                
-                {/* Weekly Chart */}
-                <WeeklyChart />
-            </aside>
+            <Sidebar 
+                selectedDate={selectedDate}
+                setSelectedDate={setSelectedDate}
+                changeDate={changeDate}
+                totalHours={totalHours}
+                settings={settings}
+                isTargetMet={isTargetMet}
+                progress={progress}
+                isEditingTarget={isEditingTarget}
+                setIsEditingTarget={setIsEditingTarget}
+                tempTargetHours={tempTargetHours}
+                setTempTargetHours={setTempTargetHours}
+                handleTargetHoursChange={handleTargetHoursChange}
+                loadData={loadData}
+                loadingState={loadingState}
+                isDistributing={isDistributing}
+                previewEqualDistribute={previewEqualDistribute}
+                previewSmartDistribute={previewSmartDistribute}
+                isAIProcessing={isAIProcessing}
+                textChangeMode={textChangeMode}
+                previewBatchAI={previewBatchAI}
+                copyPreviousDay={copyPreviousDay}
+                weeklyHours={weeklyHours}
+                isLoadingWeek={isLoadingWeek}
+            />
 
             {/* Right: Worklog List */}
             <section className="lg:col-span-8" aria-label="Worklog list">
@@ -2661,7 +1986,7 @@ KURALLAR:
           }}
           className="bottom-nav-item haptic-feedback"
         >
-          <Settings size={22} strokeWidth={1.5} />
+          <Edit3 size={22} strokeWidth={1.5} />
           <span>Ayarlar</span>
         </button>
       </nav>
