@@ -584,6 +584,7 @@ export default function App() {
 
   // WeeklyHours'u cache'den güncelle (Pazartesi-Pazar sıralaması)
   const updateWeeklyHoursFromCache = () => {
+    const weekMonday = getWeekMonday(selectedDate);
     const weekDays = getWeekDays(selectedDate);
     const dayNames = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
     
@@ -591,12 +592,14 @@ export default function App() {
     
     for (let i = 0; i < weekDays.length; i++) {
       const dateStr = weekDays[i];
-      const cached = worklogCacheRef.current.get(dateStr);
+      // Hafta cache'inden al
+      const weekCached = weekWorklogsCacheRef.current.get(dateStr);
       
       let totalHours = 0;
-      if (cached) {
-        totalHours = cached.worklogs.reduce((sum, wl) => sum + wl.hours, 0);
+      if (weekCached) {
+        totalHours = weekCached.reduce((sum, wl) => sum + wl.hours, 0);
       } else if (dateStr === selectedDate) {
+        // Mevcut gün için state'ten al
         totalHours = worklogs.reduce((sum, wl) => sum + wl.hours, 0);
       }
       
@@ -791,6 +794,10 @@ export default function App() {
       // Mevcut günün verilerini state'e koy
       const todayWorklogs = weekData.get(selectedDate) || [];
       setWorklogs(todayWorklogs);
+      
+      // Haftalık özet'i güncelle
+      updateWeeklyHoursFromCache();
+      
       setLoadingState(LoadingState.SUCCESS);
     } catch (e: any) {
       console.error(e);
@@ -822,6 +829,8 @@ export default function App() {
     const cachedWeekData = weekWorklogsCacheRef.current.get(selectedDate);
     if (cachedWeekData) {
         setWorklogs(cachedWeekData);
+        // Haftalık özet'i güncelle
+        updateWeeklyHoursFromCache();
         setLoadingState(LoadingState.SUCCESS);
     } else {
         // Haftanın cache'i var ama bu tarih yok (hata durumu), hafta verilerini yeniden yükle
