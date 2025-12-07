@@ -276,6 +276,38 @@ export const WorklogList: React.FC<Props> = ({ worklogs, loading, onUpdate, onIm
         );
     }
 
+    if (loading === LoadingState.LOADING) {
+        return (
+            <div className="flex flex-col gap-4">
+                {[1, 2, 3].map((i) => (
+                    <div key={i} className="surface-card p-6 animate-pulse">
+                        <div className="flex justify-between items-start mb-4">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl skeleton" />
+                                <div className="space-y-2">
+                                    <div className="h-4 w-24 rounded skeleton" />
+                                    <div className="h-3 w-32 rounded skeleton" />
+                                </div>
+                            </div>
+                            <div className="h-8 w-20 rounded-full skeleton" />
+                        </div>
+                        <div className="h-20 w-full rounded-xl skeleton mb-4" />
+                        <div className="flex justify-between items-center">
+                            <div className="flex gap-2">
+                                <div className="h-8 w-8 rounded-lg skeleton" />
+                                <div className="h-8 w-8 rounded-lg skeleton" />
+                            </div>
+                            <div className="flex gap-2">
+                                <div className="h-8 w-24 rounded-full skeleton" />
+                                <div className="h-8 w-24 rounded-full skeleton" />
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        );
+    }
+
     if (worklogs.length === 0) {
         return (
             <div className="text-center py-16 px-6 rounded-2xl" style={{ backgroundColor: 'var(--color-surface-container)', border: '2px dashed var(--color-outline)' }}>

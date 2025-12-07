@@ -79,6 +79,40 @@
   --blur-light: 10px;
 }
 
+/* Glassmorphism Utilities */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+.dark .glass-panel {
+  background: rgba(28, 28, 30, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Skeleton Loading Animation */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, 
+    var(--color-surface-container-high) 25%, 
+    var(--color-surface-container) 50%, 
+    var(--color-surface-container-high) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius-sm);
+}
+
 /* Dark Mode - Apple Dark Vibrancy */
 .dark {
   --color-surface: #000000;
@@ -173,25 +207,44 @@ body {
    ============================================ */
 
 @layer components {
-  /* Apple Surface Cards - Clean & Minimal */
+  /* Apple Surface Cards - Clean & Minimal with Glassmorphism */
   .surface-card {
-    background-color: var(--color-surface);
+    background-color: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     border-radius: var(--radius-lg);
     box-shadow: var(--elevation-1);
-    border: 0.5px solid var(--color-outline-variant);
+    border: 1px solid rgba(255, 255, 255, 0.5);
     transition: all var(--transition-normal);
+  }
+
+  .dark .surface-card {
+    background-color: rgba(28, 28, 30, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
   }
 
   .surface-card:hover {
     box-shadow: var(--elevation-2);
     transform: translateY(-1px);
+    background-color: rgba(255, 255, 255, 0.9);
+  }
+
+  .dark .surface-card:hover {
+    background-color: rgba(44, 44, 46, 0.9);
   }
 
   .surface-card-elevated {
-    background-color: var(--color-surface);
+    background-color: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
     border-radius: var(--radius-xl);
     box-shadow: var(--elevation-3);
-    border: none;
+    border: 1px solid rgba(255, 255, 255, 0.6);
+  }
+
+  .dark .surface-card-elevated {
+    background-color: rgba(44, 44, 46, 0.9);
+    border: 1px solid rgba(255, 255, 255, 0.15);
   }
 
   /* Apple Buttons - Pill Shape, Clean */
