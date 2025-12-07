@@ -972,7 +972,9 @@ Genişletilmiş not:`;
         }
 
         const originalComment = wl.comment;
-        const rawResponse = await callGroq(prompt, settings, maxTokensForMode);
+        // Use lower temperature for spell check to be more deterministic
+        const temperature = mode === 'SPELL' ? 0.1 : 0.3;
+        const rawResponse = await callGroq(prompt, settings, maxTokensForMode, temperature);
         const improvedText = cleanAIOutput(rawResponse || '', mode === 'SPELL');
         
         // Küçük farkları da kabul et - normalize edip karşılaştır
@@ -1015,7 +1017,7 @@ Genişletilmiş not:`;
     }
   };
 
-  // Batch AI Preview - Tüm worklog'ları önizleme ile göster
+  // Batch AI Preview - Tüm worklog'ları önizleme ile göster (OPTIMIZED: Single Request)
   const previewBatchAI = async (mode: 'IMPROVE' | 'SPELL') => {
     if (isAIProcessing) return;
     
@@ -1038,70 +1040,101 @@ Genişletilmiş not:`;
     notify('AI İşleniyor', `${worklogsWithComments.length} worklog için ${actionName.toLowerCase()} hazırlanıyor...`, 'info');
     
     try {
+        // Prepare JSON payload
+        const items = worklogsWithComments.map(wl => ({
+            id: wl.id,
+            summary: wl.summary,
+            text: wl.comment
+        }));
+
+        let prompt = '';
+        if (mode === 'IMPROVE') {
+            prompt = `You are a professional worklog assistant. Improve the following worklog comments to be more professional and slightly expanded (150-250 chars).
+            
+INSTRUCTIONS:
+- Expand each comment to 2-3 sentences.
+- Use the provided 'summary' for context.
+- Use natural, professional Turkish.
+- Avoid clichés like "gerçekleştirildi", "sağlandı".
+- Do NOT use technical terms not present in the original text.
+- Return ONLY a JSON array.
+
+INPUT JSON:
+${JSON.stringify(items)}
+
+OUTPUT JSON FORMAT:
+[
+  {"id": "...", "text": "Improved text here..."},
+  ...
+]`;
+        } else {
+            // SPELL MODE - Batch
+            prompt = `You are a spell checker. Fix spelling and punctuation errors in the following texts.
+            
+INSTRUCTIONS:
+- Fix ONLY spelling and punctuation.
+- Do NOT change sentence structure or words unless they are misspelled.
+- Keep the meaning exactly the same.
+- Return ONLY a JSON array.
+
+INPUT JSON:
+${JSON.stringify(items)}
+
+OUTPUT JSON FORMAT:
+[
+  {"id": "...", "text": "Fixed text here..."},
+  ...
+]`;
+        }
+
+        // Calculate tokens roughly
+        const inputLength = JSON.stringify(items).length;
+        const maxTokens = Math.min(8000, Math.max(2000, inputLength * 3)); // Allow enough space for output
+
+        // Use a faster model for SPELL if possible, but 70b is safer for JSON structure
+        // For now, stick to the user's selected model or default
+        const rawResponse = await callGroq(prompt, settings, maxTokens, 0.1); // Low temp for JSON
+        
+        let parsedResponse: {id: string, text: string}[] = [];
+        try {
+            // Extract JSON from response (in case of extra text)
+            const jsonMatch = rawResponse.match(/\[[\s\S]*\]/);
+            if (jsonMatch) {
+                parsedResponse = JSON.parse(jsonMatch[0]);
+            } else {
+                parsedResponse = JSON.parse(rawResponse);
+            }
+        } catch (e) {
+            console.error("JSON Parse Error:", e);
+            throw new Error("AI yanıtı işlenemedi (JSON format hatası).");
+        }
+
         const previews: TextChangePreview[] = [];
         
-        for (const wl of worklogsWithComments) {
-            let prompt = '';
-            if (mode === 'IMPROVE') {
-                prompt = `Worklog notunu profesyonelleştir ve genişlet.
-
-Talep: ${wl.summary}
-Mevcut not: ${wl.comment}
-
-GÖREV:
-- Mevcut notu 2-3 cümleye genişlet (150-250 karakter)
-- Talep başlığındaki konuyu kullanarak bağlam ekle
-- Her eylemi biraz daha açıklayıcı yaz
-- Doğal Türkçe kullan
-
-ÖRNEK:
-Giriş: "Hata düzeltildi"
-Çıkış: "Bildirilen hata incelendi ve kaynağı tespit edildi. Gerekli düzeltmeler yapılarak sorun giderildi."
-
-YASAK:
-- "Gerçekleştirildi", "sağlandı", "optimize edildi", "başarıyla tamamlandı" klişeleri
-- Metinde olmayan teknik terimler (SQL, API, modül adı)
-- Tırnak, emoji, madde işareti
-
-Genişletilmiş not:`;
-            } else {
-                // SPELL modu: Ultra temiz prompt - sadece metni düzelt
-                prompt = `Sadece yazım ve noktalama hatalarını düzelt. Cümle yapısını veya kelimeleri değiştirme:\n\n${wl.comment}`;
-            }
-
-            // SPELL modu: orijinal metin kadar token al (uzun metinler için yeterli)
-            const maxTokensForMode = mode === 'IMPROVE' ? 1000 : Math.max(wl.comment.length * 2, 800);
-            const rawResponse = await callGroq(prompt, settings, maxTokensForMode);
-            const improvedText = cleanAIOutput(rawResponse || '', mode === 'SPELL');
-            
-            // Normalize edip karşılaştır - küçük farkları da kabul et
-            const normalizeText = (t: string) => t.toLowerCase().replace(/[^a-zçğıöşü0-9]/gi, '');
-            const isDifferent = improvedText && normalizeText(improvedText) !== normalizeText(wl.comment);
-            
-            if (improvedText && isDifferent) {
-                previews.push({
-                    worklogId: wl.id,
-                    issueKey: wl.issueKey,
-                    summary: wl.summary,
-                    before: wl.comment,
-                    after: improvedText,
-                    mode
-                });
-            } else if (improvedText) {
-                // Metin var ama çok benzer - yine de ekle
-                previews.push({
-                    worklogId: wl.id,
-                    issueKey: wl.issueKey,
-                    summary: wl.summary,
-                    before: wl.comment,
-                    after: improvedText,
-                    mode
-                });
+        for (const item of parsedResponse) {
+            const original = worklogsWithComments.find(w => w.id === item.id);
+            if (original && item.text) {
+                const improvedText = item.text.trim();
+                
+                // Normalize check
+                const normalizeText = (t: string) => t.toLowerCase().replace(/[^a-zçğıöşü0-9]/gi, '');
+                const isDifferent = normalizeText(improvedText) !== normalizeText(original.comment);
+                
+                if (isDifferent || improvedText) {
+                    previews.push({
+                        worklogId: original.id,
+                        issueKey: original.issueKey,
+                        summary: original.summary,
+                        before: original.comment,
+                        after: improvedText,
+                        mode
+                    });
+                }
             }
         }
         
         if (previews.length === 0) {
-            notify('Hata', 'AI yanıt veremedi, tekrar deneyin.', 'error');
+            notify('Bilgi', 'Değişiklik önerisi bulunamadı.', 'info');
             setIsAIProcessing(false);
             return;
         }
