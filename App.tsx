@@ -1481,10 +1481,8 @@ Genişletilmiş not:`;
      const currentTotal = worklogs.reduce((sum, wl) => sum + wl.hours, 0);
      const remaining = target - currentTotal;
      
-     if (remaining <= 0) {
-         notify('Hedef Tamam', `Mevcut toplam (${currentTotal.toFixed(2)}h) zaten hedefe (${target}h) ulaşmış veya aşmış!`, 'info');
-         return;
-     }
+     // NOT: Artık remaining <= 0 olsa bile dağıtıma izin veriyoruz (kullanıcı isteği)
+     // Bu durumda süreleri azaltarak hedefe uyduracağız.
 
      if (!settings.groqApiKey) {
          notify('AI Hatası', 'Akıllı dağıtım için Groq API Anahtarı gerekli', 'error');
@@ -1493,10 +1491,26 @@ Genişletilmiş not:`;
      }
 
      setIsDistributing(true);
-     notify('AI Analiz Ediyor', 'Worklog içerikleri analiz ediliyor...', 'info');
+     notify('AI Analiz Ediyor', 'Geçmiş veriler ve iş detayları analiz ediliyor...', 'info');
      
      try {
-         // Prepare worklog data for AI
+         // 1. Geçmiş verilerden bağlam topla (Cache'den)
+         let contextLogs: string[] = [];
+         if (weekWorklogsCacheRef.current) {
+             weekWorklogsCacheRef.current.forEach((logs, date) => {
+                 if (date !== selectedDate) { // Bugün hariç diğer günler
+                     logs.forEach(l => {
+                         if (l.comment && l.hours > 0.2) {
+                             contextLogs.push(`- [${l.issueKey}] ${l.summary}: ${l.hours}h`);
+                         }
+                     });
+                 }
+             });
+         }
+         // En son 15 kaydı al (token tasarrufu)
+         const contextText = contextLogs.slice(-15).join('\n');
+
+         // 2. Mevcut worklog verilerini hazırla
          const worklogData = worklogs.map(wl => ({
              key: wl.issueKey,
              summary: wl.summary,
@@ -1505,36 +1519,41 @@ Genişletilmiş not:`;
          }));
 
          const prompt = `
-Sen bir iş süresi tahmin uzmanısın. Aşağıdaki worklog kayıtlarına EKLENECEK saatleri belirle.
+Sen uzman bir proje yöneticisisin. Görevin, bugünün iş kayıtlarının sürelerini optimize ederek TOPLAM süreyi tam olarak ${target} saate ayarlamak.
 
 MEVCUT DURUM:
-- Toplam mevcut süre: ${currentTotal.toFixed(2)} saat
-- Hedef: ${target} saat
-- DAĞITILACAK EK SÜRE: ${remaining.toFixed(2)} saat
+- Şu anki toplam: ${currentTotal.toFixed(2)} saat
+- HEDEF TOPLAM: ${target} saat
+- Yapılması gereken: ${remaining > 0 ? 'Süreleri ARTIRARAK' : 'Süreleri DENGELEYEREK/AZALTARAK'} hedefe ulaşmak.
 
-WORKLOG KAYITLARI:
-${worklogData.map((w, i) => `${i + 1}. ${w.key}: "${w.summary}" - Yorum: "${w.comment}" (Mevcut: ${w.currentHours}h)`).join('\n')}
+GEÇMİŞ HAFTANIN BENZER İŞLERİ (Referans al):
+${contextText || "Veri yok."}
+
+BUGÜNÜN KAYITLARI (Bunların sürelerini güncelle):
+${worklogData.map((w, i) => `${i}. [${w.key}] ${w.summary}
+   Detay: "${w.comment}"
+   Şu anki süre: ${w.currentHours}h`).join('\n')}
 
 KURALLAR:
-- Toplam ek süre tam olarak ${remaining.toFixed(2)} saat olmalı
-- Her log'a eklenecek süre minimum 0 olabilir (bazı loglara hiç eklenmeyebilir)
-- İşin karmaşıklığına, yorumdaki detaylara göre dağıt
-- Daha detaylı/uzun yorumlar, daha karmaşık işler daha fazla ek süre alabilir
-- Basit, kısa işler daha az ek süre alabilir
+1. Tüm kayıtların YENİ sürelerinin toplamı TAM OLARAK ${target} olmalı.
+2. İşin zorluğuna, açıklamasına ve geçmiş benzer işlere göre mantıklı dağıtım yap.
+3. Hiçbir işin süresi 0 olamaz (en az 0.1h).
+4. Tutarlı ve profesyonel ol. Her çalıştırmada benzer mantıklı sonuçlar ver.
+5. Eğer süre azaltılıyorsa, detayı en az olan veya en basit işlerden kıs.
 
-ÇIKTI FORMAT (sadece JSON, başka bir şey yazma):
-Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
-[${worklogData.map((_, i) => `{"index": ${i}, "addHours": X.XX}`).join(', ')}]
-
-Örnek: 2 saat dağıtılacaksa ve 3 log varsa: [{"index": 0, "addHours": 0.75}, {"index": 1, "addHours": 1.0}, {"index": 2, "addHours": 0.25}]
+ÇIKTI FORMATI (Sadece JSON Array, yorum yok):
+[
+  {"index": 0, "newTotalHours": 2.5},
+  {"index": 1, "newTotalHours": 1.25}
+]
 `;
 
-         const response = await callGroq(prompt, settings, 500);
+         // Temperature 0.1 ile daha tutarlı sonuçlar
+         const response = await callGroq(prompt, settings, 600, 0.1);
          
          // Parse AI response
-         let distribution: { index: number; addHours: number }[];
+         let distribution: { index: number; newTotalHours: number }[];
          try {
-             // Extract JSON from response
              const jsonMatch = response.match(/\[[\s\S]*\]/);
              if (!jsonMatch) throw new Error('JSON bulunamadı');
              distribution = JSON.parse(jsonMatch[0]);
@@ -1544,19 +1563,21 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
              return;
          }
 
-         // Validate and adjust - AI'ın önerdiği ek saatlerin toplamı 'remaining' olmalı
-         const totalAIAddHours = distribution.reduce((sum, d) => sum + (d.addHours || 0), 0);
-         const ratio = totalAIAddHours > 0 ? remaining / totalAIAddHours : 1;
+         // Validate and adjust
+         const totalAINewHours = distribution.reduce((sum, d) => sum + (d.newTotalHours || 0), 0);
          
-         // Create preview - mevcut saat + AI'ın önerdiği ek saat
+         // Oranlayarak tam hedefe uydur (AI bazen 0.1 şaşabilir)
+         const ratio = totalAINewHours > 0 ? target / totalAINewHours : 1;
+         
          const previewItems = worklogs.map((wl, index) => {
-             const aiAddHours = distribution.find(d => d.index === index)?.addHours || (remaining / worklogs.length);
-             const adjustedAddHours = Math.max(0, Math.round(aiAddHours * ratio * 100) / 100);
+             const aiNewHours = distribution.find(d => d.index === index)?.newTotalHours || (target / worklogs.length);
+             // Ratio ile düzelt
+             const adjustedHours = Math.max(0.1, Math.round(aiNewHours * ratio * 100) / 100);
              return {
                  issueKey: wl.issueKey,
                  summary: wl.summary,
                  currentHours: wl.hours,
-                 newHours: Math.round((wl.hours + adjustedAddHours) * 100) / 100
+                 newHours: adjustedHours
              };
          });
          
@@ -1592,10 +1613,7 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
      const currentTotal = worklogs.reduce((sum, wl) => sum + wl.hours, 0);
      const remaining = target - currentTotal;
      
-     if (remaining <= 0) {
-         notify('Hedef Tamam', `Mevcut toplam (${currentTotal.toFixed(2)}h) zaten hedefe (${target}h) ulaşmış veya aşmış!`, 'info');
-         return;
-     }
+     // NOT: remaining <= 0 olsa bile devam et (azaltma yapılacak)
      
      // Kalan saati eşit dağıt: her log'a +remaining/count saat
      const addPerLog = remaining / worklogs.length;
@@ -1604,7 +1622,7 @@ Her index için EKLENECEK saat miktarını ver (mevcut değil, EK miktar)
          issueKey: wl.issueKey,
          summary: wl.summary,
          currentHours: wl.hours,
-         newHours: Math.round((wl.hours + addPerLog) * 100) / 100
+         newHours: Math.max(0, Math.round((wl.hours + addPerLog) * 100) / 100)
      }));
      
      // Adjust for rounding errors - son log'u düzelt

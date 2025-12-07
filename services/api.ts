@@ -299,7 +299,7 @@ export const fetchIssueDetails = async (issueKey: string, settings: AppSettings)
 
 // --- GROQ API (Proxy Üzerinden) ---
 
-export const callGroq = async (prompt: string, settings: AppSettings, maxTokens = 300): Promise<string> => {
+export const callGroq = async (prompt: string, settings: AppSettings, maxTokens = 300, temperature = 0.3): Promise<string> => {
     if (!settings.groqApiKey) throw new Error("Groq API Anahtarı eksik");
 
     const targetUrl = 'https://api.groq.com/openai/v1/chat/completions';
@@ -311,7 +311,7 @@ export const callGroq = async (prompt: string, settings: AppSettings, maxTokens 
         model: settings.groqModel || 'llama-3.3-70b-versatile',
         messages: [{ role: 'user', content: prompt }],
         max_tokens: maxTokens,
-        temperature: 0.3
+        temperature: temperature
     });
 
     if (!response.ok) {
