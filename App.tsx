@@ -6,6 +6,7 @@ import { fetchWorklogs, updateWorklog, callGroq, createWorklog, deleteWorklog, f
 import { SettingsModal } from './components/SettingsModal';
 import { WorklogList } from './components/WorklogList';
 import { AddWorklogModal } from './components/AddWorklogModal';
+import { MagicCommandBar } from './components/MagicCommandBar';
 import { NotificationHistory } from './components/NotificationHistory';
 import { WeeklyReportModal } from './components/WeeklyReportModal';
 import { secondsToHours, formatHours } from './utils/adf';
@@ -261,6 +262,7 @@ export default function App() {
   const [isAddWorklogOpen, setIsAddWorklogOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isWeeklyReportOpen, setIsWeeklyReportOpen] = useState(false);
+  const [isMagicBarOpen, setIsMagicBarOpen] = useState(false);
   const [isEditingTarget, setIsEditingTarget] = useState(false);
   const [selectedDate, setSelectedDate] = useState(getDefaultStartDate());
   const [worklogs, setWorklogs] = useState<Worklog[]>([]);
@@ -481,6 +483,12 @@ export default function App() {
         // Save event will be handled by active modal
         window.dispatchEvent(new CustomEvent('trigger-save'));
         return;
+      }
+
+      // Ctrl+K = Magic Command Bar
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
+        e.preventDefault();
+        setIsMagicBarOpen(prev => !prev);
       }
 
       if (isInput) return;
@@ -2829,6 +2837,52 @@ KURALLAR:
         </span>
       </footer>
 
+        <SettingsModal
+            isOpen={isSettingsOpen}
+            onClose={() => setIsSettingsOpen(false)}
+            settings={settings}
+            onSave={saveSettings}
+        />
+
+        <AddWorklogModal
+            isOpen={isAddWorklogOpen}
+            onClose={() => setIsAddWorklogOpen(false)}
+            onSubmit={handleAddWorklog}
+            settings={settings}
+            suggestions={suggestions}
+            selectedDate={selectedDate}
+            getTimeEstimation={getTimeEstimation}
+        />
+
+        <NotificationHistory
+            isOpen={isHistoryOpen}
+            onClose={() => setIsHistoryOpen(false)}
+            history={notificationHistory}
+            onClear={() => setNotificationHistory([])}
+        />
+
+        <WeeklyReportModal
+            isOpen={isWeeklyReportOpen}
+            onClose={() => setIsWeeklyReportOpen(false)}
+            settings={settings}
+            onFetchWeekWorklogs={async (start, end) => {
+                // Bu fonksiyon WeeklyReportModal içinde kullanılıyor ama
+                // App.tsx'deki fetchWeekWorklogs sadece tek gün alıyor.
+                // Şimdilik basitçe o haftanın pazartesisini verip tüm haftayı çekelim.
+                const weekMap = await fetchWeekWorklogs(start, settings);
+                let allLogs: Worklog[] = [];
+                weekMap.forEach(logs => allLogs = [...allLogs, ...logs]);
+                return allLogs;
+            }}
+            onAIGenerate={generateAIWeeklyReport}
+        />
+
+        <MagicCommandBar
+            isOpen={isMagicBarOpen}
+            onClose={() => setIsMagicBarOpen(false)}
+            onSubmit={handleAddWorklog}
+            settings={settings}
+        />
     </main>
   );
 }
