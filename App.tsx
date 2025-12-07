@@ -1187,6 +1187,8 @@ status: devam/test/tamamlandı/beklemede`;
 
     try {
         let prompt = '';
+        let maxTokensForMode = 600;
+        
         if (mode === 'IMPROVE') {
             prompt = `Worklog notunu profesyonelleştir ve genişlet.
 
@@ -1209,12 +1211,15 @@ YASAK:
 - Tırnak, emoji, madde işareti
 
 Genişletilmiş not:`;
+            maxTokensForMode = 1000;
         } else {
+            // SPELL modu: orijinal metin kadar token al (uzun metinler için yeterli)
+            maxTokensForMode = Math.max(wl.comment.length * 2, 800);
             prompt = `Yazım hatalarını ve noktalama işaretlerini düzelt. Başka değişiklik yapma. Metni tam aynı tut.\n\n"${wl.comment}"\n\nDüzeltilmiş:`;
         }
 
         const originalComment = wl.comment;
-        const rawResponse = await callGroq(prompt, settings);
+        const rawResponse = await callGroq(prompt, settings, maxTokensForMode);
         const improvedText = cleanAIOutput(rawResponse || '');
         
         // Küçük farkları da kabul et - normalize edip karşılaştır
@@ -1310,7 +1315,9 @@ Genişletilmiş not:`;
                 prompt = `Yazım hatalarını ve noktalama işaretlerini düzelt. Başka değişiklik yapma. Metni tam aynı tut.\n\n"${wl.comment}"\n\nDüzeltilmiş:`;
             }
 
-            const rawResponse = await callGroq(prompt, settings);
+            // SPELL modu: orijinal metin kadar token al (uzun metinler için yeterli)
+            const maxTokensForMode = mode === 'IMPROVE' ? 1000 : Math.max(wl.comment.length * 2, 800);
+            const rawResponse = await callGroq(prompt, settings, maxTokensForMode);
             const improvedText = cleanAIOutput(rawResponse || '');
             
             // Normalize edip karşılaştır - küçük farkları da kabul et

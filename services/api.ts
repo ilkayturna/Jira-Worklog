@@ -314,7 +314,30 @@ export const callGroq = async (prompt: string, settings: AppSettings, maxTokens 
         temperature: 0.3
     });
 
-    if (!response.ok) throw new Error("Yapay zeka servisi yanıt vermedi");
+    if (!response.ok) {
+        let errorMsg = `Groq API Hatası (${response.status})`;
+        try {
+            const errorData = await response.json();
+            if (errorData.error?.message) {
+                errorMsg += `: ${errorData.error.message}`;
+            }
+            if (errorData.error?.type === 'invalid_request_error' && errorData.error?.message?.includes('model')) {
+                errorMsg += ' - Seçtiğiniz model kullanılamıyor veya hatalı. Lütfen başka bir model seçin.';
+            }
+        } catch (e) {
+            // Ignore JSON parsing error
+        }
+        throw new Error(errorMsg);
+    }
+    
     const json = await response.json();
-    return json.choices?.[0]?.message?.content || '';
+    const content = json.choices?.[0]?.message?.content || '';
+    const finishReason = json.choices?.[0]?.finish_reason;
+    
+    // Eğer finish_reason "length" ise, metin token limit'ini aştı demek
+    if (finishReason === 'length') {
+        console.warn(`AI yanıt token limitine ulaştı. Verilen metin eksik olabilir.`);
+    }
+    
+    return content;
 };
