@@ -234,8 +234,8 @@ SADECE sayı yaz:`;
         }
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSubmit = async (e?: React.FormEvent) => {
+        if (e) e.preventDefault();
         setError('');
 
         if (!selectedIssue) {
@@ -259,6 +259,14 @@ SADECE sayı yaz:`;
             setIsSubmitting(false);
         }
     };
+
+    // Listen for global save trigger (Ctrl+S)
+    useEffect(() => {
+        if (!isOpen) return;
+        const handleSaveTrigger = () => handleSubmit();
+        window.addEventListener('trigger-save', handleSaveTrigger);
+        return () => window.removeEventListener('trigger-save', handleSaveTrigger);
+    }, [isOpen, selectedIssue, hours, comment, onSubmit]);
 
     if (!isOpen) return null;
 

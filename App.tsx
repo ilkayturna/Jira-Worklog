@@ -472,11 +472,21 @@ export default function App() {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if typing in input/textarea
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      // Ignore if typing in input/textarea (except for Ctrl+S which should work everywhere)
+      const isInput = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement;
       
-      // N = New worklog
-      if (e.key === 'n' || e.key === 'N') {
+      // Ctrl+S: Save (Global)
+      if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault();
+        // Save event will be handled by active modal
+        window.dispatchEvent(new CustomEvent('trigger-save'));
+        return;
+      }
+
+      if (isInput) return;
+      
+      // Ctrl+N = New worklog
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'n' || e.key === 'N')) {
         e.preventDefault();
         setIsAddWorklogOpen(true);
       }
