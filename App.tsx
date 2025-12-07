@@ -1164,14 +1164,38 @@ status: devam/test/tamamlandı/beklemede`;
   };
 
   // Clean AI output - remove quotes and unwanted formatting
-  const cleanAIOutput = (text: string): string => {
+  const cleanAIOutput = (text: string, isSpellMode: boolean = false): string => {
     let cleaned = text.trim();
-    // Remove leading/trailing quotes (single, double, smart quotes)
-    cleaned = cleaned.replace(/^["'"'""'']+|["'"'""'']+$/g, '');
-    // Remove markdown formatting
-    cleaned = cleaned.replace(/^[#*_`]+|[#*_`]+$/g, '');
-    // Remove "Düzeltilmiş:", "Düzeltme:", "Output:" etc prefixes
-    cleaned = cleaned.replace(/^(Düzeltilmi[şs]:?|Düzeltme:?|Output:?|Çıktı:?|Result:?)\s*/i, '');
+    
+    // SPELL modu için daha agresif temizlik
+    if (isSpellMode) {
+        // Markdown yıldızlarını kaldır (**text** -> text)
+        cleaned = cleaned.replace(/\*\*(.+?)\*\*/g, '$1');
+        cleaned = cleaned.replace(/\*(.+?)\*/g, '$1');
+        cleaned = cleaned.replace(/__(.+?)__/g, '$1');
+        cleaned = cleaned.replace(/_(.+?)_/g, '$1');
+        
+        // Herhangi bir "prefix:" içeren satırları kaldır (Düzeltilmiş:, ÖNCEKİ:, YENİ: vs)
+        // Ama paragrafın ortasında varsa sakla
+        const lines = cleaned.split('\n');
+        cleaned = lines.filter(line => {
+            const trimmed = line.trim();
+            // Eğer satır SADECE "Şey:" gibi bir prefix ise, kaldır
+            if (/^(Düzeltilmi[şs]|Düzeltme|Output|Çıktı|Result|ÖNCEKİ|YENİ|BEFORE|AFTER|Original|Fixed|Corrected|Spell|Check|Note|Info|Cevap|Answer|Sonuç|Original|Modified|Changed)[:|]?\s*$/i.test(trimmed)) {
+                return false;
+            }
+            return true;
+        }).join('\n');
+        
+        // Boş satırları temizle
+        cleaned = cleaned.replace(/\n\n+/g, '\n').trim();
+    } else {
+        // IMPROVE modu için hafif temizlik
+        cleaned = cleaned.replace(/^["'"'""'']+|["'"'""'']+$/g, '');
+        cleaned = cleaned.replace(/^[#*_`]+|[#*_`]+$/g, '');
+        cleaned = cleaned.replace(/^(Düzeltilmi[şs]:?|Düzeltme:?|Output:?|Çıktı:?|Result:?)\s*/i, '');
+    }
+    
     return cleaned.trim();
   };
 
@@ -1213,14 +1237,14 @@ YASAK:
 Genişletilmiş not:`;
             maxTokensForMode = 1000;
         } else {
-            // SPELL modu: orijinal metin kadar token al (uzun metinler için yeterli)
+            // SPELL modu: Ultra temiz prompt - sadece metni düzelt
             maxTokensForMode = Math.max(wl.comment.length * 2, 800);
-            prompt = `Yazım hatalarını ve noktalama işaretlerini düzelt. Başka değişiklik yapma. Metni tam aynı tut.\n\n"${wl.comment}"\n\nDüzeltilmiş:`;
+            prompt = `Yazım ve noktalama hatalarını düzelt:\n\n${wl.comment}`;
         }
 
         const originalComment = wl.comment;
         const rawResponse = await callGroq(prompt, settings, maxTokensForMode);
-        const improvedText = cleanAIOutput(rawResponse || '');
+        const improvedText = cleanAIOutput(rawResponse || '', mode === 'SPELL');
         
         // Küçük farkları da kabul et - normalize edip karşılaştır
         const normalizeText = (t: string) => t.toLowerCase().replace(/[^a-zçğıöşü0-9]/gi, '');
@@ -1312,13 +1336,14 @@ YASAK:
 
 Genişletilmiş not:`;
             } else {
-                prompt = `Yazım hatalarını ve noktalama işaretlerini düzelt. Başka değişiklik yapma. Metni tam aynı tut.\n\n"${wl.comment}"\n\nDüzeltilmiş:`;
+                // SPELL modu: Ultra temiz prompt - sadece metni düzelt
+                prompt = `Yazım ve noktalama hatalarını düzelt:\n\n${wl.comment}`;
             }
 
             // SPELL modu: orijinal metin kadar token al (uzun metinler için yeterli)
             const maxTokensForMode = mode === 'IMPROVE' ? 1000 : Math.max(wl.comment.length * 2, 800);
             const rawResponse = await callGroq(prompt, settings, maxTokensForMode);
-            const improvedText = cleanAIOutput(rawResponse || '');
+            const improvedText = cleanAIOutput(rawResponse || '', mode === 'SPELL');
             
             // Normalize edip karşılaştır - küçük farkları da kabul et
             const normalizeText = (t: string) => t.toLowerCase().replace(/[^a-zçğıöşü0-9]/gi, '');
