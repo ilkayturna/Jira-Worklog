@@ -212,6 +212,7 @@ export const createWorklog = async (issueKey: string, dateStr: string, seconds: 
     }, body);
 
     if(!response.ok) throw new Error("Worklog oluşturulamadı");
+    return await response.json();
 }
 
 // Issue'ları sil (undo için)

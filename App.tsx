@@ -10,6 +10,11 @@ import { MagicCommandBar } from './components/MagicCommandBar';
 import { NotificationHistory } from './components/NotificationHistory';
 import { WeeklyReportModal } from './components/WeeklyReportModal';
 import { secondsToHours, formatHours } from './utils/adf';
+import { useSettings } from './hooks/useSettings';
+import { useWorklogs } from './hooks/useWorklogs';
+import { useNotifications } from './hooks/useNotifications';
+import { APP_NAME, SUGGESTIONS_KEY, NOTIFICATION_HISTORY_KEY, WORKLOG_HISTORY_KEY } from './constants';
+import { toLocalDateStr, getWeekMonday, getWeekDays } from './utils/date';
 
 // Diff helper - kelime bazlı karşılaştırma
 interface DiffPart {
@@ -78,20 +83,6 @@ const computeWordDiff = (before: string, after: string): { beforeParts: DiffPart
   };
 };
 
-const APP_NAME = 'WorklogPro';
-const SUGGESTIONS_KEY = `${APP_NAME}_suggestions`;
-const NOTIFICATION_HISTORY_KEY = `${APP_NAME}_notificationHistory`;
-
-const detectJiraUrl = () => {
-    const saved = localStorage.getItem(`${APP_NAME}_jiraUrl`);
-    if (saved) return saved;
-    // Auto-detect if running inside Jira
-    if (window.location.hostname.includes('atlassian.net')) {
-        return window.location.origin;
-    }
-    return '';
-};
-
 // Load suggestions from localStorage
 const loadSuggestions = (): WorklogSuggestion[] => {
     try {
@@ -103,21 +94,10 @@ const loadSuggestions = (): WorklogSuggestion[] => {
 };
 
 // Load notification history from localStorage
-const loadNotificationHistory = (): NotificationHistoryItem[] => {
-    try {
-        const saved = localStorage.getItem(NOTIFICATION_HISTORY_KEY);
-        if (!saved) return [];
-        const parsed = JSON.parse(saved);
-        // Filter out old notifications (older than 7 days)
-        const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-        return parsed.filter((n: NotificationHistoryItem) => n.timestamp > sevenDaysAgo);
-    } catch {
-        return [];
-    }
-};
+// Imported from hooks/useNotifications
 
 // Worklog history key
-const WORKLOG_HISTORY_KEY = `${APP_NAME}_worklogHistories`;
+// const WORKLOG_HISTORY_KEY = `${APP_NAME}_worklogHistories`; // Imported from constants
 
 // Load worklog histories from localStorage
 const loadWorklogHistories = (): Map<string, { entries: WorklogHistoryEntry[]; index: number }> => {
@@ -207,19 +187,6 @@ const updateSuggestions = (issueKey: string, summary: string, comment: string, h
     return suggestions;
 };
 
-// Initial State
-const initialSettings: AppSettings = {
-  jiraUrl: detectJiraUrl(),
-  jiraEmail: localStorage.getItem(`${APP_NAME}_jiraEmail`) || '',
-  jiraToken: localStorage.getItem(`${APP_NAME}_jiraToken`) || '',
-  groqApiKey: localStorage.getItem(`${APP_NAME}_groqApiKey`) || '',
-  groqModel: localStorage.getItem(`${APP_NAME}_groqModel`) || 'llama-3.3-70b-versatile',
-  targetDailyHours: parseFloat(localStorage.getItem(`${APP_NAME}_targetDailyHours`) || '8'),
-  minHoursPerWorklog: parseFloat(localStorage.getItem(`${APP_NAME}_minHoursPerWorklog`) || '0.25'),
-  aiSystemPrompt: localStorage.getItem(`${APP_NAME}_aiSystemPrompt`) || DEFAULT_SYSTEM_PROMPT,
-  isDarkTheme: localStorage.getItem(`${APP_NAME}_isDarkTheme`) === null ? true : localStorage.getItem(`${APP_NAME}_isDarkTheme`) === 'true',
-};
-
 // Varsayılan başlangıç tarihini hesapla - Yerel tarih kullan
 const getDefaultStartDate = (): string => {
   const now = new Date();
@@ -230,45 +197,48 @@ const getDefaultStartDate = (): string => {
 };
 
 // Helper: Local date string (YYYY-MM-DD)
-const toLocalDateStr = (d: Date): string => {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
+// Imported from utils/date
 
 // Helper: Haftanın Pazartesi gününü bul
-const getWeekMonday = (dateStr: string): string => {
-  const date = new Date(dateStr);
-  const dayOfWeek = date.getDay();
-  const monday = new Date(date);
-  monday.setDate(date.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
-  return toLocalDateStr(monday);
-};
+// Imported from utils/date
 
 // Helper: Haftanın tüm günlerini al (Pazartesi-Pazar)
-const getWeekDays = (dateStr: string): string[] => {
-  const monday = getWeekMonday(dateStr);
-  const mondayDate = new Date(monday);
-  const days: string[] = [];
-  for (let i = 0; i < 7; i++) {
-    const day = new Date(mondayDate);
-    day.setDate(mondayDate.getDate() + i);
-    days.push(toLocalDateStr(day));
-  }
-  return days;
-};
+// Imported from utils/date
 
 export default function App() {
-  const [settings, setSettings] = useState<AppSettings>(initialSettings);
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const { 
+    settings, 
+    setSettings, 
+    isSettingsOpen, 
+    setIsSettingsOpen, 
+    saveSettings: persistSettings, 
+    updateTargetDailyHours,
+    toggleTheme
+  } = useSettings();
   const [isAddWorklogOpen, setIsAddWorklogOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isWeeklyReportOpen, setIsWeeklyReportOpen] = useState(false);
   const [isMagicBarOpen, setIsMagicBarOpen] = useState(false);
   const [isEditingTarget, setIsEditingTarget] = useState(false);
   const [selectedDate, setSelectedDate] = useState(getDefaultStartDate());
-  const [worklogs, setWorklogs] = useState<Worklog[]>([]);
-  const [loadingState, setLoadingState] = useState<LoadingState>(LoadingState.IDLE);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [notificationHistory, setNotificationHistory] = useState<NotificationHistoryItem[]>(loadNotificationHistory());
+  const { 
+    notifications, 
+    notificationHistory, 
+    setNotificationHistory, 
+    notify, 
+    clearNotificationHistory, 
+    deleteNotification 
+  } = useNotifications();
+  
+  const { 
+    worklogs, 
+    loadingState, 
+    loadData, 
+    addWorklog, 
+    editWorklog, 
+    removeWorklog 
+  } = useWorklogs(settings, selectedDate, notify);
+
   const [suggestions, setSuggestions] = useState<WorklogSuggestion[]>(loadSuggestions());
   const [tempTargetHours, setTempTargetHours] = useState<string>(settings.targetDailyHours.toString());
   
@@ -371,7 +341,7 @@ export default function App() {
     const handleTouchEnd = async () => {
       if (isPulling && pullProgress >= 1) {
         // Trigger refresh
-        await loadData(settings, true);
+        await loadData(true);
         // Haptic feedback simulation
         if ('vibrate' in navigator) {
           navigator.vibrate(10);
@@ -437,20 +407,7 @@ export default function App() {
     else document.documentElement.classList.remove('dark');
   }, [settings.isDarkTheme]);
 
-  useEffect(() => {
-    // Only load if all credentials are present to prevent errors
-    if(settings.jiraUrl && settings.jiraToken && settings.jiraEmail) {
-        const weekMonday = getWeekMonday(selectedDate);
-        // Eğer hafta değişiyorsa, tüm hafta verilerini yükle
-        if (weekCacheMondayRef.current !== weekMonday) {
-            loadData(settings, true);
-            currentWeekMondayRef.current = weekMonday;
-        } else {
-            // Aksi takdirde sadece o günün verilerini cache'ten al
-            loadData(settings, false);
-        }
-    }
-  }, [selectedDate, settings]);
+
 
   // Save notification history when it changes
   useEffect(() => {
@@ -520,7 +477,7 @@ export default function App() {
       // R = Refresh
       else if (e.key === 'r' || e.key === 'R') {
         e.preventDefault();
-        loadData(settings, true);
+        loadData(true);
       }
       // S = Settings
       else if (e.key === 's' || e.key === 'S') {
@@ -634,18 +591,6 @@ export default function App() {
 
   // --- Actions ---
 
-  const notify = (title: string, message: string, type: Notification['type'] = 'info', undoAction?: UndoAction, diff?: { before: string; after: string; issueKey?: string }) => {
-    const id = Date.now().toString();
-    const notification: NotificationHistoryItem = { id, title, message, type, timestamp: Date.now(), undoAction, diff };
-    
-    // Add to toast notifications
-    setNotifications(prev => [...prev, notification]);
-    setTimeout(() => setNotifications(prev => prev.filter(n => n.id !== id)), 5000);
-    
-    // Add to history
-    setNotificationHistory(prev => [notification, ...prev].slice(0, 100)); // Keep max 100
-  };
-
   // Update target hours from progress card
   const handleTargetHoursChange = () => {
     const newTarget = parseFloat(tempTargetHours);
@@ -655,9 +600,7 @@ export default function App() {
         return;
     }
     
-    const newSettings = { ...settings, targetDailyHours: newTarget };
-    setSettings(newSettings);
-    localStorage.setItem(`${APP_NAME}_targetDailyHours`, String(newTarget));
+    updateTargetDailyHours(newTarget);
     setIsEditingTarget(false);
     notify('Hedef Güncellendi', `Günlük hedef ${newTarget} saat olarak ayarlandı.`, 'success');
   };
@@ -697,19 +640,11 @@ export default function App() {
         );
         
         // Reload data
-        await loadData();
+        await loadData(true);
         
     } catch (e: any) {
         notify('Geri Alma Başarısız', e.message, 'error');
     }
-  };
-
-  const clearNotificationHistory = () => {
-    setNotificationHistory([]);
-  };
-
-  const deleteNotification = (id: string) => {
-    setNotificationHistory(prev => prev.filter(n => n.id !== id));
   };
 
   // AI-powered time estimation based on issue summary and historical data
@@ -749,124 +684,32 @@ export default function App() {
   const handleAddWorklog = async (issueKey: string, hours: number, comment: string) => {
     const seconds = Math.round(hours * 3600);
     
-    await createWorklog(issueKey, selectedDate, seconds, comment, settings);
+    const newWorklog = await addWorklog(issueKey, seconds, comment);
     
-    // Get the new worklog ID for undo (reload and find the new one)
-    const updatedWorklogs = await fetchWorklogs(selectedDate, settings);
-    const newWorklog = updatedWorklogs.find(wl => 
-        wl.issueKey === issueKey && 
-        !worklogs.some(existing => existing.id === wl.id)
-    );
-    
-    setWorklogs(updatedWorklogs);
-    
-    // Update suggestions
-    const summary = newWorklog?.summary || issueKey;
-    setSuggestions(updateSuggestions(issueKey, summary, comment, hours));
-    
-    // Invalidate cache
-    invalidateCache(selectedDate);
-    
-    // Notify with undo
-    const undoAction: UndoAction = newWorklog ? {
-        type: 'CREATE',
-        data: [{ worklogId: newWorklog.id, issueKey }]
-    } : undefined as any;
-    
-    notify('Worklog Eklendi', `${issueKey}: ${hours}h`, 'success', undoAction);
+    if (newWorklog) {
+        // Update suggestions
+        // Note: newWorklog from create API might not have summary
+        const summary = (newWorklog as any).summary || issueKey;
+        setSuggestions(updateSuggestions(issueKey, summary, comment, hours));
+        
+        // Notify with undo
+        const undoAction: UndoAction = {
+            type: 'CREATE',
+            data: [{ worklogId: newWorklog.id, issueKey }]
+        };
+        
+        notify('Worklog Eklendi', `${issueKey}: ${hours}h`, 'success', undoAction);
+    }
   };
 
   const saveSettings = (newSettings: AppSettings) => {
-    setSettings(newSettings);
-    // Persist
-    Object.entries(newSettings).forEach(([key, value]) => {
-        localStorage.setItem(`${APP_NAME}_${key}`, String(value));
-    });
-    setIsSettingsOpen(false);
+    persistSettings(newSettings);
     notify('Ayarlar Kaydedildi', 'Yapılandırmanız güncellendi.', 'success');
-    
-    // Reload data immediately if credentials are present
-    if (newSettings.jiraUrl && newSettings.jiraEmail && newSettings.jiraToken) {
-        loadData(newSettings);
-    }
   };
 
-  // Hafta başında tüm hafta verilerini paralel olarak çek
-  const loadWeekData = async (mondayDate: string, currentSettings?: AppSettings) => {
-    const settings_to_use = currentSettings || settings;
-    if (!settings_to_use.jiraUrl || !settings_to_use.jiraEmail || !settings_to_use.jiraToken) {
-        return;
-    }
 
-    setIsLoadingWeek(true);
-    try {
-      const weekData: Map<string, Worklog[]> = await fetchWeekWorklogs(mondayDate, settings_to_use);
-      
-      // Cache'e kaydet - weekData zaten Map
-      weekWorklogsCacheRef.current.clear();
-      weekData.forEach((value, key) => {
-        weekWorklogsCacheRef.current.set(key, value);
-      });
-      weekCacheMondayRef.current = mondayDate;
-      
-      // Mevcut günün verilerini state'e koy
-      const todayWorklogs = weekData.get(selectedDate) || [];
-      setWorklogs(todayWorklogs);
-      
-      // Haftalık özet'i güncelle
-      updateWeeklyHoursFromCache();
-      
-      setLoadingState(LoadingState.SUCCESS);
-    } catch (e: any) {
-      console.error(e);
-      setLoadingState(LoadingState.ERROR);
-      notify('Hafta Verisi Yükleme Hatası', e.message, 'error');
-      if(e.message.includes('Bilgileri Eksik') || e.message.includes('401')) {
-          setIsSettingsOpen(true);
-      }
-    } finally {
-      setIsLoadingWeek(false);
-    }
-  };
 
-  const loadData = async (currentSettings = settings, forceRefresh = false) => {
-    if (!currentSettings.jiraUrl || !currentSettings.jiraEmail || !currentSettings.jiraToken) {
-        return;
-    }
 
-    const weekMonday = getWeekMonday(selectedDate);
-    
-    // Eğer haftanın başında değişim varsa, tüm hafta verilerini çek
-    if (forceRefresh || weekCacheMondayRef.current !== weekMonday) {
-        await loadWeekData(weekMonday, currentSettings);
-        currentWeekMondayRef.current = weekMonday;
-        return;
-    }
-    
-    // Aksi takdirde cache'ten al
-    const cachedWeekData = weekWorklogsCacheRef.current.get(selectedDate);
-    if (cachedWeekData) {
-        setWorklogs(cachedWeekData);
-        // Haftalık özet'i güncelle
-        updateWeeklyHoursFromCache();
-        setLoadingState(LoadingState.SUCCESS);
-    } else {
-        // Haftanın cache'i var ama bu tarih yok (hata durumu), hafta verilerini yeniden yükle
-        await loadWeekData(weekMonday, currentSettings);
-    }
-  };
-
-  // Cache'i invalidate et (worklog eklendiğinde/güncellendiğinde)
-  const invalidateCache = (date: string) => {
-    worklogCacheRef.current.delete(date);
-    // Ayrıca hafta cache'ini de temizle - o haftayı yeniden load etmeye zorla
-    weekWorklogsCacheRef.current.delete(date);
-    // Eğer hafta cache'i boşaldıysa veya tarih haftaya ait ise, mondayRef'i sıfırla
-    const weekMonday = getWeekMonday(date);
-    if (weekCacheMondayRef.current === weekMonday) {
-      weekCacheMondayRef.current = null; // Hafta cache'ini invalidate et
-    }
-  };
 
   // Worklog history change handler
   const handleWorklogHistoryChange = (worklogId: string, entries: WorklogHistoryEntry[], index: number) => {
@@ -1107,28 +950,15 @@ status: devam/test/tamamlandı/beklemede`;
 
     const previousComment = wl.comment;
     const previousSeconds = wl.seconds;
+    
+    const newComment = comment !== undefined ? comment : wl.comment;
+    const newSeconds = seconds !== undefined ? seconds : wl.seconds;
 
-    try {
-      await updateWorklog(wl, settings, comment, seconds);
-      
-      // Optimistic Update
-      setWorklogs(prev => prev.map(w => {
-          if(w.id !== id) return w;
-          return {
-              ...w,
-              comment: comment !== undefined ? comment : w.comment,
-              seconds: seconds !== undefined ? seconds : w.seconds,
-              hours: seconds !== undefined ? secondsToHours(seconds) : w.hours
-          };
-      }));
-      
-      // Undo/Redo işlemlerinde bildirim gösterme
-      if (isUndoRedo) return;
-      
-      // Skip notification if called from batch operations
-      if (skipNotification) return;
-      
-      // Create diff and undo action for manual edits
+    const success = await editWorklog(wl, newComment, newSeconds);
+    
+    if (success) {
+      if (isUndoRedo || skipNotification) return;
+
       if (comment !== undefined && comment !== previousComment) {
         const undoAction: UndoAction = {
           type: 'UPDATE',
@@ -1153,11 +983,6 @@ status: devam/test/tamamlandı/beklemede`;
         notify('Güncellendi', 'Kayıt başarıyla güncellendi', 'success');
       }
       
-      // Invalidate cache
-      invalidateCache(selectedDate);
-    } catch (e: any) {
-      notify('Güncelleme Başarısız', e.message, 'error');
-      loadData(); // Revert
     }
   };
 
@@ -1166,18 +991,9 @@ status: devam/test/tamamlandı/beklemede`;
     const wl = worklogs.find(w => w.id === id);
     if (!wl) return;
     
-    try {
-      await deleteWorklog(wl.issueKey, id, settings);
-      
-      // Remove from local state
-      setWorklogs(prev => prev.filter(w => w.id !== id));
-      
-      // Invalidate cache
-      invalidateCache(selectedDate);
-      
-      notify('Silindi', `${wl.issueKey} worklog'u başarıyla silindi`, 'success');
-    } catch (e: any) {
-      notify('Silme Başarısız', e.message, 'error');
+    const success = await removeWorklog(wl.issueKey, id);
+    if (success) {
+        notify('Silindi', `${wl.issueKey} worklog'u başarıyla silindi`, 'success');
     }
   };
 
@@ -1811,7 +1627,8 @@ KURALLAR:
               !worklogs.some(existing => existing.id === wl.id)
           );
           
-          setWorklogs(updatedWorklogs);
+          // setWorklogs(updatedWorklogs);
+          loadData(true);
           
           // Create undo action
           const undoAction: UndoAction = {
@@ -2063,11 +1880,7 @@ KURALLAR:
                 </button>
                 
                 <button 
-                    onClick={() => {
-                        const newDarkTheme = !settings.isDarkTheme;
-                        setSettings(s => ({...s, isDarkTheme: newDarkTheme}));
-                        localStorage.setItem(`${APP_NAME}_isDarkTheme`, String(newDarkTheme));
-                    }} 
+                    onClick={toggleTheme} 
                     className="btn-icon"
                     aria-label="Toggle theme"
                 >
@@ -2254,7 +2067,7 @@ KURALLAR:
                     
                     {/* Refresh Button */}
                     <button 
-                        onClick={() => loadData(settings, true)} 
+                        onClick={() => loadData(true)} 
                         className="btn-outlined w-full"
                         disabled={loadingState === LoadingState.LOADING}
                     >
@@ -2811,7 +2624,7 @@ KURALLAR:
         <button 
           onClick={() => {
             if ('vibrate' in navigator) navigator.vibrate(5);
-            loadData(settings, true);
+            loadData(true);
           }}
           className={`bottom-nav-item haptic-feedback ${loadingState === LoadingState.LOADING ? 'active' : ''}`}
         >
@@ -2836,46 +2649,6 @@ KURALLAR:
           Powered by <span className="footer-author">İlkay Turna</span>
         </span>
       </footer>
-
-        <SettingsModal
-            isOpen={isSettingsOpen}
-            onClose={() => setIsSettingsOpen(false)}
-            settings={settings}
-            onSave={saveSettings}
-        />
-
-        <AddWorklogModal
-            isOpen={isAddWorklogOpen}
-            onClose={() => setIsAddWorklogOpen(false)}
-            onSubmit={handleAddWorklog}
-            settings={settings}
-            suggestions={suggestions}
-            selectedDate={selectedDate}
-            getTimeEstimation={getTimeEstimation}
-        />
-
-        <NotificationHistory
-            isOpen={isHistoryOpen}
-            onClose={() => setIsHistoryOpen(false)}
-            history={notificationHistory}
-            onClear={() => setNotificationHistory([])}
-        />
-
-        <WeeklyReportModal
-            isOpen={isWeeklyReportOpen}
-            onClose={() => setIsWeeklyReportOpen(false)}
-            settings={settings}
-            onFetchWeekWorklogs={async (start, end) => {
-                // Bu fonksiyon WeeklyReportModal içinde kullanılıyor ama
-                // App.tsx'deki fetchWeekWorklogs sadece tek gün alıyor.
-                // Şimdilik basitçe o haftanın pazartesisini verip tüm haftayı çekelim.
-                const weekMap = await fetchWeekWorklogs(start, settings);
-                let allLogs: Worklog[] = [];
-                weekMap.forEach(logs => allLogs = [...allLogs, ...logs]);
-                return allLogs;
-            }}
-            onAIGenerate={generateAIWeeklyReport}
-        />
 
         <MagicCommandBar
             isOpen={isMagicBarOpen}
