@@ -108,25 +108,40 @@ export const fetchWorklogs = async (date: string, settings: AppSettings): Promis
   // Paralel istekleri sınırla veya hepsini gönder (Vercel serverless olduğu için hepsini göndermek genelde ok)
   const promises = issues.map(async (issue: any) => {
     try {
-      const wlTargetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/issue/${issue.key}/worklog`;
-      const wlResponse = await fetchThroughProxy(wlTargetUrl, 'GET', {
-            'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
-            'Accept': 'application/json'
-      });
+      let logs = [];
       
-      if (!wlResponse.ok) return;
-      
-      const wlData = await wlResponse.json();
-      const logs = wlData.worklogs || (typeof wlData === 'string' ? JSON.parse(wlData).worklogs : []);
+      // OPTIMIZATION: Check if worklogs are already fully included in the search response
+      const worklogField = issue.fields?.worklog;
+      if (worklogField && worklogField.worklogs && worklogField.total <= worklogField.maxResults) {
+          logs = worklogField.worklogs;
+      } else {
+          // If not all worklogs are present (or field is missing), fetch them separately
+          const wlTargetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/issue/${issue.key}/worklog`;
+          const wlResponse = await fetchThroughProxy(wlTargetUrl, 'GET', {
+                'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
+                'Accept': 'application/json'
+          });
+          
+          if (!wlResponse.ok) return;
+          
+          const wlData = await wlResponse.json();
+          logs = wlData.worklogs || (typeof wlData === 'string' ? JSON.parse(wlData).worklogs : []);
+      }
 
       logs.forEach((wl: any) => {
          const wlStartedDate = wl.started.split('T')[0];
          // Sadece o güne ait ve bana ait olanları al
          const authorEmail = wl.author?.emailAddress?.toLowerCase();
          const userEmail = settings.jiraEmail.toLowerCase();
-         const isMe = authorEmail === userEmail;
+         // Check both email and accountId/displayName as fallback
+         const isMe = authorEmail === userEmail || 
+                      (wl.author?.accountId === issue.fields?.assignee?.accountId) || // simplistic fallback
+                      true; // We filter by JQL 'currentUser()', so mostly these are ours, but let's be strict with email if available
+
+         // Re-verify author strictly if email is available
+         const isReallyMe = authorEmail ? authorEmail === userEmail : true;
          
-         if (wlStartedDate === date && isMe) {
+         if (wlStartedDate === date && isReallyMe) {
              allWorklogs.push({
                  id: wl.id,
                  issueKey: issue.key,
@@ -149,37 +164,103 @@ export const fetchWorklogs = async (date: string, settings: AppSettings): Promis
   return allWorklogs;
 };
 
-// Tüm hafta için worklog'ları paralel olarak çek (Pazartesi-Pazar)
+// Tüm hafta için worklog'ları tek bir sorgu ile çek (OPTIMIZED)
 export const fetchWeekWorklogs = async (mondayDateStr: string, settings: AppSettings): Promise<Map<string, Worklog[]>> => {
   if (!settings.jiraUrl || !settings.jiraEmail || !settings.jiraToken) {
     throw new Error("Jira Bilgileri Eksik: Ayarları kontrol edin.");
   }
 
-  // Pazartesi'den başlayarak 7 gün için tarih listesi oluştur
-  const weekDays: string[] = [];
   const monday = new Date(mondayDateStr);
-  for (let i = 0; i < 7; i++) {
-    const day = new Date(monday);
-    day.setDate(monday.getDate() + i);
-    weekDays.push(`${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  
+  const startDate = mondayDateStr;
+  const endDate = `${sunday.getFullYear()}-${String(sunday.getMonth() + 1).padStart(2, '0')}-${String(sunday.getDate()).padStart(2, '0')}`;
+
+  // Tek bir JQL sorgusu ile tüm haftayı çek
+  const jql = `worklogDate >= "${startDate}" AND worklogDate <= "${endDate}" AND worklogAuthor = currentUser()`;
+  const targetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/search/jql`;
+
+  let response;
+  try {
+      response = await fetchThroughProxy(targetUrl, 'POST', {
+          'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+      }, {
+          jql: jql,
+          fields: ['worklog', 'summary'],
+          maxResults: 100 // Haftalık çok fazla issue olabilir, gerekirse sayfalama yapılmalı ama şimdilik 100 yeterli
+      });
+  } catch (error) {
+      console.error("Haftalık veri çekme hatası:", error);
+      return new Map();
   }
 
-  // Her gün için paralel olarak fetch yap
-  const promises = weekDays.map(date => 
-    fetchWorklogs(date, settings).catch(e => {
-      console.error(`${date} tarihinde worklog çekerken hata:`, e);
-      return [];
-    })
-  );
+  if (!response.ok) return new Map();
 
-  const results = await Promise.all(promises);
-  
-  // Sonuçları Map'e dönüştür: date -> worklogs
+  const data = await response.json();
+  const issues = data.issues || [];
   const weekMap = new Map<string, Worklog[]>();
-  weekDays.forEach((date, index) => {
-    weekMap.set(date, results[index]);
+
+  // Initialize map for all days
+  for (let i = 0; i < 7; i++) {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      weekMap.set(dateStr, []);
+  }
+
+  const promises = issues.map(async (issue: any) => {
+      try {
+          let logs = [];
+          const worklogField = issue.fields?.worklog;
+          
+          // Optimization: Use embedded worklogs if complete
+          if (worklogField && worklogField.worklogs && worklogField.total <= worklogField.maxResults) {
+              logs = worklogField.worklogs;
+          } else {
+              // Fetch separately if needed
+              const wlTargetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/issue/${issue.key}/worklog`;
+              const wlResponse = await fetchThroughProxy(wlTargetUrl, 'GET', {
+                  'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
+                  'Accept': 'application/json'
+              });
+              if (wlResponse.ok) {
+                  const wlData = await wlResponse.json();
+                  logs = wlData.worklogs || [];
+              }
+          }
+
+          logs.forEach((wl: any) => {
+              const wlStartedDate = wl.started.split('T')[0];
+              const authorEmail = wl.author?.emailAddress?.toLowerCase();
+              const userEmail = settings.jiraEmail.toLowerCase();
+              const isReallyMe = authorEmail ? authorEmail === userEmail : true;
+
+              // Check if date is within our week range
+              if (weekMap.has(wlStartedDate) && isReallyMe) {
+                  const currentLogs = weekMap.get(wlStartedDate) || [];
+                  currentLogs.push({
+                      id: wl.id,
+                      issueKey: issue.key,
+                      summary: issue.fields?.summary || '',
+                      seconds: wl.timeSpentSeconds,
+                      hours: secondsToHours(wl.timeSpentSeconds),
+                      comment: parseJiraComment(wl.comment),
+                      started: wl.started,
+                      author: wl.author?.displayName,
+                      originalADF: wl.comment 
+                  });
+                  weekMap.set(wlStartedDate, currentLogs);
+              }
+          });
+      } catch (e) {
+          console.error(`Issue detay hatası (${issue.key}):`, e);
+      }
   });
 
+  await Promise.all(promises);
   return weekMap;
 };
 
