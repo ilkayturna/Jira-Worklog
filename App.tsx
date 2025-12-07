@@ -1167,21 +1167,43 @@ status: devam/test/tamamlandı/beklemede`;
   const cleanAIOutput = (text: string, isSpellMode: boolean = false): string => {
     let cleaned = text.trim();
     
-    // SPELL modu için daha agresif temizlik
+    // SPELL modu için daha agresif temizlik ve "Split & Take Last" stratejisi
     if (isSpellMode) {
-        // Markdown yıldızlarını kaldır (**text** -> text)
+        // 1. Splitter Strategy: Eğer "YENİ", "Düzeltilmiş" gibi ayırıcılar varsa, ondan sonrasını al.
+        // Bu sayede "ÖNCEKİ: ... YENİ: ..." formatındaki cevapların sadece YENİ kısmını alırız.
+        const splitters = [
+            // Satır başı veya yeni satır sonrası gelen ayırıcılar
+            /(?:^|\n)(?:YENİ|NEW|AFTER|SONRA|Düzeltilmi[şs](?:\s+(?:metin|hali|versiyon))?|Corrected(?:\s+(?:text|version))?|Output|Result|Cevap|Answer|Çıktı)[:|]?\s*(?:\n|$)/i
+        ];
+
+        for (const splitter of splitters) {
+            const match = cleaned.match(splitter);
+            if (match && match.index !== undefined) {
+                // Ayırıcı bulundu. Ayırıcının bitişinden sonrasını al.
+                const potentialContent = cleaned.substring(match.index + match[0].length).trim();
+                // Eğer ayırıcıdan sonra bir şey varsa, onu kullan. (Yoksa belki sadece başlık vardır, devam et)
+                if (potentialContent.length > 0) {
+                    cleaned = potentialContent;
+                    // İlk geçerli ayırıcıda dur. Genelde en sonuncusu değil, "YENİ" bloğunun başı önemlidir.
+                    // Ancak bazen birden fazla olabilir, en güvenlisi ilk bulduğumuz "YENİ"den sonrasını almak.
+                    break; 
+                }
+            }
+        }
+
+        // 2. Markdown temizliği (**text** -> text)
         cleaned = cleaned.replace(/\*\*(.+?)\*\*/g, '$1');
         cleaned = cleaned.replace(/\*(.+?)\*/g, '$1');
         cleaned = cleaned.replace(/__(.+?)__/g, '$1');
         cleaned = cleaned.replace(/_(.+?)_/g, '$1');
         
-        // Herhangi bir "prefix:" içeren satırları kaldır (Düzeltilmiş:, ÖNCEKİ:, YENİ: vs)
-        // Ama paragrafın ortasında varsa sakla
+        // 3. Satır bazlı temizlik (Kalan başlıkları temizle)
         const lines = cleaned.split('\n');
         cleaned = lines.filter(line => {
             const trimmed = line.trim();
-            // Eğer satır SADECE "Şey:" gibi bir prefix ise, kaldır
-            if (/^(Düzeltilmi[şs]|Düzeltme|Output|Çıktı|Result|ÖNCEKİ|YENİ|BEFORE|AFTER|Original|Fixed|Corrected|Spell|Check|Note|Info|Cevap|Answer|Sonuç|Original|Modified|Changed)[:|]?\s*$/i.test(trimmed)) {
+            // Başlık gibi görünen satırları filtrele
+            // Örn: "Düzeltilmiş metin:", "Not:", "İşte düzeltilmiş hali:"
+            if (/^(Düzeltilmi[şs]|Düzeltme|Output|Çıktı|Result|ÖNCEKİ|YENİ|BEFORE|AFTER|Original|Fixed|Corrected|Spell|Check|Note|Info|Cevap|Answer|Sonuç|Modified|Changed|Burada|İşte|Here)[:|]?\s*(?:metin|text|hali|version|versiyon)?[:|]?\s*$/i.test(trimmed)) {
                 return false;
             }
             return true;
