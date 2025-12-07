@@ -64,7 +64,7 @@ export const WeeklyChart: React.FC<WeeklyChartProps> = ({
                 >
                   {/* Target line */}
                   <div 
-                    className="absolute w-full border-t border-dashed"
+                    className="absolute w-full border-t border-dashed transition-all duration-500 ease-out"
                     style={{ 
                       bottom: `${(settings.targetDailyHours / maxHours) * 100}%`,
                       borderColor: 'var(--color-warning)',
@@ -73,7 +73,7 @@ export const WeeklyChart: React.FC<WeeklyChartProps> = ({
                   />
                   {/* Bar */}
                   <div 
-                    className={`chart-bar absolute bottom-0 w-full ${settings.isDarkTheme && metTarget ? 'glow-success' : ''}`}
+                    className={`absolute bottom-0 w-full rounded-t-sm transition-all duration-500 ease-out ${settings.isDarkTheme && metTarget ? 'glow-success' : ''}`}
                     style={{ 
                       height: `${Math.max(heightPercent, 4)}%`,
                       backgroundColor: metTarget 
