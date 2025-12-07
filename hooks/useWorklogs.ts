@@ -83,6 +83,9 @@ export const useWorklogs = (settings: AppSettings, selectedDate: string, notify:
             }
         }
 
+        // Clear previous worklogs to avoid stale data display while loading
+        setWorklogs([]);
+        
         if (!navigator.onLine) {
             setLoadingState(LoadingState.ERROR);
             notify('Çevrimdışı', 'İnternet bağlantısı yok ve önbellekte veri bulunamadı.', 'warning');
