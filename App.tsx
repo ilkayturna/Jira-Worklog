@@ -1261,7 +1261,7 @@ Genişletilmiş not:`;
         } else {
             // SPELL modu: Ultra temiz prompt - sadece metni düzelt
             maxTokensForMode = Math.max(wl.comment.length * 2, 800);
-            prompt = `Yazım ve noktalama hatalarını düzelt:\n\n${wl.comment}`;
+            prompt = `Sadece yazım ve noktalama hatalarını düzelt. Cümle yapısını veya kelimeleri değiştirme:\n\n${wl.comment}`;
         }
 
         const originalComment = wl.comment;
@@ -1359,7 +1359,7 @@ YASAK:
 Genişletilmiş not:`;
             } else {
                 // SPELL modu: Ultra temiz prompt - sadece metni düzelt
-                prompt = `Yazım ve noktalama hatalarını düzelt:\n\n${wl.comment}`;
+                prompt = `Sadece yazım ve noktalama hatalarını düzelt. Cümle yapısını veya kelimeleri değiştirme:\n\n${wl.comment}`;
             }
 
             // SPELL modu: orijinal metin kadar token al (uzun metinler için yeterli)
