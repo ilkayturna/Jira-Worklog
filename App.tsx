@@ -118,7 +118,7 @@ export default function App() {
   const CACHE_TTL = 5 * 60 * 1000; // 5 dakika cache süresi
   
   // Hafta cache'i - tüm hafta verilerini sakla (date -> worklogs)
-  const weekWorklogsCacheRef = useRef<Map<string, Worklog[]>>(new Map());
+  // weekWorklogsCacheRef removed as it was redundant
   const weekCacheMondayRef = useRef<string | null>(null);
   const [isLoadingWeek, setIsLoadingWeek] = useState(false);
   
@@ -435,14 +435,14 @@ export default function App() {
     
     for (let i = 0; i < weekDays.length; i++) {
       const dateStr = weekDays[i];
-      // Hafta cache'inden al
-      const weekCached = weekWorklogsCacheRef.current.get(dateStr);
+      // Hafta cache'inden al (worklogCacheRef kullan)
+      const cached = worklogCacheRef.current.get(dateStr);
       
       let totalHours = 0;
-      if (weekCached) {
-        totalHours = weekCached.reduce((sum, wl) => sum + wl.hours, 0);
+      if (cached) {
+        totalHours = cached.worklogs.reduce((sum, wl) => sum + wl.hours, 0);
       } else if (dateStr === selectedDate) {
-        // Mevcut gün için state'ten al
+        // Mevcut gün için state'ten al (cache henüz güncellenmemiş olabilir)
         totalHours = worklogs.reduce((sum, wl) => sum + wl.hours, 0);
       }
       
@@ -1203,10 +1203,10 @@ Genişletilmiş not:`;
      try {
          // 1. Geçmiş verilerden bağlam topla (Cache'den)
          let contextLogs: string[] = [];
-         if (weekWorklogsCacheRef.current) {
-             weekWorklogsCacheRef.current.forEach((logs, date) => {
+         if (worklogCacheRef.current) {
+             worklogCacheRef.current.forEach((cached, date) => {
                  if (date !== selectedDate) { // Bugün hariç diğer günler
-                     logs.forEach(l => {
+                     cached.worklogs.forEach(l => {
                          if (l.comment && l.hours > 0.2) {
                              contextLogs.push(`- [${l.issueKey}] ${l.summary}: ${l.hours}h`);
                          }
