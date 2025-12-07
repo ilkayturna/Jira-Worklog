@@ -9,6 +9,7 @@ import { AddWorklogModal } from './components/AddWorklogModal';
 import { MagicCommandBar } from './components/MagicCommandBar';
 import { NotificationHistory } from './components/NotificationHistory';
 import { WeeklyReportModal } from './components/WeeklyReportModal';
+import { AssignedIssuesDrawer } from './components/AssignedIssuesDrawer';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { formatHours } from './utils/adf';
@@ -28,6 +29,8 @@ import { loadSuggestions, loadWorklogHistories, saveWorklogHistories, saveNotifi
 
 
 
+
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 
 // Varsayılan başlangıç tarihini hesapla - Yerel tarih kullan
 const getDefaultStartDate = (): string => {
@@ -52,6 +55,7 @@ export default function App() {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isWeeklyReportOpen, setIsWeeklyReportOpen] = useState(false);
   const [isMagicBarOpen, setIsMagicBarOpen] = useState(false);
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isEditingTarget, setIsEditingTarget] = useState(false);
   const [selectedDate, setSelectedDate] = useState(getDefaultStartDate());
   const { 
@@ -73,6 +77,34 @@ export default function App() {
     queue,
     isSyncing
   } = useWorklogs(settings, selectedDate, notify);
+
+  // Keyboard Shortcuts
+  useKeyboardShortcuts([
+    {
+      key: 'n',
+      ctrlKey: true,
+      action: () => setIsAddWorklogOpen(true),
+      preventDefault: true
+    },
+    {
+      key: 'k',
+      ctrlKey: true,
+      action: () => setIsMagicBarOpen(true),
+      preventDefault: true
+    },
+    {
+      key: 'r',
+      ctrlKey: true,
+      action: () => loadData(true),
+      preventDefault: true
+    },
+    {
+      key: ',',
+      ctrlKey: true,
+      action: () => setIsSettingsOpen(true),
+      preventDefault: true
+    }
+  ]);
 
   const [suggestions, setSuggestions] = useState<WorklogSuggestion[]>(loadSuggestions());
   const [tempTargetHours, setTempTargetHours] = useState<string>(settings.targetDailyHours.toString());
@@ -1490,6 +1522,7 @@ KURALLAR:
             toggleTheme={toggleTheme}
             isDarkTheme={settings.isDarkTheme}
             undoableCount={undoableCount}
+            onToggleDrawer={() => setIsDrawerOpen(!isDrawerOpen)}
         />
 
         {/* Dashboard Grid - Responsive */}
@@ -1551,6 +1584,7 @@ KURALLAR:
                         worklogHistories={worklogHistories}
                         onHistoryChange={handleWorklogHistoryChange}
                         onDelete={handleDeleteWorklog}
+                        settings={settings}
                     />
                 </div>
             </section>
@@ -2003,6 +2037,13 @@ KURALLAR:
             onClose={() => setIsMagicBarOpen(false)}
             onSubmit={handleAddWorklog}
             settings={settings}
+        />
+
+        <AssignedIssuesDrawer 
+            isOpen={isDrawerOpen} 
+            onClose={() => setIsDrawerOpen(false)} 
+            settings={settings}
+            onDragStart={() => {}}
         />
     </main>
   );

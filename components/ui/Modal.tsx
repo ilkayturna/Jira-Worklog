@@ -40,10 +40,9 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
       {/* Modal */}
       <div 
         ref={modalRef}
-        className={`apple-modal relative w-full max-w-lg max-h-[85vh] flex flex-col ${className}`}
+        className={`apple-modal glass-modal-content relative w-full max-w-lg max-h-[85vh] flex flex-col ${className}`}
         onClick={(e) => e.stopPropagation()}
         style={{
-          backgroundColor: 'var(--color-surface)',
           borderRadius: '14px',
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), 0 0 0 0.5px rgba(0, 0, 0, 0.05)',
           animation: 'modalSlideIn 0.25s ease-out'

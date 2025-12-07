@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar as CalendarIcon, Plus, FileSpreadsheet, Bell, Sun, Moon, Settings } from 'lucide-react';
+import { Calendar as CalendarIcon, Plus, FileSpreadsheet, Bell, Sun, Moon, Settings, Layout } from 'lucide-react';
 
 interface HeaderProps {
     setIsAddWorklogOpen: (value: boolean) => void;
@@ -9,6 +9,7 @@ interface HeaderProps {
     toggleTheme: () => void;
     isDarkTheme: boolean;
     undoableCount: number;
+    onToggleDrawer: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -18,7 +19,8 @@ export const Header: React.FC<HeaderProps> = ({
     setIsSettingsOpen,
     toggleTheme,
     isDarkTheme,
-    undoableCount
+    undoableCount,
+    onToggleDrawer
 }) => {
     return (
         <header className="apple-header">
@@ -56,6 +58,16 @@ export const Header: React.FC<HeaderProps> = ({
                     <Plus size={20}/>
                 </button>
                 
+                {/* Assigned Issues Drawer */}
+                <button 
+                    onClick={onToggleDrawer} 
+                    className="btn-icon"
+                    aria-label="Assigned Issues"
+                    title="Bana Atananlar"
+                >
+                    <Layout size={20}/>
+                </button>
+
                 {/* Weekly Report */}
                 <button 
                     onClick={() => setIsWeeklyReportOpen(true)} 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, Loader2, ArrowRight, Clock, Hash, Sparkles, Command } from 'lucide-react';
+import { Search, Loader2, ArrowRight, Clock, Hash, Sparkles, Command, Mic, MicOff } from 'lucide-react';
 import { AppSettings, JiraIssue } from '../types';
 import { searchIssues, callGroq } from '../services/api';
 
@@ -29,7 +29,9 @@ export const MagicCommandBar: React.FC<MagicCommandBarProps> = ({
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [result, setResult] = useState<AIAnalysisResult | null>(null);
     const [error, setError] = useState<string | null>(null);
+    const [isListening, setIsListening] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
+    const recognitionRef = useRef<any>(null);
 
     // Focus input when opened
     useEffect(() => {
@@ -40,8 +42,66 @@ export const MagicCommandBar: React.FC<MagicCommandBarProps> = ({
             setInput('');
             setResult(null);
             setError(null);
+            stopListening();
         }
     }, [isOpen]);
+
+    // Voice Recognition Setup
+    useEffect(() => {
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+            const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+            recognitionRef.current = new SpeechRecognition();
+            recognitionRef.current.continuous = false;
+            recognitionRef.current.interimResults = true;
+            recognitionRef.current.lang = 'tr-TR';
+
+            recognitionRef.current.onresult = (event: any) => {
+                const transcript = Array.from(event.results)
+                    .map((result: any) => result[0])
+                    .map((result: any) => result.transcript)
+                    .join('');
+                setInput(transcript);
+            };
+
+            recognitionRef.current.onend = () => {
+                setIsListening(false);
+            };
+
+            recognitionRef.current.onerror = (event: any) => {
+                console.error('Speech recognition error', event.error);
+                setIsListening(false);
+            };
+        }
+    }, []);
+
+    const toggleListening = () => {
+        if (isListening) {
+            stopListening();
+        } else {
+            startListening();
+        }
+    };
+
+    const startListening = () => {
+        if (recognitionRef.current) {
+            try {
+                recognitionRef.current.start();
+                setIsListening(true);
+                setInput(''); // Clear input when starting new recording
+            } catch (e) {
+                console.error(e);
+            }
+        } else {
+            alert("Tarayıcınız sesli komutu desteklemiyor.");
+        }
+    };
+
+    const stopListening = () => {
+        if (recognitionRef.current) {
+            recognitionRef.current.stop();
+            setIsListening(false);
+        }
+    };
 
     const handleKeyDown = async (e: React.KeyboardEvent) => {
         if (e.key === 'Escape') {
@@ -87,13 +147,13 @@ Sen akıllı bir Jira Worklog asistanısın. Kullanıcının girdiği doğal dil
 KULLANICI GİRDİSİ: "${input}"
 
 MEVCUT JIRA KAYITLARI (Bulunanlar):
-${relevantIssues.map(i => `- [${i.key}] ${i.summary} (Proje: ${i.projectName})`).join('\n')}
+${relevantIssues.map(i => `- [${i.key}] ${i.summary} (Proje: ${i.projectName})\n  Detay: ${i.description ? i.description.substring(0, 300).replace(/\n/g, ' ') : 'Yok'}`).join('\n')}
 
 GÖREVLER:
 1. EN UYGUN ISSUE'YU SEÇ:
    - Kullanıcı girdisiyle en alakalı issue'yu bul.
+   - Eğer başlıkta veya DETAYDA (açıklamada) ipucu varsa onu kullan.
    - Eğer birden fazla benzer varsa (örn: AGC-250 ve AGC-427), ID'si daha büyük olanı (daha güncel) tercih et.
-   - Eğer başlıkta tam eşleşme varsa (örn: "Sorgu hazırlama") onu seç.
    - Hiçbir issue eşleşmiyorsa null dön.
 
 2. SÜRE TAHMİN ET:
@@ -103,6 +163,7 @@ GÖREVLER:
 
 3. YORUMU DÜZENLE:
    - Kullanıcının ifadesini profesyonel bir Jira worklog açıklamasına dönüştür.
+   - Issue'nun detayından (açıklamasından) bağlam alarak yorumu zenginleştir.
    - Yazım hatalarını düzelt, kurumsal bir dil kullan.
 
 ÇIKTI FORMATI (Sadece JSON):
@@ -141,27 +202,53 @@ GÖREVLER:
             <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" onClick={onClose} />
             
             <div className="relative w-full max-w-2xl flex flex-col gap-2 animate-scale-in">
-                {/* Main Input Bar */}
-                <div className="surface-card-elevated overflow-hidden flex items-center p-4 gap-4 ring-1 ring-white/20 shadow-2xl">
-                    {isAnalyzing ? (
-                        <Loader2 className="w-6 h-6 text-primary-500 animate-spin shrink-0" />
-                    ) : (
-                        <Sparkles className="w-6 h-6 text-primary-500 shrink-0" />
-                    )}
+                {/* Main Input Bar - Liquid Glass Style */}
+                <div className="relative overflow-hidden rounded-2xl p-[1px]" style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.4) 0%, rgba(255,255,255,0.1) 100%)' }}>
+                    <div className="absolute inset-0 bg-white/40 dark:bg-black/40 backdrop-blur-xl" />
                     
-                    <input
-                        ref={inputRef}
-                        type="text"
-                        value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        onKeyDown={handleKeyDown}
-                        placeholder="Ne yaptığını anlat? (Örn: Demireller sorgusunu güncelledim, 2 saat sürdü)"
-                        className="flex-1 bg-transparent border-none outline-none text-lg placeholder:text-gray-400 text-gray-800 dark:text-white"
-                        autoComplete="off"
+                    {/* Glowing Border Effect */}
+                    <div className="absolute inset-0 rounded-2xl opacity-50" 
+                         style={{ 
+                             background: 'linear-gradient(90deg, #007AFF, #5856D6, #FF2D55, #007AFF)', 
+                             backgroundSize: '300% 100%',
+                             animation: 'shimmer 4s linear infinite',
+                             mask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                             maskComposite: 'exclude',
+                             WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                             WebkitMaskComposite: 'xor',
+                             padding: '2px'
+                         }} 
                     />
-                    
-                    <div className="flex items-center gap-2 text-xs text-gray-400 font-mono border border-gray-200 dark:border-gray-700 rounded px-2 py-1">
-                        <span>ESC</span>
+
+                    <div className="relative flex items-center p-4 gap-4 bg-white/80 dark:bg-black/80 rounded-2xl">
+                        {isAnalyzing ? (
+                            <Loader2 className="w-6 h-6 text-primary-500 animate-spin shrink-0" />
+                        ) : (
+                            <Sparkles className="w-6 h-6 text-primary-500 shrink-0 animate-pulse" />
+                        )}
+                        
+                        <input
+                            ref={inputRef}
+                            type="text"
+                            value={input}
+                            onChange={(e) => setInput(e.target.value)}
+                            onKeyDown={handleKeyDown}
+                            placeholder={isListening ? "Dinliyorum..." : "Ne yaptığını anlat? (Örn: Login sayfasını düzelttim)"}
+                            className="flex-1 bg-transparent border-none outline-none text-lg placeholder:text-gray-400 text-gray-800 dark:text-white"
+                            autoComplete="off"
+                        />
+                        
+                        <button 
+                            onClick={toggleListening}
+                            className={`p-2 rounded-full transition-all duration-300 ${isListening ? 'bg-red-500 text-white scale-110 animate-pulse' : 'hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500'}`}
+                            title="Sesli Komut"
+                        >
+                            {isListening ? <MicOff size={20} /> : <Mic size={20} />}
+                        </button>
+
+                        <div className="hidden md:flex items-center gap-2 text-xs text-gray-400 font-mono border border-gray-200 dark:border-gray-700 rounded px-2 py-1">
+                            <span>ESC</span>
+                        </div>
                     </div>
                 </div>
 

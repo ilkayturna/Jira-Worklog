@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Worklog, LoadingState, WorklogHistoryEntry } from '../types';
-import { Clock, Edit3, Wand2, SpellCheck, Check, X, ExternalLink, Undo2, Redo2, Trash2 } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Worklog, LoadingState, WorklogHistoryEntry, AppSettings } from '../types';
+import { Clock, Edit3, Wand2, SpellCheck, Check, X, ExternalLink, Undo2, Redo2, Trash2, PieChart } from 'lucide-react';
 import { parseSmartTimeInput } from '../utils/adf';
+import { IssueHoverCard } from './IssueHoverCard';
 
 const MAX_HISTORY_SIZE = 20;
 
@@ -15,7 +16,45 @@ interface Props {
   worklogHistories: Map<string, { entries: WorklogHistoryEntry[]; index: number }>;
   onHistoryChange: (id: string, entries: WorklogHistoryEntry[], index: number) => void;
   onDelete?: (id: string) => Promise<void>;
+  targetDailyHours?: number;
+  settings: AppSettings;
 }
+
+const DailySummaryCard: React.FC<{ worklogs: Worklog[], target: number }> = ({ worklogs, target }) => {
+    const totalHours = worklogs.reduce((sum, wl) => sum + wl.hours, 0);
+    const progress = Math.min(100, (totalHours / target) * 100);
+    const remaining = Math.max(0, target - totalHours);
+    
+    return (
+        <div className="surface-card p-4 mb-4 flex items-center justify-between animate-slide-in-top">
+            <div className="flex items-center gap-4">
+                <div className="relative w-12 h-12 flex items-center justify-center">
+                    <svg className="w-full h-full transform -rotate-90">
+                        <circle cx="24" cy="24" r="20" stroke="var(--color-surface-container-high)" strokeWidth="4" fill="none" />
+                        <circle cx="24" cy="24" r="20" stroke="var(--color-primary-500)" strokeWidth="4" fill="none" 
+                            strokeDasharray={125.6} strokeDashoffset={125.6 - (125.6 * progress) / 100} 
+                            className="transition-all duration-1000 ease-out" />
+                    </svg>
+                    <span className="absolute text-[10px] font-bold" style={{ color: 'var(--color-on-surface)' }}>
+                        {Math.round(progress)}%
+                    </span>
+                </div>
+                <div>
+                    <h3 className="text-sm font-semibold" style={{ color: 'var(--color-on-surface)' }}>Günlük Özet</h3>
+                    <p className="text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>
+                        {totalHours.toFixed(1)} / {target} saat tamamlandı
+                    </p>
+                </div>
+            </div>
+            <div className="text-right">
+                <div className="text-xs font-medium uppercase tracking-wider" style={{ color: 'var(--color-on-surface-variant)' }}>Kalan</div>
+                <div className="text-lg font-bold" style={{ color: remaining > 0 ? 'var(--color-warning)' : 'var(--color-success)' }}>
+                    {remaining > 0 ? `${remaining.toFixed(1)}s` : 'Tamamlandı!'}
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const getHourIndicator = (hours: number) => {
     if (hours >= 4) return { color: '#ea4335', label: 'Uzun' };
@@ -34,7 +73,8 @@ const WorklogRow: React.FC<{
     history: { entries: WorklogHistoryEntry[]; index: number } | undefined;
     onHistoryChange: (entries: WorklogHistoryEntry[], index: number) => void;
     onDelete?: (id: string) => Promise<void>;
-}> = ({ wl, index, onUpdate, onImprove, onSpellCheck, jiraBaseUrl, history, onHistoryChange, onDelete }) => {
+    settings: AppSettings;
+}> = ({ wl, index, onUpdate, onImprove, onSpellCheck, jiraBaseUrl, history, onHistoryChange, onDelete, settings }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [editComment, setEditComment] = useState(wl.comment);
     const [isProcessing, setIsProcessing] = useState(false);
@@ -163,12 +203,14 @@ const WorklogRow: React.FC<{
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 sm:gap-4 mb-4">
                 <div className="min-w-0 flex-1">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
-                        <a href={`${jiraBaseUrl}/browse/${wl.issueKey}`} target="_blank" rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 font-semibold text-sm hover:underline shrink-0"
-                            style={{ color: 'var(--color-primary-600)' }}>
-                            {wl.issueKey}
-                            <ExternalLink size={12} className="opacity-50" />
-                        </a>
+                        <IssueHoverCard issueKey={wl.issueKey} jiraBaseUrl={jiraBaseUrl} settings={settings}>
+                            <a href={`${jiraBaseUrl}/browse/${wl.issueKey}`} target="_blank" rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 font-semibold text-sm hover:underline shrink-0"
+                                style={{ color: 'var(--color-primary-600)' }}>
+                                {wl.issueKey}
+                                <ExternalLink size={12} className="opacity-50" />
+                            </a>
+                        </IssueHoverCard>
                         <span className="chip text-xs line-clamp-2 sm:truncate" style={{ maxWidth: '100%' }} title={wl.summary}>
                             {wl.summary}
                         </span>
@@ -267,15 +309,43 @@ const WorklogRow: React.FC<{
     );
 };
 
-export const WorklogList: React.FC<Props> = ({ worklogs, loading, onUpdate, onImprove, onSpellCheck, jiraBaseUrl, worklogHistories, onHistoryChange, onDelete }) => {
+export const WorklogList: React.FC<Props & { targetDailyHours?: number }> = ({ 
+    worklogs, 
+    loading, 
+    onUpdate, 
+    onImprove, 
+    onSpellCheck, 
+    jiraBaseUrl, 
+    worklogHistories, 
+    onHistoryChange,
+    onDelete,
+    targetDailyHours = 8,
+    settings
+}) => {
     if (loading === LoadingState.LOADING) {
         return (
             <div className="flex flex-col gap-4">
+                {/* Daily Summary Skeleton */}
+                <div className="surface-card p-4 mb-4 flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-full skeleton shrink-0" />
+                        <div className="space-y-2">
+                            <div className="h-4 w-24 rounded skeleton" />
+                            <div className="h-3 w-32 rounded skeleton" />
+                        </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                        <div className="h-3 w-12 rounded skeleton" />
+                        <div className="h-6 w-16 rounded skeleton" />
+                    </div>
+                </div>
+
+                {/* Worklog Rows Skeleton */}
                 {[1, 2, 3].map((i) => (
-                    <div key={i} className="surface-card p-6 animate-pulse">
+                    <div key={i} className="surface-card p-6">
                         <div className="flex justify-between items-start mb-4">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl skeleton" />
+                                <div className="w-10 h-10 rounded-xl skeleton shrink-0" />
                                 <div className="space-y-2">
                                     <div className="h-4 w-24 rounded skeleton" />
                                     <div className="h-3 w-32 rounded skeleton" />
@@ -283,8 +353,8 @@ export const WorklogList: React.FC<Props> = ({ worklogs, loading, onUpdate, onIm
                             </div>
                             <div className="h-8 w-20 rounded-full skeleton" />
                         </div>
-                        <div className="h-20 w-full rounded-xl skeleton mb-4" />
-                        <div className="flex justify-between items-center">
+                        <div className="h-16 w-full rounded-xl skeleton mb-4" />
+                        <div className="flex justify-between items-center pt-4 border-t border-[var(--color-outline-variant)]">
                             <div className="flex gap-2">
                                 <div className="h-8 w-8 rounded-lg skeleton" />
                                 <div className="h-8 w-8 rounded-lg skeleton" />
@@ -316,9 +386,10 @@ export const WorklogList: React.FC<Props> = ({ worklogs, loading, onUpdate, onIm
 
     return (
         <div className="flex flex-col gap-4 stagger-animation">
+            <DailySummaryCard worklogs={worklogs} target={targetDailyHours} />
             {worklogs.map((wl, index) => (
                 <WorklogRow key={wl.id} wl={wl} index={index} onUpdate={onUpdate} onImprove={onImprove} onSpellCheck={onSpellCheck}
-                    jiraBaseUrl={jiraBaseUrl} history={worklogHistories.get(wl.id)} onHistoryChange={(entries, idx) => onHistoryChange(wl.id, entries, idx)} onDelete={onDelete} />
+                    jiraBaseUrl={jiraBaseUrl} history={worklogHistories.get(wl.id)} onHistoryChange={(entries, idx) => onHistoryChange(wl.id, entries, idx)} onDelete={onDelete} settings={settings} />
             ))}
         </div>
     );

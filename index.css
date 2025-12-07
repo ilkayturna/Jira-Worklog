@@ -104,13 +104,26 @@
 
 .skeleton {
   background: linear-gradient(90deg, 
-    var(--color-surface-container-high) 25%, 
+    var(--color-surface-container-high) 0%, 
     var(--color-surface-container) 50%, 
-    var(--color-surface-container-high) 75%
+    var(--color-surface-container-high) 100%
   );
   background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
+  animation: shimmer 2s infinite linear;
   border-radius: var(--radius-sm);
+}
+
+/* Glassmorphism Modal */
+.glass-modal-content {
+  background: rgba(255, 255, 255, 0.85) !important;
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.dark .glass-modal-content {
+  background: rgba(30, 30, 30, 0.85) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 /* Dark Mode - Apple Dark Vibrancy */
