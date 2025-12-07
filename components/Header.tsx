@@ -1,5 +1,6 @@
 import React from 'react';
 import { Calendar as CalendarIcon, Plus, FileSpreadsheet, Bell, Sun, Moon, Settings, Layout } from 'lucide-react';
+import { useModifierKey } from '../hooks/useModifierKey';
 
 interface HeaderProps {
     setIsAddWorklogOpen: (value: boolean) => void;
@@ -12,6 +13,12 @@ interface HeaderProps {
     onToggleDrawer: () => void;
 }
 
+const ShortcutBadge = ({ char }: { char: string }) => (
+    <span className="absolute -top-2 -right-2 w-5 h-5 bg-black text-white dark:bg-white dark:text-black rounded-md flex items-center justify-center text-[10px] font-bold shadow-sm animate-in zoom-in duration-200 z-10 border border-white/20">
+        {char}
+    </span>
+);
+
 export const Header: React.FC<HeaderProps> = ({
     setIsAddWorklogOpen,
     setIsWeeklyReportOpen,
@@ -22,6 +29,10 @@ export const Header: React.FC<HeaderProps> = ({
     undoableCount,
     onToggleDrawer
 }) => {
+    const isCtrlPressed = useModifierKey('Control');
+    const isMetaPressed = useModifierKey('Meta');
+    const showShortcuts = isCtrlPressed || isMetaPressed;
+
     return (
         <header className="apple-header">
             <div className="flex items-center gap-4">
@@ -44,14 +55,15 @@ export const Header: React.FC<HeaderProps> = ({
                 {/* Add Worklog Button - Apple style */}
                 <button 
                     onClick={() => setIsAddWorklogOpen(true)} 
-                    className="hidden sm:flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-full transition-all hover:scale-[1.02] active:scale-[0.98]"
+                    className="hidden sm:flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-full transition-all hover:scale-[1.02] active:scale-[0.98] relative"
                     style={{ background: 'linear-gradient(135deg, #007AFF 0%, #0055d4 100%)', color: 'white' }}
                 >
                     <Plus size={16} strokeWidth={2.5}/> Yeni
+                    {showShortcuts && <ShortcutBadge char="N" />}
                 </button>
                 <button 
                     onClick={() => setIsAddWorklogOpen(true)} 
-                    className="btn-icon sm:hidden"
+                    className="btn-icon sm:hidden relative"
                     style={{ backgroundColor: 'var(--color-primary-600)', color: 'white' }}
                     aria-label="Add worklog"
                 >
@@ -102,10 +114,11 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
                 <button 
                     onClick={() => setIsSettingsOpen(true)} 
-                    className="btn-icon"
+                    className="btn-icon relative"
                     aria-label="Settings"
                 >
                     <Settings size={20} />
+                    {showShortcuts && <ShortcutBadge char="," />}
                 </button>
             </div>
         </header>

@@ -20,6 +20,7 @@ import { SUGGESTIONS_KEY, NOTIFICATION_HISTORY_KEY, WORKLOG_HISTORY_KEY } from '
 import { toLocalDateStr, getWeekMonday, getWeekDays } from './utils/date';
 import { computeWordDiff, DiffPart } from './utils/diff';
 import { loadSuggestions, loadWorklogHistories, saveWorklogHistories, saveNotificationHistory, updateSuggestions } from './utils/storage';
+import { triggerHaptic } from './utils/ui';
 
 // Diff helper - kelime bazlı karşılaştırma
 // Moved to utils/diff.ts
@@ -566,6 +567,7 @@ export default function App() {
         };
         
         notify('Worklog Eklendi', `${issueKey}: ${hours}h`, 'success', undoAction);
+        triggerHaptic();
     }
   };
 
@@ -811,7 +813,7 @@ status: devam/test/tamamlandı/beklemede`;
     }
   };
 
-  const handleUpdateWorklog = async (id: string, comment?: string, seconds?: number, skipNotification?: boolean, isUndoRedo?: boolean) => {
+  const handleUpdateWorklog = async (id: string, comment?: string, seconds?: number, skipNotification?: boolean, isUndoRedo?: boolean, newDate?: string) => {
     const wl = worklogs.find(w => w.id === id);
     if (!wl) return;
 
@@ -821,12 +823,16 @@ status: devam/test/tamamlandı/beklemede`;
     const newComment = comment !== undefined ? comment : wl.comment;
     const newSeconds = seconds !== undefined ? seconds : wl.seconds;
 
-    const success = await editWorklog(wl, newComment, newSeconds);
+    const success = await editWorklog(wl, newComment, newSeconds, newDate);
     
     if (success) {
       if (isUndoRedo || skipNotification) return;
 
-      if (comment !== undefined && comment !== previousComment) {
+      if (newDate) {
+          notify('Taşındı', `${wl.issueKey} worklog'u ${newDate} tarihine taşındı.`, 'success');
+          // Refresh current view as the worklog is moved away
+          loadData(true);
+      } else if (comment !== undefined && comment !== previousComment) {
         const undoAction: UndoAction = {
           type: 'UPDATE',
           data: [{ worklogId: id, issueKey: wl.issueKey, previousComment, newComment: comment }]
@@ -1577,7 +1583,9 @@ KURALLAR:
                     <WorklogList 
                         worklogs={worklogs} 
                         loading={loadingState} 
-                        onUpdate={handleUpdateWorklog}
+                        onUpdate={(id, comment, seconds, isUndoRedo, newDate) => 
+                            handleUpdateWorklog(id, comment, seconds, isUndoRedo, isUndoRedo, newDate)
+                        }
                         onImprove={(id) => handleAIAction(id, 'IMPROVE')}
                         onSpellCheck={(id) => handleAIAction(id, 'SPELL')}
                         jiraBaseUrl={settings.jiraUrl}
@@ -2031,6 +2039,21 @@ KURALLAR:
           Powered by <span className="footer-author">İlkay Turna</span>
         </span>
       </footer>
+
+      {/* Floating Magic Button (Mobile Only) */}
+      <button
+        onClick={() => {
+            triggerHaptic();
+            setIsMagicBarOpen(true);
+        }}
+        className="fixed bottom-24 right-4 z-40 lg:hidden w-14 h-14 rounded-full flex items-center justify-center shadow-xl animate-bounce-subtle"
+        style={{ 
+            background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)',
+            boxShadow: '0 8px 20px rgba(99, 102, 241, 0.4)'
+        }}
+      >
+        <Sparkles size={24} className="text-white" />
+      </button>
 
         <MagicCommandBar
             isOpen={isMagicBarOpen}

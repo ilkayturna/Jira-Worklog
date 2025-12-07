@@ -27,6 +27,7 @@ export const MagicCommandBar: React.FC<MagicCommandBarProps> = ({
 }) => {
     const [input, setInput] = useState('');
     const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const [loadingStep, setLoadingStep] = useState<string>('');
     const [result, setResult] = useState<AIAnalysisResult | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [isListening, setIsListening] = useState(false);
@@ -125,6 +126,7 @@ export const MagicCommandBar: React.FC<MagicCommandBarProps> = ({
         if (!input.trim() || !settings.groqApiKey) return;
         
         setIsAnalyzing(true);
+        setLoadingStep('Jira taranıyor...');
         setError(null);
 
         try {
@@ -139,6 +141,8 @@ export const MagicCommandBar: React.FC<MagicCommandBarProps> = ({
             } catch (err) {
                 console.warn('Jira search failed, proceeding without context', err);
             }
+
+            setLoadingStep('Yapay zeka analiz ediyor...');
 
             // 2. Ask AI to analyze intent, match issue, estimate time, and format comment
             const prompt = `
@@ -222,21 +226,28 @@ GÖREVLER:
 
                     <div className="relative flex items-center p-4 gap-4 bg-white/80 dark:bg-black/80 rounded-2xl">
                         {isAnalyzing ? (
-                            <Loader2 className="w-6 h-6 text-primary-500 animate-spin shrink-0" />
+                            <div className="flex items-center gap-2">
+                                <Loader2 className="w-6 h-6 text-primary-500 animate-spin shrink-0" />
+                                <span className="text-xs text-primary-600 animate-pulse font-medium whitespace-nowrap">
+                                    {loadingStep}
+                                </span>
+                            </div>
                         ) : (
                             <Sparkles className="w-6 h-6 text-primary-500 shrink-0 animate-pulse" />
                         )}
                         
-                        <input
-                            ref={inputRef}
-                            type="text"
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            onKeyDown={handleKeyDown}
-                            placeholder={isListening ? "Dinliyorum..." : "Ne yaptığını anlat? (Örn: Login sayfasını düzelttim)"}
-                            className="flex-1 bg-transparent border-none outline-none text-lg placeholder:text-gray-400 text-gray-800 dark:text-white"
-                            autoComplete="off"
-                        />
+                        {!isAnalyzing && (
+                            <input
+                                ref={inputRef}
+                                type="text"
+                                value={input}
+                                onChange={(e) => setInput(e.target.value)}
+                                onKeyDown={handleKeyDown}
+                                placeholder={isListening ? "Dinliyorum..." : "Ne yaptığını anlat? (Örn: Login sayfasını düzelttim)"}
+                                className="flex-1 bg-transparent border-none outline-none text-lg placeholder:text-gray-400 text-gray-800 dark:text-white"
+                                autoComplete="off"
+                            />
+                        )}
                         
                         <button 
                             onClick={toggleListening}

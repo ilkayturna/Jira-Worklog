@@ -183,9 +183,9 @@ export const fetchWeekWorklogs = async (mondayDateStr: string, settings: AppSett
   return weekMap;
 };
 
-export const updateWorklog = async (wl: Worklog, settings: AppSettings, newComment?: string, newSeconds?: number) => {
+export const updateWorklog = async (wl: Worklog, settings: AppSettings, newComment?: string, newSeconds?: number, newDate?: string) => {
     const body: any = {
-        started: wl.started,
+        started: newDate ? `${newDate}T09:00:00.000+0000` : wl.started,
         timeSpentSeconds: newSeconds !== undefined ? newSeconds : wl.seconds
     };
 

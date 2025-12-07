@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Worklog, LoadingState, WorklogHistoryEntry, AppSettings } from '../types';
-import { Clock, Edit3, Wand2, SpellCheck, Check, X, ExternalLink, Undo2, Redo2, Trash2, PieChart } from 'lucide-react';
+import { Clock, Edit3, Wand2, SpellCheck, Check, X, ExternalLink, Undo2, Redo2, Trash2, PieChart, Copy, CalendarDays, ExternalLink as LinkIcon } from 'lucide-react';
 import { parseSmartTimeInput } from '../utils/adf';
 import { IssueHoverCard } from './IssueHoverCard';
+import { ContextMenu } from './ui/ContextMenu';
+import { triggerHaptic } from '../utils/ui';
 
 const MAX_HISTORY_SIZE = 20;
 
 interface Props {
   worklogs: Worklog[];
   loading: LoadingState;
-  onUpdate: (id: string, comment?: string, hours?: number, isUndoRedo?: boolean) => Promise<void>;
+  onUpdate: (id: string, comment?: string, hours?: number, isUndoRedo?: boolean, newDate?: string) => Promise<void>;
   onImprove: (id: string) => Promise<void>;
   onSpellCheck: (id: string) => Promise<void>;
   jiraBaseUrl: string;
@@ -66,7 +68,7 @@ const getHourIndicator = (hours: number) => {
 const WorklogRow: React.FC<{ 
     wl: Worklog; 
     index: number;
-    onUpdate: (id: string, comment?: string, hours?: number, isUndoRedo?: boolean) => Promise<void>;
+    onUpdate: (id: string, comment?: string, hours?: number, isUndoRedo?: boolean, newDate?: string) => Promise<void>;
     onImprove: (id: string) => Promise<void>;
     onSpellCheck: (id: string) => Promise<void>;
     jiraBaseUrl: string;
@@ -80,6 +82,7 @@ const WorklogRow: React.FC<{
     const [isProcessing, setIsProcessing] = useState(false);
     const [timeStr, setTimeStr] = useState(wl.hours.toFixed(2));
     const [isTimeEditing, setIsTimeEditing] = useState(false);
+    const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
     const hourInfo = getHourIndicator(wl.hours);
     
@@ -95,6 +98,26 @@ const WorklogRow: React.FC<{
     useEffect(() => {
         if (!isTimeEditing) setTimeStr(wl.hours.toFixed(2));
     }, [wl.hours, isTimeEditing]);
+
+    const handleContextMenu = (e: React.MouseEvent) => {
+        e.preventDefault();
+        setContextMenu({ x: e.clientX, y: e.clientY });
+    };
+
+    const handleMoveToTomorrow = async () => {
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const dateStr = tomorrow.toISOString().split('T')[0];
+        setIsProcessing(true);
+        await onUpdate(wl.id, undefined, undefined, false, dateStr);
+        setIsProcessing(false);
+        triggerHaptic();
+    };
+
+    const handleCopy = () => {
+        navigator.clipboard.writeText(`${wl.issueKey} ${wl.summary}\n${wl.comment}`);
+        triggerHaptic();
+    };
 
     const saveToHistory = () => {
         const currentEntry: WorklogHistoryEntry = {
@@ -191,6 +214,7 @@ const WorklogRow: React.FC<{
 
     return (
         <article 
+            onContextMenu={handleContextMenu}
             className={`group surface-card p-4 md:p-5 rounded-2xl relative transition-all duration-200 ${isProcessing ? 'opacity-60' : ''}`}
             style={{ animationDelay: `${index * 50}ms` }}
         >
@@ -305,6 +329,19 @@ const WorklogRow: React.FC<{
                     )}
                 </div>
             </div>
+
+            {contextMenu && (
+                <ContextMenu
+                    x={contextMenu.x}
+                    y={contextMenu.y}
+                    onClose={() => setContextMenu(null)}
+                    actions={[
+                        { label: 'Kopyala', icon: <Copy size={14} />, onClick: handleCopy },
+                        { label: 'Yarına Taşı', icon: <CalendarDays size={14} />, onClick: handleMoveToTomorrow },
+                        { label: "Jira'da Aç", icon: <LinkIcon size={14} />, onClick: () => window.open(`${jiraBaseUrl}/browse/${wl.issueKey}`, '_blank') },
+                    ]}
+                />
+            )}
         </article>
     );
 };

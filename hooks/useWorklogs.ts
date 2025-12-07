@@ -170,12 +170,12 @@ export const useWorklogs = (settings: AppSettings, selectedDate: string, notify:
         }
     };
 
-    const editWorklog = async (worklog: Worklog, newComment: string, newSeconds: number) => {
+    const editWorklog = async (worklog: Worklog, newComment: string, newSeconds: number, newDate?: string) => {
         // Offline Check
         if (!navigator.onLine) {
             addToQueue({
                 type: 'UPDATE',
-                data: { worklog, comment: newComment, seconds: newSeconds }
+                data: { worklog, comment: newComment, seconds: newSeconds, date: newDate }
             });
             notify('Çevrimdışı Güncelleme', 'İnternet gelince güncellenecek.', 'info');
             
@@ -186,7 +186,7 @@ export const useWorklogs = (settings: AppSettings, selectedDate: string, notify:
 
         try {
             setLoadingState(LoadingState.LOADING);
-            await updateWorklog(worklog, settings, newComment, newSeconds);
+            await updateWorklog(worklog, settings, newComment, newSeconds, newDate);
             invalidateCache(selectedDate);
             await loadData(true);
             return true;
@@ -194,7 +194,7 @@ export const useWorklogs = (settings: AppSettings, selectedDate: string, notify:
              if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
                 addToQueue({
                     type: 'UPDATE',
-                    data: { worklog, comment: newComment, seconds: newSeconds }
+                    data: { worklog, comment: newComment, seconds: newSeconds, date: newDate }
                 });
                 notify('Ağ Hatası', 'Güncelleme kuyruğa eklendi.', 'warning');
                 return true; // Treat as success for UI
