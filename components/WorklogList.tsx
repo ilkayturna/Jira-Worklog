@@ -270,14 +270,6 @@ const WorklogRow: React.FC<{
 export const WorklogList: React.FC<Props> = ({ worklogs, loading, onUpdate, onImprove, onSpellCheck, jiraBaseUrl, worklogHistories, onHistoryChange, onDelete }) => {
     if (loading === LoadingState.LOADING) {
         return (
-            <div className="space-y-4 stagger-animation">
-                {[1, 2, 3].map(i => (<div key={i} className="skeleton h-36 rounded-2xl" />))}
-            </div>
-        );
-    }
-
-    if (loading === LoadingState.LOADING) {
-        return (
             <div className="flex flex-col gap-4">
                 {[1, 2, 3].map((i) => (
                     <div key={i} className="surface-card p-6 animate-pulse">

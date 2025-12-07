@@ -236,7 +236,9 @@ export default function App() {
     loadData, 
     addWorklog, 
     editWorklog, 
-    removeWorklog 
+    removeWorklog,
+    queue,
+    isSyncing
   } = useWorklogs(settings, selectedDate, notify);
 
   const [suggestions, setSuggestions] = useState<WorklogSuggestion[]>(loadSuggestions());
@@ -1804,11 +1806,29 @@ KURALLAR:
         {loadingState === LoadingState.LOADING ? 'Yenileniyor...' : 'Yenilemek için bırak'}
       </div>
       
-      {/* Offline Indicator */}
-      {!isOnline && (
-        <div className="offline-indicator">
-          <span className="offline-dot" />
-          Çevrimdışı
+      {/* Offline/Sync Status Indicator */}
+      {(!isOnline || queue.length > 0 || isSyncing) && (
+        <div className="offline-indicator" style={{ 
+            background: isOnline ? 'var(--color-surface)' : 'var(--color-surface-container)',
+            borderColor: isOnline ? 'var(--color-primary-200)' : 'var(--color-outline)'
+        }}>
+          {!isOnline ? (
+            <>
+              <span className="offline-dot" style={{ background: 'var(--color-error)' }} />
+              Çevrimdışı
+            </>
+          ) : (
+            <>
+              {isSyncing ? (
+                 <RefreshCw size={14} className="animate-spin text-blue-500" />
+              ) : (
+                 <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+              )}
+              <span style={{ color: 'var(--color-on-surface)' }}>
+                {isSyncing ? 'Senkronize ediliyor...' : `${queue.length} değişiklik kuyrukta`}
+              </span>
+            </>
+          )}
         </div>
       )}
       
@@ -2626,10 +2646,13 @@ KURALLAR:
             if ('vibrate' in navigator) navigator.vibrate(5);
             loadData(true);
           }}
-          className={`bottom-nav-item haptic-feedback ${loadingState === LoadingState.LOADING ? 'active' : ''}`}
+          className={`bottom-nav-item haptic-feedback ${loadingState === LoadingState.LOADING || isSyncing ? 'active' : ''}`}
         >
-          <RefreshCw size={22} strokeWidth={1.5} className={loadingState === LoadingState.LOADING ? 'animate-spin' : ''} />
-          <span>Yenile</span>
+          <RefreshCw size={22} strokeWidth={1.5} className={loadingState === LoadingState.LOADING || isSyncing ? 'animate-spin' : ''} />
+          <span>{isSyncing ? 'Sync...' : 'Yenile'}</span>
+          {queue.length > 0 && (
+            <span className="absolute top-1 right-1 w-2 h-2 bg-orange-500 rounded-full animate-pulse" />
+          )}
         </button>
         <button 
           onClick={() => {
