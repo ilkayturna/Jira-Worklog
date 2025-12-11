@@ -42,11 +42,12 @@ const sanitizeWorklogPayload = (payload: any): SanitizedWorklogPayload => {
       // Validate specific field formats
       if (field === 'timeSpentSeconds') {
         const seconds = Number(payload[field]);
-        if (!isNaN(seconds) && seconds > 0 && seconds <= 86400) {
+        // Allow up to 7 days (604800 seconds) per worklog - Jira's actual limit
+        if (!isNaN(seconds) && seconds > 0 && seconds <= 604800) {
           sanitized.timeSpentSeconds = seconds;
           includedFields.push(`timeSpentSeconds=${seconds}`);
         } else {
-          console.warn(`⚠️ Invalid timeSpentSeconds value: ${payload[field]}`);
+          console.warn(`⚠️ Invalid timeSpentSeconds value: ${payload[field]} (must be 1-604800)`);
         }
       } else if (field === 'started') {
         // Validate ISO 8601 format
@@ -394,8 +395,8 @@ export const fetchWorklogs = async (
       {
         jql,
         fields: ['worklog', 'summary', 'assignee'],
-        maxResults: 100,
-        validateQuery: true
+        maxResults: 100
+        // Note: validateQuery is NOT supported in /rest/api/3/search/jql endpoint
       },
       undefined,
       abortSignal
