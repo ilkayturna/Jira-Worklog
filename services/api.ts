@@ -2,166 +2,354 @@
 import { AppSettings, Worklog, JiraIssue } from '../types';
 import { plainTextToADF, parseJiraComment, secondsToHours } from '../utils/adf';
 
-// --- UTILS ---
-
-const getAuthHeader = (email: string, token: string) => {
-  // Basic Auth: email:token formatında, encode YAPMADAN
-  return 'Basic ' + btoa(email + ':' + token);
-};
-
-const normalizeUrl = (url: string) => {
-    let normalized = url.trim().replace(/\/$/, '');
-    if (normalized && !normalized.startsWith('http')) {
-        normalized = `https://${normalized}`;
-    }
-    return normalized;
+// --- TYPE DEFINITIONS ---
+interface FetchOptions {
+  method: string;
+  headers: Record<string, string>;
+  body?: string;
+  signal?: AbortSignal;
 }
 
-// ARTIK PROXY ÜZERİNDEN İSTEK ATIYORUZ
-const fetchThroughProxy = async (targetUrl: string, method: string, headers: any, body?: any, retries = 3, backoff = 1000) => {
-    // Vercel'de çalışırken /api/proxy endpoint'ini kullan
-    const proxyUrl = `/api/proxy?url=${encodeURIComponent(targetUrl)}`;
-    
-    const options: any = {
-        method: method,
-        headers: headers
-    };
+interface RetryConfig {
+  maxRetries: number;
+  baseDelay: number;
+  maxDelay: number;
+  retryableStatuses: number[];
+}
 
-    if (body) {
-        // DÜZELTME: Browser fetch API'si body'yi otomatik stringify YAPMAZ.
-        // Eğer body bir obje ise ve content-type json ise, manuel stringify yapmalıyız.
-        // Aksi takdirde sunucuya "[object Object]" gider ve 500 hatası alınır.
-        if (typeof body === 'object') {
-            options.body = JSON.stringify(body);
-        } else {
-            options.body = body;
-        }
-    }
-
-    for (let i = 0; i < retries; i++) {
-        try {
-            const response = await fetch(proxyUrl, options);
-            
-            // 429 (Too Many Requests) veya 5xx hatalarında retry yap
-            if (response.status === 429 || response.status >= 500) {
-                throw new Error(`Retryable error: ${response.status}`);
-            }
-            
-            return response;
-        } catch (error) {
-            if (i === retries - 1) throw error;
-            // Exponential backoff
-            await new Promise(resolve => setTimeout(resolve, backoff * Math.pow(2, i)));
-        }
-    }
-    throw new Error("Max retries reached");
+// --- CONSTANTS ---
+const DEFAULT_RETRY_CONFIG: RetryConfig = {
+  maxRetries: 3,
+  baseDelay: 1000,
+  maxDelay: 10000,
+  retryableStatuses: [408, 429, 500, 502, 503, 504]
 };
 
-// --- JIRA API ---
+const REQUEST_TIMEOUT = 30000; // 30 seconds
 
-export const fetchWorklogs = async (date: string, settings: AppSettings): Promise<Worklog[]> => {
-  if (!settings.jiraUrl || !settings.jiraEmail || !settings.jiraToken) {
-    throw new Error("Jira Bilgileri Eksik: Ayarları kontrol edin.");
+// --- UTILITY FUNCTIONS ---
+
+const getAuthHeader = (email: string, token: string): string => {
+  if (!email || !token) {
+    throw new Error('Email and token are required for authentication');
   }
+  // Basic Auth: email:token format (base64 encoded)
+  return 'Basic ' + btoa(`${email.trim()}:${token.trim()}`);
+};
 
-  // worklogDate ile o güne ait worklog'u olan issue'ları bul, worklogAuthor ile filtrele
-  const jql = `worklogDate = "${date}" AND worklogAuthor = currentUser()`;
+const normalizeUrl = (url: string): string => {
+  if (!url) throw new Error('URL is required');
   
-  // POST metodu ile yeni /search/jql endpoint'i kullan (eski /search endpoint'i 410 Gone döner)
-  // Bkz: https://developer.atlassian.com/changelog/#CHANGE-2046
-  const targetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/search/jql`;
+  let normalized = url.trim().replace(/\/$/, '');
   
-  let response;
+  // Add https if no protocol specified
+  if (!normalized.match(/^https?:\/\//i)) {
+    normalized = `https://${normalized}`;
+  }
+  
+  // Validate URL format
   try {
-      response = await fetchThroughProxy(targetUrl, 'POST', {
-          'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
-          'Accept': 'application/json',
-          'Content-Type': 'application/json'
-      }, {
-          jql: jql,
-          fields: ['worklog', 'summary'],
-          maxResults: 100
-      });
-  } catch (error) {
-      throw new Error("Ağ Hatası: Proxy sunucusuna erişilemiyor.");
+    new URL(normalized);
+  } catch {
+    throw new Error(`Invalid URL format: ${url}`);
   }
-
-  if (!response.ok) {
-    let errDetail = '';
-    try { 
-        const json = await response.json();
-        errDetail = JSON.stringify(json.details || json);
-    } catch(e) {
-        try { errDetail = await response.text(); } catch(z){}
-    }
-    throw new Error(`Jira API Hatası (${response.status}): ${errDetail}`);
-  }
-
-  const data = await response.json();
-  // Yeni /search/jql endpoint'i issues array döner
-  const issues = data.issues || [];
   
-  if (!issues) return [];
+  return normalized;
+};
 
-  const allWorklogs: Worklog[] = [];
+// Exponential backoff with jitter
+const calculateBackoff = (attempt: number, baseDelay: number, maxDelay: number): number => {
+  const exponentialDelay = baseDelay * Math.pow(2, attempt);
+  const jitter = Math.random() * 0.3 * exponentialDelay; // 30% jitter
+  return Math.min(exponentialDelay + jitter, maxDelay);
+};
 
-  // Paralel istekleri sınırla veya hepsini gönder (Vercel serverless olduğu için hepsini göndermek genelde ok)
-  const promises = issues.map(async (issue: any) => {
+// Enhanced fetch with retry logic, timeout, and proper error handling
+const fetchThroughProxy = async (
+  targetUrl: string,
+  method: string,
+  headers: Record<string, string>,
+  body?: any,
+  config: Partial<RetryConfig> = {},
+  abortSignal?: AbortSignal
+): Promise<Response> => {
+  const retryConfig = { ...DEFAULT_RETRY_CONFIG, ...config };
+  const proxyUrl = `/api/proxy?url=${encodeURIComponent(targetUrl)}`;
+
+  // Validate inputs
+  if (!targetUrl) throw new Error('Target URL is required');
+  if (!method) throw new Error('HTTP method is required');
+
+  const options: FetchOptions = {
+    method,
+    headers: {
+      ...headers,
+      'Content-Type': headers['Content-Type'] || 'application/json'
+    }
+  };
+
+  // Handle request body
+  if (body !== undefined) {
+    if (typeof body === 'object' && body !== null) {
+      options.body = JSON.stringify(body);
+    } else if (typeof body === 'string') {
+      options.body = body;
+    } else {
+      throw new Error('Invalid body type');
+    }
+  }
+
+  // Add abort signal if provided
+  if (abortSignal) {
+    options.signal = abortSignal;
+  }
+
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < retryConfig.maxRetries; attempt++) {
     try {
-      let logs = [];
-      
-      // OPTIMIZATION: Check if worklogs are already fully included in the search response
-      const worklogField = issue.fields?.worklog;
-      if (worklogField && worklogField.worklogs && worklogField.total <= worklogField.maxResults) {
-          logs = worklogField.worklogs;
-      } else {
-          // If not all worklogs are present (or field is missing), fetch them separately
-          const wlTargetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/issue/${issue.key}/worklog`;
-          const wlResponse = await fetchThroughProxy(wlTargetUrl, 'GET', {
-                'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
-                'Accept': 'application/json'
-          });
-          
-          if (!wlResponse.ok) return;
-          
-          const wlData = await wlResponse.json();
-          logs = wlData.worklogs || (typeof wlData === 'string' ? JSON.parse(wlData).worklogs : []);
+      // Create timeout controller
+      const timeoutController = new AbortController();
+      const timeoutId = setTimeout(() => timeoutController.abort(), REQUEST_TIMEOUT);
+
+      // Combine abort signals
+      const combinedSignal = abortSignal
+        ? combineAbortSignals([abortSignal, timeoutController.signal])
+        : timeoutController.signal;
+
+      const response = await fetch(proxyUrl, {
+        ...options,
+        signal: combinedSignal
+      });
+
+      clearTimeout(timeoutId);
+
+      // Check if response should trigger retry
+      if (retryConfig.retryableStatuses.includes(response.status)) {
+        throw new Error(`Retryable HTTP error: ${response.status}`);
       }
 
-      logs.forEach((wl: any) => {
-         const wlStartedDate = wl.started.split('T')[0];
-         // Sadece o güne ait ve bana ait olanları al
-         const authorEmail = wl.author?.emailAddress?.toLowerCase();
-         const userEmail = settings.jiraEmail.toLowerCase();
-         // Check both email and accountId/displayName as fallback
-         const isMe = authorEmail === userEmail || 
-                      (wl.author?.accountId === issue.fields?.assignee?.accountId) || // simplistic fallback
-                      true; // We filter by JQL 'currentUser()', so mostly these are ours, but let's be strict with email if available
+      // Success - return response
+      if (response.ok || attempt === retryConfig.maxRetries - 1) {
+        return response;
+      }
 
-         // Re-verify author strictly if email is available
-         const isReallyMe = authorEmail ? authorEmail === userEmail : true;
-         
-         if (wlStartedDate === date && isReallyMe) {
-             allWorklogs.push({
-                 id: wl.id,
-                 issueKey: issue.key,
-                 summary: issue.fields?.summary || '',
-                 seconds: wl.timeSpentSeconds,
-                 hours: secondsToHours(wl.timeSpentSeconds),
-                 comment: parseJiraComment(wl.comment),
-                 started: wl.started,
-                 author: wl.author?.displayName,
-                 originalADF: wl.comment 
-             });
-         }
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    } catch (error: any) {
+      lastError = error;
+
+      // Don't retry on abort or non-retryable errors
+      if (error.name === 'AbortError') {
+        throw new Error('Request aborted');
+      }
+
+      // Log retry attempt
+      console.warn(`🔄 Retry ${attempt + 1}/${retryConfig.maxRetries} for ${method} ${targetUrl}`);
+
+      // Don't wait on last attempt
+      if (attempt < retryConfig.maxRetries - 1) {
+        const delay = calculateBackoff(attempt, retryConfig.baseDelay, retryConfig.maxDelay);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+
+  throw lastError || new Error('Request failed after all retries');
+};
+
+// Helper to combine multiple abort signals
+const combineAbortSignals = (signals: AbortSignal[]): AbortSignal => {
+  const controller = new AbortController();
+  
+  signals.forEach(signal => {
+    if (signal.aborted) {
+      controller.abort();
+    } else {
+      signal.addEventListener('abort', () => controller.abort(), { once: true });
+    }
+  });
+  
+  return controller.signal;
+};
+
+// --- JIRA API FUNCTIONS ---
+
+export const fetchWorklogs = async (
+  date: string,
+  settings: AppSettings,
+  abortSignal?: AbortSignal
+): Promise<Worklog[]> => {
+  // Validation
+  if (!settings.jiraUrl || !settings.jiraEmail || !settings.jiraToken) {
+    throw new Error('❌ Jira settings incomplete. Please check configuration.');
+  }
+
+  // Validate date format (YYYY-MM-DD)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    throw new Error(`❌ Invalid date format: ${date}. Expected YYYY-MM-DD`);
+  }
+
+  try {
+    // Build JQL query with proper escaping
+    const jql = `worklogDate = "${date}" AND worklogAuthor = currentUser()`;
+    const targetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/search/jql`;
+
+    console.log(`📡 Fetching worklogs for ${date}...`);
+
+    const response = await fetchThroughProxy(
+      targetUrl,
+      'POST',
+      {
+        'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      {
+        jql,
+        fields: ['worklog', 'summary', 'assignee'],
+        maxResults: 100,
+        validateQuery: true
+      },
+      undefined,
+      abortSignal
+    );
+
+    if (!response.ok) {
+      let errorDetail = 'Unknown error';
+      try {
+        const json = await response.json();
+        errorDetail = json.errorMessages?.join(', ') || json.details || JSON.stringify(json);
+      } catch {
+        try {
+          errorDetail = await response.text();
+        } catch {
+          errorDetail = response.statusText;
+        }
+      }
+      throw new Error(`Jira API Error (${response.status}): ${errorDetail}`);
+    }
+
+    const data = await response.json();
+    const issues = data.issues || [];
+
+    if (!Array.isArray(issues)) {
+      throw new Error('Invalid response format: issues array not found');
+    }
+
+    console.log(`📊 Found ${issues.length} issues with worklogs`);
+
+    // Process worklogs in parallel with error isolation
+    const worklogPromises = issues.map(async (issue: any) => {
+      try {
+        return await processIssueWorklogs(issue, date, settings, abortSignal);
+      } catch (error) {
+        console.error(`❌ Error processing issue ${issue.key}:`, error);
+        return []; // Return empty array on error, don't fail entire request
+      }
+    });
+
+    const worklogArrays = await Promise.all(worklogPromises);
+    const allWorklogs = worklogArrays.flat();
+
+    console.log(`✅ Retrieved ${allWorklogs.length} worklogs for ${date}`);
+    return allWorklogs;
+  } catch (error: any) {
+    if (error.name === 'AbortError' || error.message.includes('aborted')) {
+      console.log('🛑 Fetch aborted');
+      throw new Error('Request was cancelled');
+    }
+
+    console.error('❌ fetchWorklogs error:', error);
+    throw error;
+  }
+};
+
+// Helper function to process issue worklogs
+const processIssueWorklogs = async (
+  issue: any,
+  targetDate: string,
+  settings: AppSettings,
+  abortSignal?: AbortSignal
+): Promise<Worklog[]> => {
+  if (!issue || !issue.key) {
+    return [];
+  }
+
+  let worklogs = [];
+  const worklogField = issue.fields?.worklog;
+
+  // Optimization: Use embedded worklogs if complete
+  if (worklogField?.worklogs && worklogField.total <= worklogField.maxResults) {
+    worklogs = worklogField.worklogs;
+  } else {
+    // Fetch worklogs separately
+    const wlUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/issue/${issue.key}/worklog`;
+    
+    try {
+      const wlResponse = await fetchThroughProxy(
+        wlUrl,
+        'GET',
+        {
+          'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
+          'Accept': 'application/json'
+        },
+        undefined,
+        { maxRetries: 2 }, // Fewer retries for individual worklogs
+        abortSignal
+      );
+
+      if (wlResponse.ok) {
+        const wlData = await wlResponse.json();
+        worklogs = wlData.worklogs || [];
+      }
+    } catch (error) {
+      console.warn(`⚠️ Could not fetch worklogs for ${issue.key}`);
+      return [];
+    }
+  }
+
+  // Filter and transform worklogs
+  const userEmail = settings.jiraEmail.toLowerCase();
+  const result: Worklog[] = [];
+
+  worklogs.forEach((wl: any) => {
+    try {
+      // Validate worklog structure
+      if (!wl.id || !wl.started || !wl.timeSpentSeconds) {
+        return;
+      }
+
+      const wlDate = wl.started.split('T')[0];
+      
+      // Date filter
+      if (wlDate !== targetDate) {
+        return;
+      }
+
+      // Author filter (strict email validation)
+      const authorEmail = wl.author?.emailAddress?.toLowerCase();
+      if (authorEmail && authorEmail !== userEmail) {
+        return;
+      }
+
+      // Create worklog entry
+      result.push({
+        id: wl.id,
+        issueKey: issue.key,
+        summary: issue.fields?.summary || 'No summary',
+        seconds: wl.timeSpentSeconds,
+        hours: secondsToHours(wl.timeSpentSeconds),
+        comment: parseJiraComment(wl.comment),
+        started: wl.started,
+        author: wl.author?.displayName,
+        originalADF: wl.comment
       });
-    } catch (e) {
-        console.error(`Worklogları çekerken hata (${issue.key})`, e);
+    } catch (error) {
+      console.error(`Error parsing worklog ${wl.id}:`, error);
     }
   });
 
-  await Promise.all(promises);
-  return allWorklogs;
+  return result;
 };
 
 // Tüm hafta için worklog'ları tek bir sorgu ile çek (OPTIMIZED)
