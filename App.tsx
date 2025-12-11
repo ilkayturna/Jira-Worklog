@@ -1624,6 +1624,8 @@ JSON ÇIKTI (SADECE ARRAY):
                         onHistoryChange={handleWorklogHistoryChange}
                         onDelete={handleDeleteWorklog}
                         settings={settings}
+                        isAIProcessing={isAIProcessing}
+                        aiProcessingMode={textChangeMode}
                     />
                 </div>
             </section>

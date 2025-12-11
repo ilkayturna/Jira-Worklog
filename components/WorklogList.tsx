@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Worklog, LoadingState, WorklogHistoryEntry, AppSettings } from '../types';
-import { Clock, Edit3, Wand2, SpellCheck, Check, X, ExternalLink, Undo2, Redo2, Trash2, PieChart, Copy, CalendarDays, ExternalLink as LinkIcon } from 'lucide-react';
+import { Clock, Edit3, Wand2, SpellCheck, Check, X, ExternalLink, Undo2, Redo2, Trash2, PieChart, Copy, CalendarDays, ExternalLink as LinkIcon, Sparkles, Brain } from 'lucide-react';
 import { parseSmartTimeInput } from '../utils/adf';
 import { IssueHoverCard } from './IssueHoverCard';
 import { ContextMenu } from './ui/ContextMenu';
@@ -20,6 +20,8 @@ interface Props {
   onDelete?: (id: string) => Promise<void>;
   targetDailyHours?: number;
   settings: AppSettings;
+  isAIProcessing?: boolean;
+  aiProcessingMode?: 'IMPROVE' | 'SPELL' | null;
 }
 
 const getHourIndicator = (hours: number) => {
@@ -321,37 +323,203 @@ export const WorklogList: React.FC<Props & { targetDailyHours?: number }> = ({
     onHistoryChange,
     onDelete,
     targetDailyHours = 8,
-    settings
+    settings,
+    isAIProcessing = false,
+    aiProcessingMode = null
 }) => {
+    // AI Processing Overlay
+    if (isAIProcessing) {
+        return (
+            <div className="relative">
+                {/* AI Processing Skeleton Overlay */}
+                <div className="flex flex-col gap-4">
+                    {worklogs.slice(0, 3).map((wl, i) => (
+                        <div key={wl.id} className="surface-card p-6 relative overflow-hidden">
+                            {/* Pulsing glow effect */}
+                            <div 
+                                className="absolute inset-0 pointer-events-none"
+                                style={{
+                                    background: aiProcessingMode === 'IMPROVE' 
+                                        ? 'linear-gradient(135deg, rgba(139, 92, 246, 0.08) 0%, rgba(99, 102, 241, 0.08) 100%)'
+                                        : 'linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(217, 119, 6, 0.08) 100%)',
+                                    animation: 'skeleton-pulse 1.5s ease-in-out infinite',
+                                    animationDelay: `${i * 0.2}s`
+                                }}
+                            />
+                            
+                            {/* Header with real data but dimmed */}
+                            <div className="flex justify-between items-start mb-4 opacity-50">
+                                <div className="flex items-center gap-3">
+                                    <div 
+                                        className="w-10 h-10 rounded-xl flex items-center justify-center"
+                                        style={{ backgroundColor: 'var(--color-primary-100)' }}
+                                    >
+                                        {aiProcessingMode === 'IMPROVE' ? (
+                                            <Brain size={20} className="animate-pulse" style={{ color: '#8b5cf6' }} />
+                                        ) : (
+                                            <SpellCheck size={20} className="animate-pulse" style={{ color: '#f59e0b' }} />
+                                        )}
+                                    </div>
+                                    <div>
+                                        <span className="font-mono text-sm font-semibold" style={{ color: 'var(--color-primary-600)' }}>
+                                            {wl.issueKey}
+                                        </span>
+                                        <p className="text-xs truncate max-w-[200px]" style={{ color: 'var(--color-on-surface-variant)' }}>
+                                            {wl.summary}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="h-8 w-20 rounded-full skeleton" />
+                            </div>
+                            
+                            {/* Comment skeleton with shimmer */}
+                            <div className="space-y-2 mb-4">
+                                <div className="h-4 rounded skeleton" style={{ width: '90%' }} />
+                                <div className="h-4 rounded skeleton" style={{ width: '70%' }} />
+                                <div className="h-4 rounded skeleton" style={{ width: '50%' }} />
+                            </div>
+                            
+                            {/* Actions skeleton */}
+                            <div className="flex justify-between items-center pt-4 border-t" style={{ borderColor: 'var(--color-outline-variant)' }}>
+                                <div className="flex gap-2">
+                                    <div className="h-8 w-8 rounded-lg skeleton" />
+                                    <div className="h-8 w-8 rounded-lg skeleton" />
+                                </div>
+                                <div className="flex gap-2">
+                                    <div className="h-8 w-24 rounded-full skeleton" />
+                                    <div className="h-8 w-24 rounded-full skeleton" />
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                
+                {/* Floating AI Status Indicator */}
+                <div 
+                    className="fixed bottom-32 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3"
+                    style={{
+                        background: aiProcessingMode === 'IMPROVE'
+                            ? 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)'
+                            : 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                        color: 'white'
+                    }}
+                >
+                    <div className="relative">
+                        <Sparkles size={20} className="animate-pulse" />
+                        <div className="absolute inset-0 animate-ping opacity-30">
+                            <Sparkles size={20} />
+                        </div>
+                    </div>
+                    <span className="font-medium">
+                        {aiProcessingMode === 'IMPROVE' ? 'AI metinleri iyileştiriyor...' : 'AI imla kontrolü yapıyor...'}
+                    </span>
+                    <div className="flex gap-1">
+                        <span className="w-2 h-2 rounded-full bg-white/60 animate-bounce" style={{ animationDelay: '0s' }} />
+                        <span className="w-2 h-2 rounded-full bg-white/60 animate-bounce" style={{ animationDelay: '0.2s' }} />
+                        <span className="w-2 h-2 rounded-full bg-white/60 animate-bounce" style={{ animationDelay: '0.4s' }} />
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     if (loading === LoadingState.LOADING) {
         return (
             <div className="flex flex-col gap-4">
-                {/* Worklog Rows Skeleton */}
+                {/* Modern Worklog Skeleton Cards */}
                 {[1, 2, 3].map((i) => (
-                    <div key={i} className="surface-card p-6">
-                        <div className="flex justify-between items-start mb-4">
+                    <div 
+                        key={i} 
+                        className="surface-card p-6 relative overflow-hidden"
+                        style={{ 
+                            animationDelay: `${i * 0.1}s`,
+                            opacity: 1 - (i * 0.15) // Subtle fade for depth
+                        }}
+                    >
+                        {/* Subtle gradient overlay for modern feel */}
+                        <div 
+                            className="absolute inset-0 pointer-events-none opacity-30"
+                            style={{
+                                background: 'linear-gradient(135deg, var(--color-primary-100) 0%, transparent 50%)'
+                            }}
+                        />
+                        
+                        {/* Header */}
+                        <div className="flex justify-between items-start mb-4 relative">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl skeleton shrink-0" />
-                                <div className="space-y-2">
-                                    <div className="h-4 w-24 rounded skeleton" />
-                                    <div className="h-3 w-32 rounded skeleton" />
+                                <div 
+                                    className="w-11 h-11 rounded-xl skeleton"
+                                    style={{ animationDelay: `${i * 0.15}s` }}
+                                />
+                                <div className="space-y-2.5">
+                                    <div 
+                                        className="h-4 w-20 rounded-md skeleton"
+                                        style={{ animationDelay: `${i * 0.15 + 0.1}s` }}
+                                    />
+                                    <div 
+                                        className="h-3 w-36 rounded skeleton"
+                                        style={{ animationDelay: `${i * 0.15 + 0.2}s` }}
+                                    />
                                 </div>
                             </div>
-                            <div className="h-8 w-20 rounded-full skeleton" />
+                            <div 
+                                className="h-9 w-24 rounded-full skeleton"
+                                style={{ animationDelay: `${i * 0.15 + 0.1}s` }}
+                            />
                         </div>
-                        <div className="h-16 w-full rounded-xl skeleton mb-4" />
-                        <div className="flex justify-between items-center pt-4 border-t border-[var(--color-outline-variant)]">
+                        
+                        {/* Comment Area */}
+                        <div 
+                            className="rounded-xl p-4 mb-4"
+                            style={{ backgroundColor: 'var(--color-surface-container)' }}
+                        >
+                            <div className="space-y-2.5">
+                                <div 
+                                    className="h-3.5 rounded skeleton"
+                                    style={{ width: '95%', animationDelay: `${i * 0.15 + 0.2}s` }}
+                                />
+                                <div 
+                                    className="h-3.5 rounded skeleton"
+                                    style={{ width: '80%', animationDelay: `${i * 0.15 + 0.3}s` }}
+                                />
+                                <div 
+                                    className="h-3.5 rounded skeleton"
+                                    style={{ width: '60%', animationDelay: `${i * 0.15 + 0.4}s` }}
+                                />
+                            </div>
+                        </div>
+                        
+                        {/* Actions */}
+                        <div className="flex justify-between items-center pt-4 border-t" style={{ borderColor: 'var(--color-outline-variant)' }}>
                             <div className="flex gap-2">
-                                <div className="h-8 w-8 rounded-lg skeleton" />
-                                <div className="h-8 w-8 rounded-lg skeleton" />
+                                <div 
+                                    className="h-9 w-9 rounded-lg skeleton"
+                                    style={{ animationDelay: `${i * 0.15 + 0.3}s` }}
+                                />
+                                <div 
+                                    className="h-9 w-9 rounded-lg skeleton"
+                                    style={{ animationDelay: `${i * 0.15 + 0.35}s` }}
+                                />
                             </div>
                             <div className="flex gap-2">
-                                <div className="h-8 w-24 rounded-full skeleton" />
-                                <div className="h-8 w-24 rounded-full skeleton" />
+                                <div 
+                                    className="h-9 w-28 rounded-full skeleton"
+                                    style={{ animationDelay: `${i * 0.15 + 0.4}s` }}
+                                />
+                                <div 
+                                    className="h-9 w-24 rounded-full skeleton"
+                                    style={{ animationDelay: `${i * 0.15 + 0.45}s` }}
+                                />
                             </div>
                         </div>
                     </div>
                 ))}
+                
+                {/* Loading indicator at bottom */}
+                <div className="flex items-center justify-center py-4 gap-2" style={{ color: 'var(--color-on-surface-variant)' }}>
+                    <Clock size={16} className="animate-pulse" />
+                    <span className="text-sm font-medium">Worklog'lar yükleniyor...</span>
+                </div>
             </div>
         );
     }

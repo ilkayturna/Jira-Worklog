@@ -92,25 +92,92 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* Skeleton Loading Animation */
-@keyframes shimmer {
+/* Skeleton Loading Animation - Modern Pulse */
+@keyframes skeleton-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@keyframes skeleton-wave {
   0% {
-    background-position: -200% 0;
+    transform: translateX(-100%);
   }
   100% {
-    background-position: 200% 0;
+    transform: translateX(100%);
   }
 }
 
 .skeleton {
-  background: linear-gradient(90deg, 
-    var(--color-surface-container-high) 0%, 
-    var(--color-surface-container) 50%, 
-    var(--color-surface-container-high) 100%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 2s infinite linear;
+  position: relative;
+  background: var(--color-surface-container-high);
   border-radius: var(--radius-sm);
+  overflow: hidden;
+  animation: skeleton-pulse 2s ease-in-out infinite;
+}
+
+/* Optional wave effect overlay */
+.skeleton-wave::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.4),
+    transparent
+  );
+  animation: skeleton-wave 1.5s ease-in-out infinite;
+}
+
+.dark .skeleton-wave::after {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.1),
+    transparent
+  );
+}
+
+/* Skeleton Variants */
+.skeleton-text {
+  height: 14px;
+  margin-bottom: 8px;
+}
+
+.skeleton-text-sm {
+  height: 12px;
+  margin-bottom: 6px;
+}
+
+.skeleton-title {
+  height: 20px;
+  width: 60%;
+  margin-bottom: 12px;
+}
+
+.skeleton-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+
+.skeleton-button {
+  height: 36px;
+  width: 100px;
+  border-radius: var(--radius-md);
+}
+
+.skeleton-card {
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-container);
 }
 
 /* Glassmorphism Modal */
