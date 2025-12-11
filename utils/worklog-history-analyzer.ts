@@ -199,18 +199,25 @@ export function getHistoricalContext(
     return '';
   }
   
-  const examples = similar.map(p => {
-    // Get the best (longest, most detailed) comment example
-    const bestComment = p.comments
-      .filter(c => c.length > 20)
-      .sort((a, b) => b.length - a.length)[0] || p.comments[0];
+  // Extract ONLY writing style patterns, not content
+  const styleExamples = similar.map(p => {
+    // Get a few diverse comment examples to show writing style
+    const uniqueStyles = p.comments
+      .filter(c => c.length > 15 && c.length < 200)
+      .slice(0, 2)
+      .map(c => `"${c}"`);
     
-    return `• [${p.issueKey}] ${p.summary}
-  Örnek yorum: "${bestComment}"
-  Ortalama süre: ${p.avgHours.toFixed(2)}h (${p.frequency} kayıt)`;
-  });
+    return uniqueStyles.length > 0 ? uniqueStyles.join(', ') : null;
+  }).filter(Boolean);
   
-  return `\n\nBENZER GEÇMİŞ KAYITLAR:\n${examples.join('\n\n')}`;
+  if (styleExamples.length === 0) {
+    return '';
+  }
+  
+  return `\n\nYAZIM TARZI ÖRNEKLERİ (Bu dil ve üslubu kullan, içeriği DEĞİL):
+${styleExamples.slice(0, 4).join('\n')}
+
+NOT: Yukarıdaki örnekler SADECE yazım tarzını göstermek içindir. İçeriklerini kopyalama, sadece benzer profesyonel dili kullan.`;
 }
 
 /**
@@ -273,6 +280,7 @@ export function estimateWorkComplexity(
 
 /**
  * Generate AI-ready context string for batch processing
+ * Only provides writing style examples, NOT content to copy
  */
 export function generateBatchContext(
   worklogs: Worklog[],
@@ -280,27 +288,32 @@ export function generateBatchContext(
 ): string {
   const patterns = analyzeWorklogHistory(cacheRef);
   
-  // Find all unique relevant examples
-  const relevantExamples = new Map<string, string>();
+  // Collect diverse writing style examples (not content)
+  const styleExamples: string[] = [];
   
-  worklogs.forEach(wl => {
-    const similar = findSimilarWorklogs(wl, patterns, 2);
-    similar.forEach(p => {
-      if (!relevantExamples.has(p.issueKey) && p.comments[0]) {
-        const bestComment = p.comments
-          .filter(c => c.length > 30)
-          .sort((a, b) => b.length - a.length)[0] || p.comments[0];
-        relevantExamples.set(p.issueKey, `[${p.issueKey}] "${bestComment}" (${p.avgHours.toFixed(1)}h avg)`);
+  patterns.forEach(p => {
+    if (styleExamples.length >= 6) return;
+    
+    // Get short, diverse comments that show writing style
+    const goodExamples = p.comments
+      .filter(c => c.length > 20 && c.length < 150)
+      .slice(0, 1);
+    
+    goodExamples.forEach(c => {
+      if (!styleExamples.includes(c)) {
+        styleExamples.push(`"${c}"`);
       }
     });
   });
   
-  if (relevantExamples.size === 0) {
+  if (styleExamples.length === 0) {
     return '';
   }
   
-  const examples = Array.from(relevantExamples.values()).slice(0, 8);
-  return `\n\nÖĞRENİLMİŞ ÖRNEKLER (Bu stili taklit et):\n${examples.join('\n')}`;
+  return `\n\nYAZIM TARZI ÖRNEKLERİ (Sadece bu üslubu taklit et, içeriği DEĞİL):
+${styleExamples.slice(0, 5).join('\n')}
+
+ÖNEMLİ: Bu örnekler sadece profesyonel Türkçe worklog yazım tarzını gösteriyor. İçeriklerini kopyalama, sadece benzer dil ve üslup kullan.`;
 }
 
 /**

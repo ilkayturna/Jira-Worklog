@@ -903,31 +903,33 @@ status: devam/test/tamamlandı/beklemede`;
         let maxTokensForMode = 600;
         
         if (mode === 'IMPROVE') {
-            // Get historical context for this specific worklog
+            // Get historical context for writing style only
             const historicalContext = getHistoricalContext(wl, worklogCacheRef, 3);
             
-            prompt = `Sen kıdemli bir SAP B1 danışmanısın. Worklog notunu profesyonelleştir ve genişlet.
+            prompt = `Sen profesyonel bir worklog yazarısın. Verilen kısa notu daha detaylı ve profesyonel hale getir.
 
-TALEP: ${wl.summary}
+İŞ KONUSU: ${wl.summary}
 MEVCUT NOT: ${wl.comment}
 ${historicalContext}
 
 GÖREV:
-1. Mevcut notu 2-3 cümleye genişlet (150-250 karakter)
-2. Talep başlığındaki konuyu kullanarak bağlam ekle
-3. Somut eylemler kullan: incelendi, düzeltildi, eklendi, güncellendi, test edildi
-4. Doğal, profesyonel Türkçe kullan
+1. Mevcut notu genişlet (2-3 cümle, 100-200 karakter)
+2. İŞ KONUSU'ndaki bilgiyi kullanarak detay ekle
+3. Yapılan işi somut eylemlerle anlat: görüşüldü, incelendi, düzeltildi, eklendi, test edildi
+4. Doğal Türkçe kullan
 
-YASAK KELİMELER (KULLANMA):
-- "gerçekleştirildi", "sağlandı", "optimize edildi", "başarıyla tamamlandı"
-- Metinde olmayan teknik terimler ekleme
-- Tırnak, emoji, madde işareti
+YASAKLAR:
+- İş konusuyla alakasız bilgi ekleme
+- "gerçekleştirildi", "sağlandı", "optimize edildi" gibi boş ifadeler
+- Tırnak, emoji, madde işareti kullanma
+- Yazım tarzı örneklerinin içeriğini kopyalama
 
 ÖRNEK:
-Giriş: "Hata düzeltildi"
-Çıkış: "Bildirilen hata incelendi ve kaynağı tespit edildi. Gerekli düzeltmeler yapılarak sorun giderildi."
+İŞ KONUSU: "Raporlama hatası"  
+MEVCUT: "Düzeltildi"
+ÇIKTI: "Raporlama modülündeki hata incelendi. Sorununun kaynağı tespit edilerek düzeltildi ve test edildi."
 
-SADECE genişletilmiş notu yaz, başka hiçbir şey yazma:`;
+SADECE genişletilmiş notu yaz:`;
             maxTokensForMode = 800;
         } else {
             // SPELL modu: Ultra temiz prompt - sadece metni düzelt
@@ -1026,16 +1028,16 @@ SADECE düzeltilmiş metni yaz:`;
 
         let prompt = '';
         if (mode === 'IMPROVE') {
-            prompt = `Sen kıdemli bir SAP B1 danışmanısın. Aşağıdaki worklog notlarını profesyonel ve detaylı hale getir.
+            prompt = `Sen profesyonel bir worklog yazarısın. Aşağıdaki kısa notları daha detaylı ve profesyonel hale getir.
 
 KURALLAR:
-1. Her notu 2-3 cümleye genişlet (150-250 karakter)
-2. 'summary' alanındaki bağlamı kullan ama aynen kopyalama
-3. Doğal, profesyonel Türkçe kullan
-4. YASAK kelimeler: "gerçekleştirildi", "sağlandı", "optimize edildi", "başarıyla tamamlandı"
-5. Metinde olmayan teknik terim EKLEME
-6. Somut eylemler kullan: incelendi, düzeltildi, eklendi, güncellendi, test edildi
-7. SADECE JSON array döndür, başka hiçbir şey yazma
+1. Her notu 2-3 cümleye genişlet (100-200 karakter)
+2. 'summary' alanındaki İŞ KONUSUNA uygun detay ekle
+3. Somut eylemler kullan: görüşüldü, incelendi, düzeltildi, eklendi, test edildi
+4. Doğal Türkçe kullan
+5. İş konusuyla ALAKASIZ bilgi EKLEME
+6. YASAK: "gerçekleştirildi", "sağlandı", "optimize edildi"
+7. SADECE JSON array döndür
 ${historicalContext}
 
 GİRİŞ:
