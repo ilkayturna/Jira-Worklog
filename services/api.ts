@@ -474,7 +474,19 @@ export const updateWorklog = async (wl: Worklog, settings: AppSettings, newComme
     }, body);
 
     if (!response.ok) {
-        throw new Error(`Worklog güncellenemedi (${response.status})`);
+        let errorMsg = 'Worklog guncellenemedi';
+        try {
+            const errorData = await response.json();
+            if (errorData.errorMessages && errorData.errorMessages.length > 0) {
+                errorMsg = errorData.errorMessages[0];
+            } else if (errorData.errors) {
+                const firstError = Object.values(errorData.errors)[0];
+                errorMsg = typeof firstError === 'string' ? firstError : JSON.stringify(firstError);
+            }
+        } catch (e) {
+            errorMsg = `Worklog guncellenemedi (${response.status})`;
+        }
+        throw new Error(errorMsg);
     }
 };
 
@@ -495,7 +507,21 @@ export const createWorklog = async (issueKey: string, dateStr: string, seconds: 
         'Content-Type': 'application/json'
     }, body);
 
-    if(!response.ok) throw new Error("Worklog oluşturulamadı");
+    if (!response.ok) {
+        let errorMsg = 'Worklog olusturulamadi';
+        try {
+            const errorData = await response.json();
+            if (errorData.errorMessages && errorData.errorMessages.length > 0) {
+                errorMsg = errorData.errorMessages[0];
+            } else if (errorData.errors) {
+                const firstError = Object.values(errorData.errors)[0];
+                errorMsg = typeof firstError === 'string' ? firstError : JSON.stringify(firstError);
+            }
+        } catch (e) {
+            errorMsg = `Worklog olusturulamadi (${response.status})`;
+        }
+        throw new Error(errorMsg);
+    }
     return await response.json();
 }
 
@@ -508,7 +534,21 @@ export const deleteWorklog = async (issueKey: string, worklogId: string, setting
         'Accept': 'application/json'
     });
 
-    if(!response.ok) throw new Error("Worklog silinemedi");
+    if (!response.ok) {
+        let errorMsg = 'Worklog silinemedi';
+        try {
+            const errorData = await response.json();
+            if (errorData.errorMessages && errorData.errorMessages.length > 0) {
+                errorMsg = errorData.errorMessages[0];
+            } else if (errorData.errors) {
+                const firstError = Object.values(errorData.errors)[0];
+                errorMsg = typeof firstError === 'string' ? firstError : JSON.stringify(firstError);
+            }
+        } catch (e) {
+            errorMsg = `Worklog silinemedi (${response.status})`;
+        }
+        throw new Error(errorMsg);
+    }
 }
 
 // Jira Issue Arama - Akıllı öneri ve yeni worklog eklemek için
