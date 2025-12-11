@@ -678,19 +678,39 @@ export const updateWorklog = async (wl: Worklog, settings: AppSettings, newComme
         }
         payload.timeSpentSeconds = seconds;
 
-        // Comment (optional but typically present)
-        if (newComment !== undefined) {
+        // Comment handling - CRITICAL: Always include comment in payload
+        // Jira API v3 may return 400 if comment is missing during update
+        if (newComment !== undefined && newComment !== null) {
             // New comment provided - convert to ADF
-            const adf = plainTextToADF(newComment);
-            if (adf) {
-                payload.comment = adf;
+            const trimmedComment = String(newComment).trim();
+            if (trimmedComment.length > 0) {
+                const adf = plainTextToADF(trimmedComment);
+                if (adf) {
+                    payload.comment = adf;
+                    console.log('📝 Using new comment (ADF converted)');
+                }
+            } else {
+                // Empty string comment - create minimal ADF
+                payload.comment = { type: 'doc', version: 1, content: [{ type: 'paragraph', content: [{ type: 'text', text: ' ' }] }] };
+                console.log('📝 Using empty comment placeholder');
             }
         } else if (wl.originalADF) {
             // Preserve original ADF comment
             payload.comment = wl.originalADF;
+            console.log('📝 Preserving original ADF comment');
+        } else if (wl.comment) {
+            // Fallback: Convert existing plain text comment to ADF
+            const adf = plainTextToADF(wl.comment);
+            if (adf) {
+                payload.comment = adf;
+                console.log('📝 Converting existing plain text comment to ADF');
+            }
         }
-        // Note: If no comment provided and no originalADF, we send without comment
-        // Jira will preserve existing comment in this case
+        // If still no comment, create minimal placeholder (Jira sometimes requires it)
+        if (!payload.comment) {
+            payload.comment = { type: 'doc', version: 1, content: [{ type: 'paragraph', content: [{ type: 'text', text: '-' }] }] };
+            console.log('📝 Using fallback minimal comment');
+        }
 
         // 2. SANITIZE PAYLOAD - Remove any read-only fields that might have leaked
         const cleanBody = sanitizeWorklogPayload(payload);

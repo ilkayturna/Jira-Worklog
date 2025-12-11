@@ -762,7 +762,10 @@ status: devam/test/tamamlandı/beklemede`;
 
   const handleUpdateWorklog = async (id: string, comment?: string, seconds?: number, skipNotification?: boolean, isUndoRedo?: boolean, newDate?: string) => {
     const wl = worklogs.find(w => w.id === id);
-    if (!wl) return;
+    if (!wl) {
+      console.error('❌ handleUpdateWorklog: Worklog not found in state:', id);
+      return;
+    }
 
     const previousComment = wl.comment;
     const previousSeconds = wl.seconds;
@@ -773,7 +776,13 @@ status: devam/test/tamamlandı/beklemede`;
     const success = await editWorklog(wl, newComment, newSeconds, newDate);
     
     if (success) {
-      if (isUndoRedo || skipNotification) return;
+      // Skip notifications and auto-refresh for batch operations (skipNotification=true)
+      if (skipNotification) {
+        console.log('✅ Batch update successful for:', wl.issueKey);
+        return;
+      }
+      
+      if (isUndoRedo) return;
 
       if (newDate) {
           notify('Taşındı', `${wl.issueKey} worklog'u ${newDate} tarihine taşındı.`, 'success');
@@ -801,7 +810,7 @@ status: devam/test/tamamlandı/beklemede`;
         notify('Güncellendi', 'Kayıt başarıyla güncellendi', 'success');
       }
       
-      // Auto-refresh selected date after updating worklog
+      // Auto-refresh selected date after updating worklog (skip for batch ops)
       setTimeout(() => {
         loadData(true);
       }, 300);
@@ -958,10 +967,14 @@ Genişletilmiş not:`;
                 undoAction,
                 { before: originalComment, after: improvedText, issueKey: wl.issueKey }
             );
+            
+            // Refresh data after AI action
+            setTimeout(() => loadData(true), 500);
         } else if (improvedText) {
             // Metin var ama çok benzer - yine de uygula
             await handleUpdateWorklog(id, improvedText, undefined, true);
             notify('Güncellendi', `${wl.issueKey} metni güncellendi`, 'success');
+            setTimeout(() => loadData(true), 500);
         } else {
             notify('Hata', 'AI yanıt veremedi, tekrar deneyin.', 'error');
         }
@@ -1117,8 +1130,15 @@ OUTPUT JSON FORMAT:
             newComment: preview.after
         }));
         
+        // Process all updates sequentially (skipNotification=true prevents individual loadData calls)
+        let successCount = 0;
         for (const preview of textChangePreview) {
-            await handleUpdateWorklog(preview.worklogId, preview.after, undefined, true);
+            try {
+                await handleUpdateWorklog(preview.worklogId, preview.after, undefined, true);
+                successCount++;
+            } catch (err) {
+                console.error(`❌ Failed to update worklog ${preview.worklogId}:`, err);
+            }
         }
         
         // Create single batch undo action
@@ -1145,13 +1165,18 @@ OUTPUT JSON FORMAT:
         const modeLabel = textChangeMode === 'IMPROVE' ? 'İyileştirme' : 'İmla Düzeltme';
         notify(
             'Toplu İşlem Tamamlandı', 
-            `${textChangePreview.length} worklog ${modeLabel.toLowerCase()} uygulandı.`, 
+            `${successCount}/${textChangePreview.length} worklog ${modeLabel.toLowerCase()} uygulandı.`, 
             'success',
             batchUndoAction
         );
         
         setTextChangePreview(null);
         setTextChangeMode(null);
+        
+        // Single loadData call after all batch updates complete
+        setTimeout(() => {
+            loadData(true);
+        }, 500);
         
     } catch (e: any) {
         notify('Uygulama Hatası', e.message, 'error');
@@ -1571,7 +1596,7 @@ KURALLAR:
                         worklogs={worklogs} 
                         loading={loadingState} 
                         onUpdate={(id, comment, seconds, isUndoRedo, newDate) => 
-                            handleUpdateWorklog(id, comment, seconds, isUndoRedo, isUndoRedo, newDate)
+                            handleUpdateWorklog(id, comment, seconds, false, isUndoRedo, newDate)
                         }
                         onImprove={(id) => handleAIAction(id, 'IMPROVE')}
                         onSpellCheck={(id) => handleAIAction(id, 'SPELL')}

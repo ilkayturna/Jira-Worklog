@@ -504,11 +504,18 @@ export const useWorklogs = (
         // Store previous state for rollback
         const previousWorklogs = [...worklogs];
 
-        // Optimistic UI update
+        // Optimistic UI update (preserve originalADF for API calls)
         if (isMountedRef.current) {
             setWorklogs(prev => prev.map(w => 
                 w.id === worklog.id 
-                    ? { ...w, comment: sanitizedComment, seconds: newSeconds, hours: newSeconds / 3600 }
+                    ? { 
+                        ...w, 
+                        comment: sanitizedComment, 
+                        seconds: newSeconds, 
+                        hours: newSeconds / 3600,
+                        // Keep originalADF intact for proper API serialization
+                        originalADF: w.originalADF 
+                      }
                     : w
             ));
         }
@@ -531,9 +538,9 @@ export const useWorklogs = (
             if (!isMountedRef.current) return false;
 
             invalidateCache(newDate || selectedDate);
-            await loadData(true);
-
-            notify('✅ Güncellendi', 'Worklog başarıyla güncellendi', 'success');
+            // Note: loadData and notify are handled by the caller (handleUpdateWorklog in App.tsx)
+            // to avoid double notifications and unnecessary reloads during batch operations
+            setLoadingState(LoadingState.IDLE);
             return true;
         } catch (error: any) {
             if (!isMountedRef.current) return false;
