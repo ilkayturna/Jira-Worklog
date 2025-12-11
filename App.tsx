@@ -510,6 +510,11 @@ export default function App() {
         
         notify('Worklog Eklendi', `${issueKey}: ${hours}h`, 'success', undoAction);
         triggerHaptic();
+        
+        // Auto-refresh selected date after adding worklog
+        setTimeout(() => {
+            loadData(true);
+        }, 500);
     }
   };
 
@@ -772,8 +777,6 @@ status: devam/test/tamamlandı/beklemede`;
 
       if (newDate) {
           notify('Taşındı', `${wl.issueKey} worklog'u ${newDate} tarihine taşındı.`, 'success');
-          // Refresh current view as the worklog is moved away
-          loadData(true);
       } else if (comment !== undefined && comment !== previousComment) {
         const undoAction: UndoAction = {
           type: 'UPDATE',
@@ -798,6 +801,10 @@ status: devam/test/tamamlandı/beklemede`;
         notify('Güncellendi', 'Kayıt başarıyla güncellendi', 'success');
       }
       
+      // Auto-refresh selected date after updating worklog
+      setTimeout(() => {
+        loadData(true);
+      }, 300);
     }
   };
 
@@ -809,6 +816,11 @@ status: devam/test/tamamlandı/beklemede`;
     const success = await removeWorklog(wl.issueKey, id);
     if (success) {
         notify('Silindi', `${wl.issueKey} worklog'u başarıyla silindi`, 'success');
+        
+        // Auto-refresh selected date after deleting worklog
+        setTimeout(() => {
+            loadData(true);
+        }, 300);
     }
   };
 
@@ -1344,7 +1356,7 @@ KURALLAR:
          });
          
          await Promise.all(promises);
-         await loadData();
+         await loadData(true);
          
          // Notify with undo
          const undoAction: UndoAction = {
