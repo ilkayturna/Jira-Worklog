@@ -10,6 +10,7 @@ const WORKLOG_CACHE_KEY = 'jira_worklog_cache';
 export const useWorklogs = (settings: AppSettings, selectedDate: string, notify: (title: string, msg: string, type: any, undo?: any) => void) => {
     const [worklogs, setWorklogs] = useState<Worklog[]>([]);
     const [loadingState, setLoadingState] = useState<LoadingState>(LoadingState.IDLE);
+    const [isLoadingWeek, setIsLoadingWeek] = useState(false);
     
     const { addToQueue, queue, processQueue, isSyncing } = useOfflineQueue(settings, notify);
     
@@ -18,6 +19,7 @@ export const useWorklogs = (settings: AppSettings, selectedDate: string, notify:
     const weekWorklogsCacheRef = useRef<Map<string, Worklog[]>>(new Map());
     const weekCacheMondayRef = useRef<string | null>(null);
     const currentWeekMondayRef = useRef<string>(getWeekMonday(selectedDate));
+    const initialLoadDoneRef = useRef(false);
 
     // Load cache from storage on mount
     useEffect(() => {
@@ -109,23 +111,62 @@ export const useWorklogs = (settings: AppSettings, selectedDate: string, notify:
         }
     }, [selectedDate, settings, notify]);
 
-    // Initial load
+    // Load entire week data (all 7 days)
+    const loadWeekData = useCallback(async (mondayDate?: string) => {
+        if (!settings.jiraUrl || !settings.jiraEmail || !settings.jiraToken) return;
+        if (!navigator.onLine) return;
+
+        const monday = mondayDate || getWeekMonday(selectedDate);
+        const weekDays = getWeekDays(monday);
+        
+        setIsLoadingWeek(true);
+
+        try {
+            // Fetch all week data using the API
+            const weekData = await fetchWeekWorklogs(monday, settings);
+            
+            // Update caches for all days
+            weekDays.forEach((dateStr) => {
+                const dayWorklogs = weekData.get(dateStr) || [];
+                worklogCacheRef.current.set(dateStr, { worklogs: dayWorklogs, timestamp: Date.now() });
+                weekWorklogsCacheRef.current.set(dateStr, dayWorklogs);
+            });
+            
+            saveCacheToStorage();
+            
+            // Update current day worklogs if it's in this week
+            if (weekDays.includes(selectedDate)) {
+                const currentDayData = weekData.get(selectedDate) || [];
+                setWorklogs(currentDayData);
+            }
+        } catch (error: any) {
+            console.error('Week data load error:', error);
+        } finally {
+            setIsLoadingWeek(false);
+        }
+    }, [selectedDate, settings, notify]);
+
+    // Initial load - load current day + entire week on first mount
     useEffect(() => {
         loadData();
-    }, [loadData]);
+        
+        // Load entire week on first mount or when week changes
+        if (!initialLoadDoneRef.current) {
+            initialLoadDoneRef.current = true;
+            loadWeekData();
+        }
+    }, [loadData, loadWeekData]);
 
-    // Week data loading logic (simplified from App.tsx)
+    // Week change detection - reload week data when week changes
     useEffect(() => {
         if (!settings.jiraUrl) return;
         const weekMonday = getWeekMonday(selectedDate);
-        if (weekCacheMondayRef.current !== weekMonday) {
-            // New week, maybe clear week cache or load new week
-            // For now, we just track it. App.tsx had complex logic here.
-            // We'll keep it simple: loadData loads the current day.
-            // If we want to load the whole week for the chart, we can do it separately.
-            weekCacheMondayRef.current = weekMonday;
+        if (weekCacheMondayRef.current !== null && weekCacheMondayRef.current !== weekMonday) {
+            // Week changed, load new week data
+            loadWeekData(weekMonday);
         }
-    }, [selectedDate, settings.jiraUrl]);
+        weekCacheMondayRef.current = weekMonday;
+    }, [selectedDate, settings.jiraUrl, loadWeekData]);
 
     const addWorklog = async (issueKey: string, timeSpentSeconds: number, comment: string, started?: string) => {
         // Offline Check
@@ -248,10 +289,13 @@ export const useWorklogs = (settings: AppSettings, selectedDate: string, notify:
         worklogs,
         loadingState,
         loadData,
+        loadWeekData,
         addWorklog,
         editWorklog,
         removeWorklog,
         weekWorklogsCacheRef,
+        worklogCacheRef,
+        isLoadingWeek,
         queue,
         isSyncing,
         processQueue
