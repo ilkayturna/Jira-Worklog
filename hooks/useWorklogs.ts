@@ -396,8 +396,8 @@ export const useWorklogs = (
             return null;
         }
 
-        if (timeSpentSeconds <= 0 || timeSpentSeconds > 86400) { // Max 24 hours
-            notify('❌ Geçersiz Süre', 'Süre 0 ile 24 saat arasında olmalı', 'error');
+        if (timeSpentSeconds <= 0 || timeSpentSeconds > 604800) { // Max 7 days (Jira limit)
+            notify('❌ Geçersiz Süre', 'Süre 0 ile 7 gün (168 saat) arasında olmalı', 'error');
             return null;
         }
 
@@ -493,8 +493,8 @@ export const useWorklogs = (
         newDate?: string
     ): Promise<boolean> => {
         // Validation
-        if (newSeconds <= 0 || newSeconds > 86400) {
-            notify('❌ Geçersiz Süre', 'Süre 0 ile 24 saat arasında olmalı', 'error');
+        if (newSeconds <= 0 || newSeconds > 604800) {
+            notify('❌ Geçersiz Süre', 'Süre 0 ile 7 gün (168 saat) arasında olmalı', 'error');
             return false;
         }
 

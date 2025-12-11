@@ -823,14 +823,8 @@ status: devam/test/tamamlandı/beklemede`;
     if (!wl) return;
     
     const success = await removeWorklog(wl.issueKey, id);
-    if (success) {
-        notify('Silindi', `${wl.issueKey} worklog'u başarıyla silindi`, 'success');
-        
-        // Auto-refresh selected date after deleting worklog
-        setTimeout(() => {
-            loadData(true);
-        }, 300);
-    }
+    // Note: Notification is already handled by removeWorklog in useWorklogs.ts
+    // No need to notify or loadData here - removeWorklog does both
   };
 
   // Clean AI output - remove quotes and unwanted formatting

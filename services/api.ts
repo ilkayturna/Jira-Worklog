@@ -788,8 +788,8 @@ export const createWorklog = async (issueKey: string, dateStr: string, seconds: 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
         throw new Error(`createWorklog: Invalid date format: ${dateStr}. Expected YYYY-MM-DD`);
     }
-    if (typeof seconds !== 'number' || seconds <= 0 || seconds > 86400) {
-        throw new Error(`createWorklog: Invalid seconds value: ${seconds}. Must be between 1 and 86400`);
+    if (typeof seconds !== 'number' || seconds <= 0 || seconds > 604800) {
+        throw new Error(`createWorklog: Invalid seconds value: ${seconds}. Must be between 1 and 604800 (7 days)`);
     }
     if (!settings?.jiraUrl || !settings?.jiraEmail || !settings?.jiraToken) {
         throw new Error('createWorklog: Missing Jira credentials');

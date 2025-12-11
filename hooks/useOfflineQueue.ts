@@ -6,7 +6,7 @@ const QUEUE_KEY = 'WorklogPro_offlineQueue';
 
 export type QueueItem = 
   | { id: string; type: 'CREATE'; data: { issueKey: string; date: string; seconds: number; comment: string }; timestamp: number }
-  | { id: string; type: 'UPDATE'; data: { worklog: Worklog; comment?: string; seconds?: number }; timestamp: number }
+  | { id: string; type: 'UPDATE'; data: { worklog: Worklog; comment?: string; seconds?: number; date?: string }; timestamp: number }
   | { id: string; type: 'DELETE'; data: { issueKey: string; worklogId: string }; timestamp: number };
 
 export const useOfflineQueue = (settings: AppSettings, notify: (title: string, msg: string, type: any) => void) => {
@@ -51,7 +51,7 @@ export const useOfflineQueue = (settings: AppSettings, notify: (title: string, m
                 if (item.type === 'CREATE') {
                     await createWorklog(item.data.issueKey, item.data.date, item.data.seconds, item.data.comment, settings);
                 } else if (item.type === 'UPDATE') {
-                    await updateWorklog(item.data.worklog, settings, item.data.comment, item.data.seconds);
+                    await updateWorklog(item.data.worklog, settings, item.data.comment, item.data.seconds, item.data.date);
                 } else if (item.type === 'DELETE') {
                     await deleteWorklog(item.data.issueKey, item.data.worklogId, settings);
                 }
