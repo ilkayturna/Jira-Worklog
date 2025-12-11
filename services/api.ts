@@ -2,6 +2,70 @@
 import { AppSettings, Worklog, JiraIssue } from '../types';
 import { plainTextToADF, parseJiraComment, secondsToHours } from '../utils/adf';
 
+// --- PAYLOAD SANITIZER: Jira'ya göndermeden önce READ-ONLY alanları filtrele ---
+/**
+ * Worklog payload'ını temizler: sadece yazılabilir alanları tutar
+ * Jira API, salt-okunur alanlar (id, self, author, updateAuthor, created, updated) gönderildiğinde 400 hatası verir
+ */
+interface SanitizedWorklogPayload {
+  comment?: any; // ADF format
+  timeSpentSeconds?: number;
+  started?: string;
+  [key: string]: any;
+}
+
+const sanitizeWorklogPayload = (payload: any): SanitizedWorklogPayload => {
+  // Sadece izin verilen alanları al
+  const allowedFields = ['comment', 'timeSpentSeconds', 'timeSpent', 'started'];
+  const sanitized: SanitizedWorklogPayload = {};
+
+  for (const field of allowedFields) {
+    if (field in payload && payload[field] !== undefined) {
+      sanitized[field] = payload[field];
+    }
+  }
+
+  return sanitized;
+};
+
+/**
+ * Jira API hata yanıtını ayrıştırır ve anlamlı mesaj çıkar
+ * Jira API format: { errorMessages: string[], errors: { [field]: string | string[] } }
+ */
+const parseJiraErrorResponse = async (response: Response, defaultMsg: string): Promise<string> => {
+  try {
+    const errorData = await response.json();
+    
+    // errorMessages array'ini kontrol et (Primary source)
+    if (errorData.errorMessages && Array.isArray(errorData.errorMessages) && errorData.errorMessages.length > 0) {
+      return errorData.errorMessages[0];
+    }
+    
+    // errors object'ini kontrol et (Field-specific errors)
+    if (errorData.errors && typeof errorData.errors === 'object') {
+      const errorValues = Object.entries(errorData.errors)
+        .map(([field, msg]) => {
+          const fieldMsg = typeof msg === 'string' ? msg : Array.isArray(msg) ? msg[0] : JSON.stringify(msg);
+          return `${field}: ${fieldMsg}`;
+        })
+        .filter(Boolean);
+      
+      if (errorValues.length > 0) {
+        return errorValues.join('; ');
+      }
+    }
+    
+    // details mesajı (bazı endpoint'ler bunu kullanır)
+    if (errorData.details) {
+      return typeof errorData.details === 'string' ? errorData.details : JSON.stringify(errorData.details);
+    }
+  } catch (e) {
+    // JSON parse failed, fall through to default
+  }
+  
+  return `${defaultMsg} (${response.status})`;
+};
+
 // --- TYPE DEFINITIONS ---
 interface FetchOptions {
   method: string;
@@ -453,101 +517,146 @@ export const fetchWeekWorklogs = async (mondayDateStr: string, settings: AppSett
 };
 
 export const updateWorklog = async (wl: Worklog, settings: AppSettings, newComment?: string, newSeconds?: number, newDate?: string) => {
-    const body: any = {
-        started: newDate ? `${newDate}T09:00:00.000+0000` : wl.started,
-        timeSpentSeconds: newSeconds !== undefined ? newSeconds : wl.seconds
-    };
+    try {
+        // 1. PAYLOAD OLUŞTUR
+        const payload: any = {
+            started: newDate ? `${newDate}T09:00:00.000+0000` : wl.started,
+            timeSpentSeconds: newSeconds !== undefined ? newSeconds : wl.seconds
+        };
 
-    if (newComment !== undefined) {
-        const adf = plainTextToADF(newComment);
-        if (adf) body.comment = adf;
-    } else if (wl.originalADF) {
-        body.comment = wl.originalADF;
-    }
-
-    const targetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/issue/${wl.issueKey}/worklog/${wl.id}`;
-    
-    const response = await fetchThroughProxy(targetUrl, 'PUT', {
-        'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-    }, body);
-
-    if (!response.ok) {
-        let errorMsg = 'Worklog guncellenemedi';
-        try {
-            const errorData = await response.json();
-            if (errorData.errorMessages && errorData.errorMessages.length > 0) {
-                errorMsg = errorData.errorMessages[0];
-            } else if (errorData.errors) {
-                const firstError = Object.values(errorData.errors)[0];
-                errorMsg = typeof firstError === 'string' ? firstError : JSON.stringify(firstError);
-            }
-        } catch (e) {
-            errorMsg = `Worklog guncellenemedi (${response.status})`;
+        if (newComment !== undefined) {
+            const adf = plainTextToADF(newComment);
+            if (adf) payload.comment = adf;
+        } else if (wl.originalADF) {
+            payload.comment = wl.originalADF;
         }
-        throw new Error(errorMsg);
+
+        // 2. PAYLOAD'I TEMIZLE (READ-ONLY alanları çıkar)
+        const cleanBody = sanitizeWorklogPayload(payload);
+        
+        console.log(`🔄 Updating worklog ${wl.id} on ${wl.issueKey}`, {
+            payload: cleanBody,
+            originalSeconds: wl.seconds,
+            newSeconds: newSeconds,
+            newComment: newComment ? newComment.substring(0, 50) + '...' : 'unchanged'
+        });
+
+        const targetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/issue/${wl.issueKey}/worklog/${wl.id}`;
+        
+        const response = await fetchThroughProxy(targetUrl, 'PUT', {
+            'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        }, cleanBody);
+
+        if (!response.ok) {
+            const errorMsg = await parseJiraErrorResponse(response, 'Worklog güncellenemedi');
+            console.error('❌ Worklog update failed:', {
+                status: response.status,
+                error: errorMsg,
+                worklogId: wl.id,
+                issueKey: wl.issueKey
+            });
+            throw new Error(errorMsg);
+        }
+
+        // 3. YANIT AL VE RETURN ET
+        const updatedWorklog = await response.json();
+        console.log(`✅ Worklog ${wl.id} updated successfully`);
+        
+        return updatedWorklog;
+    } catch (error: any) {
+        console.error('❌ updateWorklog error:', error);
+        throw error;
     }
 };
 
 export const createWorklog = async (issueKey: string, dateStr: string, seconds: number, comment: string, settings: AppSettings) => {
-    const started = `${dateStr}T09:00:00.000+0000`;
-    
-    const body = {
-        timeSpentSeconds: seconds,
-        started: started,
-        comment: plainTextToADF(comment)
-    };
+    try {
+        // 1. PAYLOAD OLUŞTUR
+        const started = `${dateStr}T09:00:00.000+0000`;
+        
+        const payload = {
+            timeSpentSeconds: seconds,
+            started: started,
+            comment: plainTextToADF(comment)
+        };
 
-    const targetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/issue/${issueKey}/worklog`;
-    
-    const response = await fetchThroughProxy(targetUrl, 'POST', {
-        'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-    }, body);
+        // 2. PAYLOAD'I TEMIZLE
+        const cleanBody = sanitizeWorklogPayload(payload);
+        
+        console.log(`➕ Creating worklog on ${issueKey}`, {
+            payload: cleanBody,
+            seconds: seconds,
+            comment: comment.substring(0, 50) + '...'
+        });
 
-    if (!response.ok) {
-        let errorMsg = 'Worklog olusturulamadi';
-        try {
-            const errorData = await response.json();
-            if (errorData.errorMessages && errorData.errorMessages.length > 0) {
-                errorMsg = errorData.errorMessages[0];
-            } else if (errorData.errors) {
-                const firstError = Object.values(errorData.errors)[0];
-                errorMsg = typeof firstError === 'string' ? firstError : JSON.stringify(firstError);
-            }
-        } catch (e) {
-            errorMsg = `Worklog olusturulamadi (${response.status})`;
+        const targetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/issue/${issueKey}/worklog`;
+        
+        const response = await fetchThroughProxy(targetUrl, 'POST', {
+            'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        }, cleanBody);
+
+        if (!response.ok) {
+            const errorMsg = await parseJiraErrorResponse(response, 'Worklog oluşturulamadı');
+            console.error('❌ Worklog creation failed:', {
+                status: response.status,
+                error: errorMsg,
+                issueKey: issueKey,
+                seconds: seconds
+            });
+            throw new Error(errorMsg);
         }
-        throw new Error(errorMsg);
+
+        // 3. YANIT AL VE RETURN ET
+        const newWorklog = await response.json();
+        console.log(`✅ Worklog created successfully on ${issueKey}`, newWorklog.id);
+        
+        return newWorklog;
+    } catch (error: any) {
+        console.error('❌ createWorklog error:', error);
+        throw error;
     }
-    return await response.json();
 }
 
-// Issue'ları sil (undo için)
+// Worklog'u sil (undo için)
 export const deleteWorklog = async (issueKey: string, worklogId: string, settings: AppSettings) => {
-    const targetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/issue/${issueKey}/worklog/${worklogId}`;
-    
-    const response = await fetchThroughProxy(targetUrl, 'DELETE', {
-        'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
-        'Accept': 'application/json'
-    });
+    try {
+        console.log(`🗑️ Deleting worklog ${worklogId} from ${issueKey}`);
 
-    if (!response.ok) {
-        let errorMsg = 'Worklog silinemedi';
-        try {
-            const errorData = await response.json();
-            if (errorData.errorMessages && errorData.errorMessages.length > 0) {
-                errorMsg = errorData.errorMessages[0];
-            } else if (errorData.errors) {
-                const firstError = Object.values(errorData.errors)[0];
-                errorMsg = typeof firstError === 'string' ? firstError : JSON.stringify(firstError);
-            }
-        } catch (e) {
-            errorMsg = `Worklog silinemedi (${response.status})`;
+        const targetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/issue/${issueKey}/worklog/${worklogId}`;
+        
+        const response = await fetchThroughProxy(targetUrl, 'DELETE', {
+            'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
+            'Accept': 'application/json'
+        });
+
+        if (!response.ok) {
+            const errorMsg = await parseJiraErrorResponse(response, 'Worklog silinemedi');
+            console.error('❌ Worklog deletion failed:', {
+                status: response.status,
+                error: errorMsg,
+                issueKey: issueKey,
+                worklogId: worklogId
+            });
+            throw new Error(errorMsg);
         }
-        throw new Error(errorMsg);
+
+        console.log(`✅ Worklog ${worklogId} deleted successfully`);
+        
+        // DELETE endpoint'i body dönemez, sadece 204 No Content veya 200 OK döner
+        // Eğer body varsa return et, yoksa null dön
+        try {
+            const result = await response.json();
+            return result;
+        } catch {
+            return null; // DELETE usually returns empty body
+        }
+    } catch (error: any) {
+        console.error('❌ deleteWorklog error:', error);
+        throw error;
     }
 }
 
