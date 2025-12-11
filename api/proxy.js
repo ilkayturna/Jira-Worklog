@@ -56,11 +56,24 @@ export default async function handler(req, res) {
     }
 
     if (!response.ok) {
-        // Hata durumunda detaylı bilgi dön
+        // Enhanced error logging - NEVER use string concatenation with objects
+        console.error('🔴 Jira API Error:', {
+            status: response.status,
+            statusText: response.statusText,
+            url: url,
+            method: req.method,
+            responseData: typeof data === 'object' ? JSON.stringify(data, null, 2) : data
+        });
+
+        // Return structured error with full Jira response preserved
         return res.status(response.status).json({
             error: 'Jira API Error',
             status: response.status,
-            details: data
+            statusText: response.statusText,
+            details: data,
+            // Also include flattened error messages for easier access
+            errorMessages: data?.errorMessages || [],
+            errors: data?.errors || {}
         });
     }
 
@@ -68,7 +81,21 @@ export default async function handler(req, res) {
     res.status(response.status).json(data);
 
   } catch (error) {
-    console.error('Proxy Hatası:', error);
-    res.status(500).json({ error: error.message });
+    // CRITICAL: Never use string concatenation with error objects
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    
+    console.error('🔴 Proxy Error:', {
+        message: errorMessage,
+        stack: errorStack,
+        url: url,
+        method: req.method
+    });
+    
+    res.status(500).json({ 
+        error: 'Proxy Error',
+        message: errorMessage,
+        details: errorStack 
+    });
   }
 }

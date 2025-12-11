@@ -6,42 +6,157 @@ import { plainTextToADF, parseJiraComment, secondsToHours } from '../utils/adf';
 /**
  * Worklog payload'ını temizler: sadece yazılabilir alanları tutar
  * Jira API, salt-okunur alanlar (id, self, author, updateAuthor, created, updated) gönderildiğinde 400 hatası verir
+ * 
+ * ALLOWED FIELDS (Jira API v3 PUT /issue/{issueId}/worklog/{id}):
+ * - comment: ADF (Atlassian Document Format) object OR string
+ * - started: ISO 8601 format string (e.g., "2024-01-01T09:00:00.000+0000")
+ * - timeSpentSeconds: number (seconds)
+ * - timeSpent: string (e.g., "1h 30m") - alternative to timeSpentSeconds
+ * 
+ * FORBIDDEN FIELDS (read-only, will cause 400 error):
+ * - id, self, author, updateAuthor, created, updated, issueId
  */
 interface SanitizedWorklogPayload {
-  comment?: any; // ADF format
+  comment?: any; // ADF format or string
   timeSpentSeconds?: number;
+  timeSpent?: string;
   started?: string;
-  [key: string]: any;
 }
 
-const sanitizeWorklogPayload = (payload: any): SanitizedWorklogPayload => {
-  // Sadece izin verilen alanları al
-  const allowedFields = ['comment', 'timeSpentSeconds', 'timeSpent', 'started'];
-  const sanitized: SanitizedWorklogPayload = {};
+const WORKLOG_EDITABLE_FIELDS = ['comment', 'timeSpentSeconds', 'timeSpent', 'started'] as const;
+const WORKLOG_READONLY_FIELDS = ['id', 'self', 'author', 'updateAuthor', 'created', 'updated', 'issueId'] as const;
 
-  for (const field of allowedFields) {
-    if (field in payload && payload[field] !== undefined) {
-      sanitized[field] = payload[field];
+const sanitizeWorklogPayload = (payload: any): SanitizedWorklogPayload => {
+  if (!payload || typeof payload !== 'object') {
+    console.warn('⚠️ sanitizeWorklogPayload: received invalid payload:', typeof payload);
+    return {};
+  }
+
+  const sanitized: SanitizedWorklogPayload = {};
+  const removedFields: string[] = [];
+  const includedFields: string[] = [];
+
+  // Strict whitelist: only copy allowed fields
+  for (const field of WORKLOG_EDITABLE_FIELDS) {
+    if (field in payload && payload[field] !== undefined && payload[field] !== null) {
+      // Validate specific field formats
+      if (field === 'timeSpentSeconds') {
+        const seconds = Number(payload[field]);
+        if (!isNaN(seconds) && seconds > 0 && seconds <= 86400) {
+          sanitized.timeSpentSeconds = seconds;
+          includedFields.push(`timeSpentSeconds=${seconds}`);
+        } else {
+          console.warn(`⚠️ Invalid timeSpentSeconds value: ${payload[field]}`);
+        }
+      } else if (field === 'started') {
+        // Validate ISO 8601 format
+        const started = String(payload[field]);
+        if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(started)) {
+          sanitized.started = started;
+          includedFields.push(`started=${started.substring(0, 16)}`);
+        } else {
+          console.warn(`⚠️ Invalid started format: ${started}`);
+        }
+      } else if (field === 'comment') {
+        // Accept both ADF object and string
+        if (payload[field]) {
+          sanitized.comment = payload[field];
+          includedFields.push('comment=(ADF/text)');
+        }
+      } else if (field === 'timeSpent') {
+        // Alternative duration format (e.g., "1h 30m")
+        const timeSpent = String(payload[field]);
+        if (timeSpent.trim()) {
+          sanitized.timeSpent = timeSpent;
+          includedFields.push(`timeSpent=${timeSpent}`);
+        }
+      }
     }
   }
+
+  // Log any forbidden fields that were present
+  for (const field of WORKLOG_READONLY_FIELDS) {
+    if (field in payload) {
+      removedFields.push(field);
+    }
+  }
+
+  if (removedFields.length > 0) {
+    console.log(`🛡️ sanitizeWorklogPayload: Removed read-only fields: [${removedFields.join(', ')}]`);
+  }
+  
+  console.log(`✅ sanitizeWorklogPayload: Included fields: [${includedFields.join(', ')}]`);
 
   return sanitized;
 };
 
 /**
- * Jira API hata yanıtını ayrıştırır ve anlamlı mesaj çıkar
+ * Jira API hata yanıtını ayrıştırır ve anlamlı mesaj çıkarır
  * Jira API format: { errorMessages: string[], errors: { [field]: string | string[] } }
+ * Proxy wrapper format: { error: string, status: number, details: JiraError }
+ * 
+ * CRITICAL: Always use JSON.stringify for error objects to prevent [object Object]
  */
 const parseJiraErrorResponse = async (response: Response, defaultMsg: string): Promise<string> => {
+  let rawBody: string | null = null;
+  
   try {
-    const errorData = await response.json();
+    // Clone response to read body twice if needed
+    const clonedResponse = response.clone();
+    rawBody = await clonedResponse.text();
     
-    // errorMessages array'ini kontrol et (Primary source)
+    // Log raw response for debugging
+    console.error('🔍 Raw Jira API Error Response:', {
+      status: response.status,
+      statusText: response.statusText,
+      rawBody: rawBody?.substring(0, 1000) // Truncate for safety
+    });
+    
+    let errorData: any;
+    try {
+      errorData = JSON.parse(rawBody);
+    } catch {
+      // Not JSON, return raw text
+      return rawBody?.trim() || `${defaultMsg} (${response.status})`;
+    }
+    
+    // Handle proxy wrapper format: { error, status, details }
+    if (errorData.details) {
+      const details = errorData.details;
+      
+      // Recurse into details which contains actual Jira error
+      if (details.errorMessages && Array.isArray(details.errorMessages) && details.errorMessages.length > 0) {
+        return details.errorMessages[0];
+      }
+      
+      if (details.errors && typeof details.errors === 'object') {
+        const errorValues = Object.entries(details.errors)
+          .map(([field, msg]) => {
+            const fieldMsg = typeof msg === 'string' ? msg : Array.isArray(msg) ? msg[0] : JSON.stringify(msg);
+            return `${field}: ${fieldMsg}`;
+          })
+          .filter(Boolean);
+        
+        if (errorValues.length > 0) {
+          return errorValues.join('; ');
+        }
+      }
+      
+      // If details is a string
+      if (typeof details === 'string') {
+        return details;
+      }
+      
+      // Fallback: serialize details
+      return JSON.stringify(details, null, 2);
+    }
+    
+    // Direct Jira error format: errorMessages array (Primary source)
     if (errorData.errorMessages && Array.isArray(errorData.errorMessages) && errorData.errorMessages.length > 0) {
       return errorData.errorMessages[0];
     }
     
-    // errors object'ini kontrol et (Field-specific errors)
+    // Direct Jira error format: errors object (Field-specific errors)
     if (errorData.errors && typeof errorData.errors === 'object') {
       const errorValues = Object.entries(errorData.errors)
         .map(([field, msg]) => {
@@ -55,12 +170,20 @@ const parseJiraErrorResponse = async (response: Response, defaultMsg: string): P
       }
     }
     
-    // details mesajı (bazı endpoint'ler bunu kullanır)
-    if (errorData.details) {
-      return typeof errorData.details === 'string' ? errorData.details : JSON.stringify(errorData.details);
+    // Generic error message field
+    if (errorData.error && typeof errorData.error === 'string') {
+      return errorData.error;
     }
+    
+    // Last resort: stringify the entire error object
+    return JSON.stringify(errorData, null, 2);
   } catch (e) {
-    // JSON parse failed, fall through to default
+    // Catastrophic failure - log everything we have
+    console.error('❌ parseJiraErrorResponse CRITICAL FAILURE:', {
+      parseError: e instanceof Error ? e.message : String(e),
+      rawBody: rawBody?.substring(0, 500),
+      responseStatus: response.status
+    });
   }
   
   return `${defaultMsg} (${response.status})`;
@@ -517,28 +640,72 @@ export const fetchWeekWorklogs = async (mondayDateStr: string, settings: AppSett
 };
 
 export const updateWorklog = async (wl: Worklog, settings: AppSettings, newComment?: string, newSeconds?: number, newDate?: string) => {
-    try {
-        // 1. PAYLOAD OLUŞTUR
-        const payload: any = {
-            started: newDate ? `${newDate}T09:00:00.000+0000` : wl.started,
-            timeSpentSeconds: newSeconds !== undefined ? newSeconds : wl.seconds
-        };
+    // Input validation
+    if (!wl || !wl.id || !wl.issueKey) {
+        const errMsg = 'updateWorklog: Invalid worklog object - missing id or issueKey';
+        console.error('❌', errMsg, { wl: JSON.stringify(wl, null, 2) });
+        throw new Error(errMsg);
+    }
 
+    if (!settings?.jiraUrl || !settings?.jiraEmail || !settings?.jiraToken) {
+        throw new Error('updateWorklog: Missing Jira credentials');
+    }
+
+    try {
+        // 1. BUILD PAYLOAD - Only include editable fields
+        const payload: Record<string, any> = {};
+        
+        // Started date (required by Jira)
+        if (newDate) {
+            // Validate date format
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) {
+                throw new Error(`Invalid date format: ${newDate}. Expected YYYY-MM-DD`);
+            }
+            payload.started = `${newDate}T09:00:00.000+0000`;
+        } else if (wl.started) {
+            payload.started = wl.started;
+        } else {
+            // Fallback to today
+            const today = new Date().toISOString().split('T')[0];
+            payload.started = `${today}T09:00:00.000+0000`;
+            console.warn('⚠️ No started date provided, using today');
+        }
+        
+        // Time spent (required by Jira)
+        const seconds = newSeconds !== undefined ? newSeconds : wl.seconds;
+        if (typeof seconds !== 'number' || seconds <= 0) {
+            throw new Error(`Invalid timeSpentSeconds: ${seconds}`);
+        }
+        payload.timeSpentSeconds = seconds;
+
+        // Comment (optional but typically present)
         if (newComment !== undefined) {
+            // New comment provided - convert to ADF
             const adf = plainTextToADF(newComment);
-            if (adf) payload.comment = adf;
+            if (adf) {
+                payload.comment = adf;
+            }
         } else if (wl.originalADF) {
+            // Preserve original ADF comment
             payload.comment = wl.originalADF;
         }
+        // Note: If no comment provided and no originalADF, we send without comment
+        // Jira will preserve existing comment in this case
 
-        // 2. PAYLOAD'I TEMIZLE (READ-ONLY alanları çıkar)
+        // 2. SANITIZE PAYLOAD - Remove any read-only fields that might have leaked
         const cleanBody = sanitizeWorklogPayload(payload);
         
+        // Validate sanitized payload has required fields
+        if (!cleanBody.started || !cleanBody.timeSpentSeconds) {
+            console.error('❌ Sanitized payload missing required fields:', JSON.stringify(cleanBody, null, 2));
+            throw new Error('Invalid payload: missing started or timeSpentSeconds after sanitization');
+        }
+        
         console.log(`🔄 Updating worklog ${wl.id} on ${wl.issueKey}`, {
-            payload: cleanBody,
+            sanitizedPayload: JSON.stringify(cleanBody, null, 2),
             originalSeconds: wl.seconds,
             newSeconds: newSeconds,
-            newComment: newComment ? newComment.substring(0, 50) + '...' : 'unchanged'
+            hasComment: !!cleanBody.comment
         });
 
         const targetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/issue/${wl.issueKey}/worklog/${wl.id}`;
@@ -553,42 +720,84 @@ export const updateWorklog = async (wl: Worklog, settings: AppSettings, newComme
             const errorMsg = await parseJiraErrorResponse(response, 'Worklog güncellenemedi');
             console.error('❌ Worklog update failed:', {
                 status: response.status,
-                error: errorMsg,
+                statusText: response.statusText,
+                errorMessage: errorMsg,
                 worklogId: wl.id,
-                issueKey: wl.issueKey
+                issueKey: wl.issueKey,
+                sentPayload: JSON.stringify(cleanBody, null, 2)
             });
             throw new Error(errorMsg);
         }
 
-        // 3. YANIT AL VE RETURN ET
+        // 3. PARSE AND RETURN RESPONSE
         const updatedWorklog = await response.json();
-        console.log(`✅ Worklog ${wl.id} updated successfully`);
+        console.log(`✅ Worklog ${wl.id} updated successfully`, {
+            newTimeSpentSeconds: updatedWorklog.timeSpentSeconds,
+            newStarted: updatedWorklog.started
+        });
         
         return updatedWorklog;
-    } catch (error: any) {
-        console.error('❌ updateWorklog error:', error);
-        throw error;
+    } catch (error: unknown) {
+        // CRITICAL: Never use string concatenation with error objects
+        const errorMessage = error instanceof Error ? error.message : JSON.stringify(error, null, 2);
+        const errorStack = error instanceof Error ? error.stack : undefined;
+        
+        console.error('❌ updateWorklog FAILED:', {
+            errorMessage,
+            errorStack,
+            worklogId: wl.id,
+            issueKey: wl.issueKey,
+            errorType: typeof error,
+            errorConstructor: error?.constructor?.name
+        });
+        
+        // Re-throw with clean message
+        if (error instanceof Error) {
+            throw error;
+        }
+        throw new Error(errorMessage);
     }
 };
 
 export const createWorklog = async (issueKey: string, dateStr: string, seconds: number, comment: string, settings: AppSettings) => {
+    // Input validation
+    if (!issueKey?.trim()) {
+        throw new Error('createWorklog: issueKey is required');
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        throw new Error(`createWorklog: Invalid date format: ${dateStr}. Expected YYYY-MM-DD`);
+    }
+    if (typeof seconds !== 'number' || seconds <= 0 || seconds > 86400) {
+        throw new Error(`createWorklog: Invalid seconds value: ${seconds}. Must be between 1 and 86400`);
+    }
+    if (!settings?.jiraUrl || !settings?.jiraEmail || !settings?.jiraToken) {
+        throw new Error('createWorklog: Missing Jira credentials');
+    }
+
     try {
-        // 1. PAYLOAD OLUŞTUR
+        // 1. BUILD PAYLOAD
         const started = `${dateStr}T09:00:00.000+0000`;
         
-        const payload = {
+        const payload: Record<string, any> = {
             timeSpentSeconds: seconds,
-            started: started,
-            comment: plainTextToADF(comment)
+            started: started
         };
+        
+        // Only add comment if provided
+        if (comment?.trim()) {
+            const adf = plainTextToADF(comment);
+            if (adf) {
+                payload.comment = adf;
+            }
+        }
 
-        // 2. PAYLOAD'I TEMIZLE
+        // 2. SANITIZE PAYLOAD (extra safety layer)
         const cleanBody = sanitizeWorklogPayload(payload);
         
         console.log(`➕ Creating worklog on ${issueKey}`, {
-            payload: cleanBody,
+            sanitizedPayload: JSON.stringify(cleanBody, null, 2),
             seconds: seconds,
-            comment: comment.substring(0, 50) + '...'
+            hasComment: !!cleanBody.comment
         });
 
         const targetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/issue/${issueKey}/worklog`;
@@ -603,26 +812,58 @@ export const createWorklog = async (issueKey: string, dateStr: string, seconds: 
             const errorMsg = await parseJiraErrorResponse(response, 'Worklog oluşturulamadı');
             console.error('❌ Worklog creation failed:', {
                 status: response.status,
-                error: errorMsg,
+                statusText: response.statusText,
+                errorMessage: errorMsg,
                 issueKey: issueKey,
-                seconds: seconds
+                seconds: seconds,
+                sentPayload: JSON.stringify(cleanBody, null, 2)
             });
             throw new Error(errorMsg);
         }
 
-        // 3. YANIT AL VE RETURN ET
+        // 3. PARSE AND RETURN RESPONSE
         const newWorklog = await response.json();
-        console.log(`✅ Worklog created successfully on ${issueKey}`, newWorklog.id);
+        console.log(`✅ Worklog created successfully on ${issueKey}`, {
+            worklogId: newWorklog.id,
+            timeSpentSeconds: newWorklog.timeSpentSeconds
+        });
         
         return newWorklog;
-    } catch (error: any) {
-        console.error('❌ createWorklog error:', error);
-        throw error;
+    } catch (error: unknown) {
+        // CRITICAL: Never use string concatenation with error objects
+        const errorMessage = error instanceof Error ? error.message : JSON.stringify(error, null, 2);
+        const errorStack = error instanceof Error ? error.stack : undefined;
+        
+        console.error('❌ createWorklog FAILED:', {
+            errorMessage,
+            errorStack,
+            issueKey,
+            dateStr,
+            seconds,
+            errorType: typeof error,
+            errorConstructor: error?.constructor?.name
+        });
+        
+        if (error instanceof Error) {
+            throw error;
+        }
+        throw new Error(errorMessage);
     }
 }
 
 // Worklog'u sil (undo için)
 export const deleteWorklog = async (issueKey: string, worklogId: string, settings: AppSettings) => {
+    // Input validation
+    if (!issueKey?.trim()) {
+        throw new Error('deleteWorklog: issueKey is required');
+    }
+    if (!worklogId?.trim()) {
+        throw new Error('deleteWorklog: worklogId is required');
+    }
+    if (!settings?.jiraUrl || !settings?.jiraEmail || !settings?.jiraToken) {
+        throw new Error('deleteWorklog: Missing Jira credentials');
+    }
+
     try {
         console.log(`🗑️ Deleting worklog ${worklogId} from ${issueKey}`);
 
@@ -637,7 +878,8 @@ export const deleteWorklog = async (issueKey: string, worklogId: string, setting
             const errorMsg = await parseJiraErrorResponse(response, 'Worklog silinemedi');
             console.error('❌ Worklog deletion failed:', {
                 status: response.status,
-                error: errorMsg,
+                statusText: response.statusText,
+                errorMessage: errorMsg,
                 issueKey: issueKey,
                 worklogId: worklogId
             });
@@ -646,17 +888,31 @@ export const deleteWorklog = async (issueKey: string, worklogId: string, setting
 
         console.log(`✅ Worklog ${worklogId} deleted successfully`);
         
-        // DELETE endpoint'i body dönemez, sadece 204 No Content veya 200 OK döner
-        // Eğer body varsa return et, yoksa null dön
+        // DELETE endpoint returns 204 No Content or 200 OK without body
         try {
             const result = await response.json();
             return result;
         } catch {
             return null; // DELETE usually returns empty body
         }
-    } catch (error: any) {
-        console.error('❌ deleteWorklog error:', error);
-        throw error;
+    } catch (error: unknown) {
+        // CRITICAL: Never use string concatenation with error objects
+        const errorMessage = error instanceof Error ? error.message : JSON.stringify(error, null, 2);
+        const errorStack = error instanceof Error ? error.stack : undefined;
+        
+        console.error('❌ deleteWorklog FAILED:', {
+            errorMessage,
+            errorStack,
+            issueKey,
+            worklogId,
+            errorType: typeof error,
+            errorConstructor: error?.constructor?.name
+        });
+        
+        if (error instanceof Error) {
+            throw error;
+        }
+        throw new Error(errorMessage);
     }
 }
 
