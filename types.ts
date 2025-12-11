@@ -65,6 +65,9 @@ export interface TextChangePreview {
   before: string;
   after: string;
   mode: 'IMPROVE' | 'SPELL';
+  // Optional: For time distribution preview
+  currentHours?: number;
+  newHours?: number;
 }
 
 // Smart suggestion based on worklog history

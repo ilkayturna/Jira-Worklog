@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Calendar as CalendarIcon, RefreshCw, CheckCircle2, AlertCircle, Info, Sparkles, Plus, History, Brain, Edit3, Clock } from 'lucide-react';
+import { Calendar as CalendarIcon, RefreshCw, CheckCircle2, AlertCircle, Info, Sparkles, Plus, History, Brain, Edit3, Clock, X } from 'lucide-react';
 import { AppSettings, Worklog, LoadingState, Notification, NotificationHistoryItem, WorklogSuggestion, UndoAction, TextChangePreview, WeeklyReportItem, WorklogHistoryEntry } from './types';
 import { fetchWorklogs, updateWorklog, callGroq, createWorklog, deleteWorklog, fetchIssueDetails } from './services/api';
 import { SettingsModal } from './components/SettingsModal';
@@ -21,6 +21,7 @@ import { toLocalDateStr, getWeekMonday, getWeekDays } from './utils/date';
 import { computeWordDiff, DiffPart } from './utils/diff';
 import { loadSuggestions, loadWorklogHistories, saveWorklogHistories, saveNotificationHistory, updateSuggestions } from './utils/storage';
 import { triggerHaptic } from './utils/ui';
+import { getHistoricalContext, generateBatchContext, estimateWorkComplexity, clearAnalysisCache } from './utils/worklog-history-analyzer';
 
 // Diff helper - kelime bazlı karşılaştırma
 // Moved to utils/diff.ts
@@ -124,6 +125,8 @@ export default function App() {
     targetHours: number;
   } | null>(null);
   const [isDistributing, setIsDistributing] = useState(false);
+  const [editingDistItemIndex, setEditingDistItemIndex] = useState<number | null>(null);
+  const [editDistHoursStr, setEditDistHoursStr] = useState('');
   
   // AI Text Change Preview State
   const [textChangePreview, setTextChangePreview] = useState<TextChangePreview[] | null>(null);
@@ -900,37 +903,45 @@ status: devam/test/tamamlandı/beklemede`;
         let maxTokensForMode = 600;
         
         if (mode === 'IMPROVE') {
-            prompt = `Worklog notunu profesyonelleştir ve genişlet.
+            // Get historical context for this specific worklog
+            const historicalContext = getHistoricalContext(wl, worklogCacheRef, 3);
+            
+            prompt = `Sen kıdemli bir SAP B1 danışmanısın. Worklog notunu profesyonelleştir ve genişlet.
 
-Talep: ${wl.summary}
-Mevcut not: ${wl.comment}
+TALEP: ${wl.summary}
+MEVCUT NOT: ${wl.comment}
+${historicalContext}
 
 GÖREV:
-- Mevcut notu 2-3 cümleye genişlet (150-250 karakter)
-- Talep başlığındaki konuyu kullanarak bağlam ekle
-- Her eylemi biraz daha açıklayıcı yaz
-- Doğal Türkçe kullan
+1. Mevcut notu 2-3 cümleye genişlet (150-250 karakter)
+2. Talep başlığındaki konuyu kullanarak bağlam ekle
+3. Somut eylemler kullan: incelendi, düzeltildi, eklendi, güncellendi, test edildi
+4. Doğal, profesyonel Türkçe kullan
+
+YASAK KELİMELER (KULLANMA):
+- "gerçekleştirildi", "sağlandı", "optimize edildi", "başarıyla tamamlandı"
+- Metinde olmayan teknik terimler ekleme
+- Tırnak, emoji, madde işareti
 
 ÖRNEK:
 Giriş: "Hata düzeltildi"
 Çıkış: "Bildirilen hata incelendi ve kaynağı tespit edildi. Gerekli düzeltmeler yapılarak sorun giderildi."
 
-YASAK:
-- "Gerçekleştirildi", "sağlandı", "optimize edildi", "başarıyla tamamlandı" klişeleri
-- Metinde olmayan teknik terimler (SQL, API, modül adı)
-- Tırnak, emoji, madde işareti
-
-Genişletilmiş not:`;
-            maxTokensForMode = 1000;
+SADECE genişletilmiş notu yaz, başka hiçbir şey yazma:`;
+            maxTokensForMode = 800;
         } else {
             // SPELL modu: Ultra temiz prompt - sadece metni düzelt
-            maxTokensForMode = Math.max(wl.comment.length * 2, 800);
-            prompt = `Sadece yazım ve noktalama hatalarını düzelt. Cümle yapısını veya kelimeleri değiştirme:\n\n${wl.comment}`;
+            maxTokensForMode = Math.max(wl.comment.length * 2, 500);
+            prompt = `Sadece yazım ve noktalama hatalarını düzelt. Cümle yapısını veya kelimeleri DEĞİŞTİRME.
+
+METİN: ${wl.comment}
+
+SADECE düzeltilmiş metni yaz:`;
         }
 
         const originalComment = wl.comment;
-        // Use lower temperature for spell check to be more deterministic
-        const temperature = mode === 'SPELL' ? 0.1 : 0.3;
+        // Use very low temperature for spell check, low for improve
+        const temperature = mode === 'SPELL' ? 0.05 : 0.2;
         const rawResponse = await callGroq(prompt, settings, maxTokensForMode, temperature);
         const improvedText = cleanAIOutput(rawResponse || '', mode === 'SPELL');
         
@@ -978,7 +989,7 @@ Genişletilmiş not:`;
     }
   };
 
-  // Batch AI Preview - Tüm worklog'ları önizleme ile göster (OPTIMIZED: Single Request)
+  // Batch AI Preview - Tüm worklog'ları önizleme ile göster (OPTIMIZED: Single Request with History)
   const previewBatchAI = async (mode: 'IMPROVE' | 'SPELL') => {
     if (isAIProcessing) return;
     
@@ -1008,66 +1019,70 @@ Genişletilmiş not:`;
             text: wl.comment
         }));
 
+        // Get historical context for better AI learning
+        const historicalContext = mode === 'IMPROVE' 
+            ? generateBatchContext(worklogsWithComments, worklogCacheRef)
+            : '';
+
         let prompt = '';
         if (mode === 'IMPROVE') {
-            prompt = `You are a professional worklog assistant. Improve the following worklog comments to be more professional and slightly expanded (150-250 chars).
-            
-INSTRUCTIONS:
-- Expand each comment to 2-3 sentences.
-- Use the provided 'summary' for context.
-- Use natural, professional Turkish.
-- Avoid clichés like "gerçekleştirildi", "sağlandı".
-- Do NOT use technical terms not present in the original text.
-- Return ONLY a JSON array.
+            prompt = `Sen kıdemli bir SAP B1 danışmanısın. Aşağıdaki worklog notlarını profesyonel ve detaylı hale getir.
 
-INPUT JSON:
-${JSON.stringify(items)}
+KURALLAR:
+1. Her notu 2-3 cümleye genişlet (150-250 karakter)
+2. 'summary' alanındaki bağlamı kullan ama aynen kopyalama
+3. Doğal, profesyonel Türkçe kullan
+4. YASAK kelimeler: "gerçekleştirildi", "sağlandı", "optimize edildi", "başarıyla tamamlandı"
+5. Metinde olmayan teknik terim EKLEME
+6. Somut eylemler kullan: incelendi, düzeltildi, eklendi, güncellendi, test edildi
+7. SADECE JSON array döndür, başka hiçbir şey yazma
+${historicalContext}
 
-OUTPUT JSON FORMAT:
-[
-  {"id": "...", "text": "Improved text here..."},
-  ...
-]`;
+GİRİŞ:
+${JSON.stringify(items, null, 2)}
+
+ÇIKIŞ FORMAT (SADECE JSON):
+[{"id": "xxx", "text": "Geliştirilmiş metin..."}]`;
         } else {
-            // SPELL MODE - Batch
-            prompt = `You are a spell checker. Fix spelling and punctuation errors in the following texts.
-            
-INSTRUCTIONS:
-- Fix ONLY spelling and punctuation.
-- Do NOT change sentence structure or words unless they are misspelled.
-- Keep the meaning exactly the same.
-- Return ONLY a JSON array.
+            // SPELL MODE - Ultra minimal prompt for accuracy
+            prompt = `Yazım ve noktalama hatalarını düzelt. Cümle yapısını veya kelimeleri DEĞİŞTİRME.
 
-INPUT JSON:
-${JSON.stringify(items)}
+KURALLAR:
+1. SADECE yazım ve noktalama hatalarını düzelt
+2. Cümle yapısını KORU
+3. Kelimeleri DEĞİŞTİRME (sadece yanlış yazılmışsa düzelt)
+4. SADECE JSON array döndür
 
-OUTPUT JSON FORMAT:
-[
-  {"id": "...", "text": "Fixed text here..."},
-  ...
-]`;
+GİRİŞ:
+${JSON.stringify(items, null, 2)}
+
+ÇIKIŞ (SADECE JSON):
+[{"id": "xxx", "text": "Düzeltilmiş metin..."}]`;
         }
 
-        // Calculate tokens roughly
+        // Calculate tokens - more generous for IMPROVE mode
         const inputLength = JSON.stringify(items).length;
-        const maxTokens = Math.min(8000, Math.max(2000, inputLength * 3)); // Allow enough space for output
+        const maxTokens = mode === 'IMPROVE' 
+            ? Math.min(8000, Math.max(3000, inputLength * 4))
+            : Math.min(4000, Math.max(1500, inputLength * 2));
 
-        // Use a faster model for SPELL if possible, but 70b is safer for JSON structure
-        // For now, stick to the user's selected model or default
-        const rawResponse = await callGroq(prompt, settings, maxTokens, 0.1); // Low temp for JSON
+        // Lower temperature for spell check, slightly higher for improve
+        const temperature = mode === 'SPELL' ? 0.05 : 0.15;
+        
+        const rawResponse = await callGroq(prompt, settings, maxTokens, temperature);
         
         let parsedResponse: {id: string, text: string}[] = [];
         try {
-            // Extract JSON from response (in case of extra text)
-            const jsonMatch = rawResponse.match(/\[[\s\S]*\]/);
+            // Extract JSON from response (handle potential wrapper text)
+            const jsonMatch = rawResponse.match(/\[[\s\S]*?\]/);
             if (jsonMatch) {
                 parsedResponse = JSON.parse(jsonMatch[0]);
             } else {
                 parsedResponse = JSON.parse(rawResponse);
             }
         } catch (e) {
-            console.error("JSON Parse Error:", e);
-            throw new Error("AI yanıtı işlenemedi (JSON format hatası).");
+            console.error("JSON Parse Error:", e, "Raw:", rawResponse.substring(0, 500));
+            throw new Error("AI yanıtı işlenemedi. Lütfen tekrar deneyin.");
         }
 
         const previews: TextChangePreview[] = [];
@@ -1075,7 +1090,7 @@ OUTPUT JSON FORMAT:
         for (const item of parsedResponse) {
             const original = worklogsWithComments.find(w => w.id === item.id);
             if (original && item.text) {
-                const improvedText = item.text.trim();
+                const improvedText = cleanAIOutput(item.text.trim(), mode === 'SPELL');
                 
                 // Normalize check
                 const normalizeText = (t: string) => t.toLowerCase().replace(/[^a-zçğıöşü0-9]/gi, '');
@@ -1193,9 +1208,6 @@ OUTPUT JSON FORMAT:
 
      const currentTotal = worklogs.reduce((sum, wl) => sum + wl.hours, 0);
      const remaining = target - currentTotal;
-     
-     // NOT: Artık remaining <= 0 olsa bile dağıtıma izin veriyoruz (kullanıcı isteği)
-     // Bu durumda süreleri azaltarak hedefe uyduracağız.
 
      if (!settings.groqApiKey) {
          notify('AI Hatası', 'Akıllı dağıtım için Groq API Anahtarı gerekli', 'error');
@@ -1204,88 +1216,93 @@ OUTPUT JSON FORMAT:
      }
 
      setIsDistributing(true);
-     notify('AI Analiz Ediyor', 'Geçmiş veriler ve iş detayları analiz ediliyor...', 'info');
+     notify('AI Analiz Ediyor', 'Geçmiş veriler ve iş karmaşıklığı analiz ediliyor...', 'info');
      
      try {
-         // 1. Geçmiş verilerden bağlam topla (Cache'den)
+         // 1. Her worklog için geçmiş veri analizi yap
+         const worklogAnalysis = worklogs.map(wl => {
+             const estimate = estimateWorkComplexity(wl, worklogCacheRef);
+             return {
+                 id: wl.id,
+                 key: wl.issueKey,
+                 summary: wl.summary,
+                 comment: wl.comment || '',
+                 currentHours: wl.hours,
+                 historicalAvg: estimate.estimatedHours,
+                 confidence: estimate.confidence,
+                 reasoning: estimate.reasoning
+             };
+         });
+
+         // 2. Geçmiş verilerden özet oluştur
          let contextLogs: string[] = [];
          if (worklogCacheRef.current) {
              worklogCacheRef.current.forEach((cached, date) => {
-                 if (date !== selectedDate) { // Bugün hariç diğer günler
+                 if (date !== selectedDate) {
                      cached.worklogs.forEach(l => {
                          if (l.comment && l.hours > 0.2) {
-                             contextLogs.push(`- [${l.issueKey}] ${l.summary}: ${l.hours}h`);
+                             contextLogs.push(`[${l.issueKey}] ${l.summary}: ${l.hours}h`);
                          }
                      });
                  }
              });
          }
-         // En son 15 kaydı al (token tasarrufu)
-         const contextText = contextLogs.slice(-15).join('\n');
+         const contextText = contextLogs.slice(-20).join('\n');
 
-         // 2. Mevcut worklog verilerini hazırla
-         const worklogData = worklogs.map(wl => ({
-             key: wl.issueKey,
-             summary: wl.summary,
-             comment: wl.comment,
-             currentHours: wl.hours
-         }));
+         // 3. AI'ya zengin bağlam gönder
+         const prompt = `Sen uzman bir proje yöneticisi ve SAP danışmanısın. Bugünün iş kayıtlarının sürelerini optimize et.
 
-         const prompt = `
-Sen uzman bir proje yöneticisisin. Görevin, bugünün iş kayıtlarının sürelerini optimize ederek TOPLAM süreyi tam olarak ${target} saate ayarlamak.
+HEDEF: Toplam süre TAM OLARAK ${target} saat olmalı.
+MEVCUT: ${currentTotal.toFixed(2)} saat
+FARK: ${remaining > 0 ? '+' : ''}${remaining.toFixed(2)} saat ${remaining > 0 ? 'eklenmeli' : 'azaltılmalı'}
 
-MEVCUT DURUM:
-- Şu anki toplam: ${currentTotal.toFixed(2)} saat
-- HEDEF TOPLAM: ${target} saat
-- Yapılması gereken: ${remaining > 0 ? 'Süreleri ARTIRARAK' : 'Süreleri DENGELEYEREK/AZALTARAK'} hedefe ulaşmak.
-
-GEÇMİŞ HAFTANIN BENZER İŞLERİ (Referans al):
-${contextText || "Veri yok."}
-
-BUGÜNÜN KAYITLARI (Bunların sürelerini güncelle):
-${worklogData.map((w, i) => `${i}. [${w.key}] ${w.summary}
+BUGÜNÜN KAYITLARI (GEÇMİŞ ANALİZİ DAHİL):
+${worklogAnalysis.map((w, i) => `${i}. [${w.key}] ${w.summary}
    Detay: "${w.comment}"
-   Şu anki süre: ${w.currentHours}h`).join('\n')}
+   Mevcut: ${w.currentHours}h | Geçmiş Ort: ${w.historicalAvg}h (${w.confidence} güven)
+   Analiz: ${w.reasoning}`).join('\n\n')}
+
+GEÇMİŞ KAYITLAR (Referans):
+${contextText || 'Veri yok'}
+
+ANALİZ KRİTERLERİ:
+1. YORUM UZUNLUĞU: Uzun, detaylı yorumlar = daha fazla süre
+2. GEÇMİŞ VERİ: Benzer işlerin ortalamasını dikkate al
+3. İŞ KARMAŞIKLIĞI: Issue başlığından zorluğu tahmin et
+4. MANTIKLILIK: "Hata düzeltildi" gibi basit işler < "Entegrasyon analizi" gibi karmaşık işler
 
 KURALLAR:
-1. Tüm kayıtların YENİ sürelerinin toplamı TAM OLARAK ${target} olmalı.
-2. İşin zorluğuna, açıklamasına ve geçmiş benzer işlere göre mantıklı dağıtım yap.
-3. Hiçbir işin süresi 0 olamaz (en az 0.1h).
-4. Tutarlı ve profesyonel ol. Her çalıştırmada benzer mantıklı sonuçlar ver.
-5. Eğer süre azaltılıyorsa, detayı en az olan veya en basit işlerden kıs.
+1. Toplam TAM ${target} saat olmalı (virgüllü sayılar olabilir: 2.5, 1.75)
+2. Minimum süre: 0.25h (15 dakika)
+3. Geçmiş verisi olan işlere öncelik ver
+4. Detaylı yorum = daha fazla süre, kısa yorum = daha az süre
 
-ÇIKTI FORMATI (Sadece JSON Array, yorum yok):
-[
-  {"index": 0, "newTotalHours": 2.5},
-  {"index": 1, "newTotalHours": 1.25}
-]
-`;
+JSON ÇIKTI (SADECE ARRAY):
+[{"index": 0, "newTotalHours": 2.5, "reason": "detaylı analiz yapılmış"}, ...]`;
 
-         // Temperature 0.1 ile daha tutarlı sonuçlar
-         const response = await callGroq(prompt, settings, 600, 0.1);
+         const response = await callGroq(prompt, settings, 1000, 0.1);
          
          // Parse AI response
-         let distribution: { index: number; newTotalHours: number }[];
+         let distribution: { index: number; newTotalHours: number; reason?: string }[];
          try {
-             const jsonMatch = response.match(/\[[\s\S]*\]/);
+             const jsonMatch = response.match(/\[[\s\S]*?\]/);
              if (!jsonMatch) throw new Error('JSON bulunamadı');
              distribution = JSON.parse(jsonMatch[0]);
          } catch (parseErr) {
-             notify('AI Yanıt Hatası', 'Yapay zeka yanıtı işlenemedi.', 'error');
+             console.error('AI Parse Error:', parseErr, response.substring(0, 500));
+             notify('AI Yanıt Hatası', 'Yapay zeka yanıtı işlenemedi. Lütfen tekrar deneyin.', 'error');
              setIsDistributing(false);
              return;
          }
 
-         // Validate and adjust
+         // Validate and adjust to exact target
          const totalAINewHours = distribution.reduce((sum, d) => sum + (d.newTotalHours || 0), 0);
-         
-         // Oranlayarak tam hedefe uydur (AI bazen 0.1 şaşabilir)
          const ratio = totalAINewHours > 0 ? target / totalAINewHours : 1;
          
          const previewItems = worklogs.map((wl, index) => {
-             const aiNewHours = distribution.find(d => d.index === index)?.newTotalHours || (target / worklogs.length);
-             // Ratio ile düzelt
-             const adjustedHours = Math.max(0.1, Math.round(aiNewHours * ratio * 100) / 100);
+             const aiItem = distribution.find(d => d.index === index);
+             const aiNewHours = aiItem?.newTotalHours || (target / worklogs.length);
+             const adjustedHours = Math.max(0.25, Math.round(aiNewHours * ratio * 100) / 100);
              return {
                  issueKey: wl.issueKey,
                  summary: wl.summary,
@@ -1294,10 +1311,15 @@ KURALLAR:
              };
          });
          
-         // Adjust last item to match exact target
+         // Final adjustment for exact target
          const previewTotal = previewItems.reduce((sum, item) => sum + item.newHours, 0);
          if (Math.abs(previewTotal - target) > 0.01 && previewItems.length > 0) {
-             previewItems[previewItems.length - 1].newHours = Math.round((previewItems[previewItems.length - 1].newHours + (target - previewTotal)) * 100) / 100;
+             const lastIndex = previewItems.length - 1;
+             previewItems[lastIndex].newHours = Math.round((previewItems[lastIndex].newHours + (target - previewTotal)) * 100) / 100;
+             // Ensure minimum
+             if (previewItems[lastIndex].newHours < 0.25) {
+                 previewItems[lastIndex].newHours = 0.25;
+             }
          }
          
          setDistributionPreview({
@@ -1387,6 +1409,7 @@ KURALLAR:
          notify('Dağıtım Tamamlandı', `Süreler ${modeLabel} dağıtım ile ${distributionPreview.targetHours}h hedefe ayarlandı.`, 'success', undoAction);
          
          setDistributionPreview(null);
+         setEditingDistItemIndex(null);
      } catch (e: any) {
          notify('Dağıtım Hatası', e.message, 'error');
      } finally {
@@ -1646,7 +1669,7 @@ KURALLAR:
 
       {/* Distribution Preview Modal */}
       {distributionPreview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setDistributionPreview(null)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in" onClick={() => { setDistributionPreview(null); setEditingDistItemIndex(null); }}>
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
             
             <div 
@@ -1689,12 +1712,32 @@ KURALLAR:
                             {distributionPreview.items.map((item, index) => (
                                 <div 
                                     key={index}
-                                    className="p-3 rounded-xl border"
+                                    className="p-3 rounded-xl border relative group"
                                     style={{ 
                                         backgroundColor: 'var(--color-surface-variant)',
                                         borderColor: 'var(--color-outline-variant)'
                                     }}
                                 >
+                                    {/* Delete button */}
+                                    {distributionPreview.items.length > 1 && (
+                                        <button
+                                            onClick={() => {
+                                                setDistributionPreview(prev => prev ? {
+                                                    ...prev,
+                                                    items: prev.items.filter((_, i) => i !== index)
+                                                } : null);
+                                            }}
+                                            className="absolute -top-2 -right-2 w-6 h-6 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                            style={{ 
+                                                backgroundColor: 'var(--color-error)',
+                                                color: 'white'
+                                            }}
+                                            title="Kaldır"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    )}
+                                    
                                     <div className="flex items-center justify-between gap-3">
                                         <div className="flex-1 min-w-0">
                                             <span className="text-xs font-bold px-2 py-0.5 rounded mr-2" 
@@ -1706,28 +1749,87 @@ KURALLAR:
                                             </p>
                                         </div>
                                         <div className="text-right shrink-0">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-sm line-through" style={{ color: 'var(--color-on-surface-variant)' }}>
-                                                    {formatHours(item.currentHours)}h
-                                                </span>
-                                                <span className="text-lg font-bold" style={{ 
-                                                    color: item.newHours > item.currentHours 
-                                                        ? 'var(--color-success)' 
-                                                        : item.newHours < item.currentHours 
-                                                            ? 'var(--color-error)' 
-                                                            : 'var(--color-on-surface)'
-                                                }}>
-                                                    {formatHours(item.newHours)}h
-                                                </span>
-                                            </div>
-                                            {item.newHours !== item.currentHours && (
-                                                <span className="text-xs" style={{ 
-                                                    color: item.newHours > item.currentHours 
-                                                        ? 'var(--color-success)' 
-                                                        : 'var(--color-error)' 
-                                                }}>
-                                                    {item.newHours > item.currentHours ? '+' : ''}{formatHours(item.newHours - item.currentHours)}h
-                                                </span>
+                                            {editingDistItemIndex === index ? (
+                                                <div className="flex items-center gap-2">
+                                                    <input
+                                                        type="number"
+                                                        value={editDistHoursStr}
+                                                        onChange={(e) => setEditDistHoursStr(e.target.value)}
+                                                        onKeyDown={(e) => {
+                                                            if (e.key === 'Enter') {
+                                                                const newVal = parseFloat(editDistHoursStr);
+                                                                if (!isNaN(newVal) && newVal >= 0.1 && newVal <= 24) {
+                                                                    setDistributionPreview(prev => prev ? {
+                                                                        ...prev,
+                                                                        items: prev.items.map((it, i) => 
+                                                                            i === index ? { ...it, newHours: newVal } : it
+                                                                        )
+                                                                    } : null);
+                                                                    setEditingDistItemIndex(null);
+                                                                }
+                                                            } else if (e.key === 'Escape') {
+                                                                setEditingDistItemIndex(null);
+                                                            }
+                                                        }}
+                                                        onBlur={() => {
+                                                            const newVal = parseFloat(editDistHoursStr);
+                                                            if (!isNaN(newVal) && newVal >= 0.1 && newVal <= 24) {
+                                                                setDistributionPreview(prev => prev ? {
+                                                                    ...prev,
+                                                                    items: prev.items.map((it, i) => 
+                                                                        i === index ? { ...it, newHours: newVal } : it
+                                                                    )
+                                                                } : null);
+                                                            }
+                                                            setEditingDistItemIndex(null);
+                                                        }}
+                                                        className="w-16 px-2 py-1 text-sm rounded border text-center"
+                                                        style={{
+                                                            backgroundColor: 'var(--color-surface)',
+                                                            borderColor: 'var(--color-primary)',
+                                                            color: 'var(--color-on-surface)'
+                                                        }}
+                                                        step="0.25"
+                                                        min="0.1"
+                                                        max="24"
+                                                        autoFocus
+                                                    />
+                                                    <span className="text-sm" style={{ color: 'var(--color-on-surface-variant)' }}>saat</span>
+                                                </div>
+                                            ) : (
+                                                <div 
+                                                    className="cursor-pointer hover:opacity-80 transition-opacity"
+                                                    onClick={() => {
+                                                        setEditingDistItemIndex(index);
+                                                        setEditDistHoursStr(item.newHours.toString());
+                                                    }}
+                                                    title="Tıklayarak düzenle"
+                                                >
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-sm line-through" style={{ color: 'var(--color-on-surface-variant)' }}>
+                                                            {formatHours(item.currentHours)}h
+                                                        </span>
+                                                        <span className="text-lg font-bold" style={{ 
+                                                            color: item.newHours > item.currentHours 
+                                                                ? 'var(--color-success)' 
+                                                                : item.newHours < item.currentHours 
+                                                                    ? 'var(--color-error)' 
+                                                                    : 'var(--color-on-surface)'
+                                                        }}>
+                                                            {formatHours(item.newHours)}h
+                                                        </span>
+                                                        <Edit3 size={14} style={{ color: 'var(--color-on-surface-variant)' }} />
+                                                    </div>
+                                                    {item.newHours !== item.currentHours && (
+                                                        <span className="text-xs" style={{ 
+                                                            color: item.newHours > item.currentHours 
+                                                                ? 'var(--color-success)' 
+                                                                : 'var(--color-error)' 
+                                                        }}>
+                                                            {item.newHours > item.currentHours ? '+' : ''}{formatHours(item.newHours - item.currentHours)}h
+                                                        </span>
+                                                    )}
+                                                </div>
                                             )}
                                         </div>
                                     </div>
@@ -1751,7 +1853,7 @@ KURALLAR:
                     {/* Actions */}
                     <div className="px-6 py-4 border-t flex items-center justify-end gap-3" style={{ borderColor: 'var(--color-outline-variant)' }}>
                         <button 
-                            onClick={() => setDistributionPreview(null)} 
+                            onClick={() => { setDistributionPreview(null); setEditingDistItemIndex(null); }} 
                             className="btn-text"
                         >
                             İptal
