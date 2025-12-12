@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshCw, MoveHorizontal } from 'lucide-react';
 import { AppSettings } from '../types';
 
@@ -20,7 +20,17 @@ export const WeeklyChart: React.FC<WeeklyChartProps> = ({
     onWorklogDrop
 }) => {
     const [dragOverDate, setDragOverDate] = useState<string | null>(null);
+  const clearDragOverTimerRef = useRef<number | null>(null);
     const maxHours = Math.max(...weeklyHours.map(d => d.hours), settings.targetDailyHours);
+
+  useEffect(() => {
+    return () => {
+      if (clearDragOverTimerRef.current !== null) {
+        window.clearTimeout(clearDragOverTimerRef.current);
+        clearDragOverTimerRef.current = null;
+      }
+    };
+  }, []);
     
     // Haftanın tarih aralığını hesapla
     const weekRange = useMemo(() => {
@@ -40,11 +50,18 @@ export const WeeklyChart: React.FC<WeeklyChartProps> = ({
     const handleDragOver = (e: React.DragEvent, date: string) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
+      if (dragOverDate !== date) {
         setDragOverDate(date);
-    };
-    
-    const handleDragLeave = () => {
+      }
+
+      // Clear highlight shortly after the last dragover event (avoids flicker from dragleave)
+      if (clearDragOverTimerRef.current !== null) {
+        window.clearTimeout(clearDragOverTimerRef.current);
+      }
+      clearDragOverTimerRef.current = window.setTimeout(() => {
         setDragOverDate(null);
+        clearDragOverTimerRef.current = null;
+      }, 120);
     };
     
     const handleDrop = (e: React.DragEvent, date: string) => {
@@ -105,12 +122,11 @@ export const WeeklyChart: React.FC<WeeklyChartProps> = ({
                   style={{ height: '80px' }}
                   onClick={() => setSelectedDate(day.date)}
                   onDragOver={(e) => handleDragOver(e, day.date)}
-                  onDragLeave={handleDragLeave}
                   onDrop={(e) => handleDrop(e, day.date)}
                 >
                   {/* Drop indicator */}
                   {isDragOver && (
-                    <div className="absolute inset-0 rounded-lg border-2 border-dashed animate-pulse z-20 flex items-center justify-center"
+                    <div className="absolute inset-0 rounded-lg border-2 border-dashed animate-pulse z-20 flex items-center justify-center pointer-events-none"
                          style={{ borderColor: 'var(--color-primary-500)', backgroundColor: 'rgba(59, 130, 246, 0.1)' }}>
                       <MoveHorizontal size={16} style={{ color: 'var(--color-primary-500)' }} />
                     </div>

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { JiraIssue, AppSettings } from '../types';
 import { fetchAssignedIssues, fetchIssueTransitions, transitionIssue } from '../services/api';
-import { GripVertical, RefreshCw, AlertCircle, X, ExternalLink, ChevronDown, Check, Loader2 } from 'lucide-react';
+import { GripVertical, RefreshCw, AlertCircle, X, ChevronDown, Check, Loader2 } from 'lucide-react';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { normalizeJiraBaseUrl } from '../utils/ui';
 
@@ -232,35 +232,15 @@ export const AssignedIssuesDrawer: React.FC<AssignedIssuesDrawerProps> = ({ isOp
                                     />
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 mb-1.5">
-                                            {jiraBaseUrl ? (
-                                                <a
-                                                    href={`${jiraBaseUrl}/browse/${issue.key}`}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="hover:underline"
-                                                    onClick={(e) => e.stopPropagation()}
-                                                >
-                                                    <span
-                                                        className="text-xs font-bold px-2 py-0.5 rounded-md"
-                                                        style={{
-                                                            background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-primary-600) 100%)',
-                                                            color: 'white'
-                                                        }}
-                                                    >
-                                                        {issue.key}
-                                                    </span>
-                                                </a>
-                                            ) : (
-                                                <span
-                                                    className="text-xs font-bold px-2 py-0.5 rounded-md"
-                                                    style={{
-                                                        background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-primary-600) 100%)',
-                                                        color: 'white'
-                                                    }}
-                                                >
-                                                    {issue.key}
-                                                </span>
-                                            )}
+                                            <span
+                                                className="text-xs font-bold px-2 py-0.5 rounded-md"
+                                                style={{
+                                                    background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-primary-600) 100%)',
+                                                    color: 'white'
+                                                }}
+                                            >
+                                                {issue.key}
+                                            </span>
                                             <span className="text-[10px] truncate" style={{ color: 'var(--color-on-surface-variant)' }}>
                                                 {issue.projectName}
                                             </span>
@@ -350,17 +330,7 @@ export const AssignedIssuesDrawer: React.FC<AssignedIssuesDrawerProps> = ({ isOp
                                                     </div>
                                                 )}
                                             </div>
-                                            {jiraBaseUrl && (
-                                                <a 
-                                                    href={`${jiraBaseUrl}/browse/${issue.key}`}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-black/5"
-                                                    onClick={(e) => e.stopPropagation()}
-                                                >
-                                                    <ExternalLink size={12} style={{ color: 'var(--color-primary-500)' }} />
-                                                </a>
-                                            )}
+                                            {/* Link intentionally only on issue name (summary) */}
                                         </div>
                                     </div>
                                 </div>
