@@ -4,7 +4,17 @@
 // Security: API keys stored in environment variables
 // ===================================================================
 
-import type { VercelRequest, VercelResponse } from '@vercel/node';
+type VercelRequest = {
+  method?: string;
+  body?: unknown;
+  headers?: Record<string, string | string[] | undefined>;
+};
+
+type VercelResponse = {
+  status: (code: number) => VercelResponse;
+  json: (body: unknown) => void;
+  setHeader?: (name: string, value: string) => void;
+};
 
 // Type definitions
 interface AIRequest {
@@ -48,20 +58,28 @@ export default async function handler(
   }
 
   try {
-    const body: AIRequest = req.body;
+    const body = (req.body ?? {}) as Partial<AIRequest>;
 
     // Validation
-    if (!body.prompt || typeof body.prompt !== 'string') {
+    if (typeof body.prompt !== 'string' || body.prompt.trim().length === 0) {
       res.status(400).json({ error: 'Invalid prompt' });
       return;
     }
+
+    const request: AIRequest = {
+      prompt: body.prompt,
+      maxTokens: body.maxTokens,
+      temperature: body.temperature,
+      model: body.model,
+      provider: body.provider,
+    };
 
     // Get API keys from environment
     const GROQ_API_KEY = process.env.GROQ_API_KEY;
     const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
     const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 
-    const provider = body.provider || 'groq';
+    const provider = request.provider || 'groq';
     
     let response: AIResponse;
 
@@ -71,7 +89,7 @@ export default async function handler(
           res.status(500).json({ error: 'Groq API key not configured' });
           return;
         }
-        response = await callGroq(body, GROQ_API_KEY);
+        response = await callGroq(request, GROQ_API_KEY);
         break;
 
       case 'openai':
@@ -79,7 +97,7 @@ export default async function handler(
           res.status(500).json({ error: 'OpenAI API key not configured' });
           return;
         }
-        response = await callOpenAI(body, OPENAI_API_KEY);
+        response = await callOpenAI(request, OPENAI_API_KEY);
         break;
 
       case 'gemini':
@@ -87,7 +105,7 @@ export default async function handler(
           res.status(500).json({ error: 'Gemini API key not configured' });
           return;
         }
-        response = await callGemini(body, GEMINI_API_KEY);
+        response = await callGemini(request, GEMINI_API_KEY);
         break;
 
       default:
