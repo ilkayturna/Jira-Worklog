@@ -35,9 +35,20 @@ export const WeeklyChart: React.FC<WeeklyChartProps> = ({
     }, [weeklyHours]);
     
     return (
-      <section className="surface-card p-5" aria-label="Weekly overview">
+      <section 
+        className="p-5 rounded-2xl"
+        style={{
+          background: 'rgba(255, 255, 255, 0.8)',
+          backdropFilter: 'blur(20px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+          border: '1px solid rgba(255, 255, 255, 0.5)',
+          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.08)'
+        }}
+        aria-label="Weekly overview"
+      >
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--color-on-surface-variant)' }}>
+          <h2 className="text-xs font-semibold uppercase tracking-wider flex items-center gap-2" style={{ color: 'var(--color-on-surface-variant)' }}>
+            <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'linear-gradient(135deg, var(--color-warning), var(--color-error))' }} />
             Haftalık Özet
           </h2>
           <div className="flex items-center gap-2">

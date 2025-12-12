@@ -1476,7 +1476,15 @@ JSON ÇIKTI (SADECE ARRAY):
   const ConfettiEffect = () => {
     if (!showConfetti) return null;
     
-    const colors = ['#4285f4', '#34a853', '#fbbc04', '#ea4335', '#9c27b0', '#00bcd4'];
+    // Use design system colors - these work in both light and dark mode
+    const colors = [
+      getComputedStyle(document.documentElement).getPropertyValue('--color-primary-500').trim() || '#3B82F6',
+      getComputedStyle(document.documentElement).getPropertyValue('--color-success').trim() || '#10B981',
+      getComputedStyle(document.documentElement).getPropertyValue('--color-warning').trim() || '#F59E0B',
+      getComputedStyle(document.documentElement).getPropertyValue('--color-error').trim() || '#EF4444',
+      getComputedStyle(document.documentElement).getPropertyValue('--color-ai-500').trim() || '#8B5CF6',
+      getComputedStyle(document.documentElement).getPropertyValue('--color-info').trim() || '#06B6D4'
+    ];
     const confettiPieces = Array.from({ length: 50 }, (_, i) => ({
       id: i,
       left: Math.random() * 100,
@@ -1689,7 +1697,7 @@ JSON ÇIKTI (SADECE ARRAY):
                                 <div className="w-10 h-10 rounded-xl flex items-center justify-center" 
                                      style={{ 
                                          background: distributionPreview.mode === 'ai' 
-                                             ? 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)'
+                                             ? 'var(--gradient-ai)'
                                              : 'var(--color-success-container)'
                                      }}>
                                     {distributionPreview.mode === 'ai' ? (
@@ -1867,7 +1875,7 @@ JSON ÇIKTI (SADECE ARRAY):
                             className="btn-filled ripple"
                             disabled={isDistributing}
                             style={distributionPreview.mode === 'ai' ? { 
-                                background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)'
+                                background: 'var(--gradient-ai)'
                             } : {}}
                         >
                             {isDistributing ? (
@@ -1904,8 +1912,8 @@ JSON ÇIKTI (SADECE ARRAY):
                                 <div className="w-10 h-10 rounded-xl flex items-center justify-center" 
                                      style={{ 
                                          background: textChangeMode === 'IMPROVE' 
-                                             ? 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)'
-                                             : 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
+                                             ? 'var(--gradient-ai)'
+                                             : 'linear-gradient(135deg, var(--color-warning) 0%, var(--color-warning-dark) 100%)'
                                      }}>
                                     {textChangeMode === 'IMPROVE' ? (
                                         <Sparkles size={22} className="text-white" />
@@ -1957,7 +1965,7 @@ JSON ÇIKTI (SADECE ARRAY):
                                         }}>
                                             <div className="flex items-center gap-2 mb-2">
                                                 <span className="text-xs font-semibold px-2 py-0.5 rounded" 
-                                                      style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#ef4444' }}>
+                                                      style={{ backgroundColor: 'var(--color-error-container)', color: 'var(--color-error)' }}>
                                                     ÖNCEKİ
                                                 </span>
                                             </div>
@@ -1969,7 +1977,7 @@ JSON ÇIKTI (SADECE ARRAY):
                                                             <span key={idx} style={{ 
                                                                 textDecoration: 'line-through',
                                                                 backgroundColor: 'rgba(239, 68, 68, 0.25)',
-                                                                color: '#dc2626',
+                                                                color: 'var(--color-error)',
                                                                 borderRadius: '2px',
                                                                 padding: '0 2px'
                                                             }}>{part.text}</span>
@@ -1985,7 +1993,7 @@ JSON ÇIKTI (SADECE ARRAY):
                                         <div className="p-4" style={{ backgroundColor: 'rgba(34, 197, 94, 0.08)' }}>
                                             <div className="flex items-center gap-2 mb-2">
                                                 <span className="text-xs font-semibold px-2 py-0.5 rounded" 
-                                                      style={{ backgroundColor: 'rgba(34, 197, 94, 0.2)', color: '#22c55e' }}>
+                                                      style={{ backgroundColor: 'var(--color-success-container)', color: 'var(--color-success)' }}>
                                                     YENİ
                                                 </span>
                                             </div>
@@ -1997,7 +2005,7 @@ JSON ÇIKTI (SADECE ARRAY):
                                                             <span key={idx} style={{ 
                                                                 fontWeight: 700,
                                                                 backgroundColor: 'rgba(34, 197, 94, 0.25)',
-                                                                color: '#16a34a',
+                                                                color: 'var(--color-success)',
                                                                 borderRadius: '2px',
                                                                 padding: '0 2px'
                                                             }}>{part.text}</span>
@@ -2034,9 +2042,9 @@ JSON ÇIKTI (SADECE ARRAY):
                                 className="btn-filled ripple"
                                 disabled={isAIProcessing}
                                 style={textChangeMode === 'IMPROVE' ? { 
-                                    background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)'
+                                    background: 'var(--gradient-ai)'
                                 } : {
-                                    background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)'
+                                    background: 'linear-gradient(135deg, var(--color-warning) 0%, var(--color-warning-dark) 100%)'
                                 }}
                             >
                                 {isAIProcessing ? (
@@ -2111,11 +2119,11 @@ JSON ÇIKTI (SADECE ARRAY):
           }}
           className="bottom-nav-item haptic-feedback"
           style={{ 
-            background: 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)', 
+            background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-ai-500) 100%)', 
             color: 'white',
             borderRadius: 'var(--radius-full)',
             padding: '0.5rem 1rem',
-            boxShadow: '0 4px 12px rgba(0, 122, 255, 0.3)'
+            boxShadow: 'var(--shadow-primary)'
           }}
         >
           <Plus size={22} strokeWidth={2.5} />
@@ -2152,7 +2160,7 @@ JSON ÇIKTI (SADECE ARRAY):
         </span>
       </footer>
 
-      {/* Floating Magic Button (Mobile Only) */}
+      {/* Floating Magic Button - Mobile (bottom-24) */}
       <button
         onClick={() => {
             triggerHaptic();
@@ -2160,11 +2168,27 @@ JSON ÇIKTI (SADECE ARRAY):
         }}
         className="fixed bottom-24 right-4 z-40 lg:hidden w-14 h-14 rounded-full flex items-center justify-center shadow-xl animate-bounce-subtle"
         style={{ 
-            background: 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)',
-            boxShadow: '0 8px 20px rgba(99, 102, 241, 0.4)'
+            background: 'var(--gradient-ai)',
+            boxShadow: 'var(--shadow-ai)'
         }}
       >
         <Sparkles size={24} className="text-white" />
+      </button>
+
+      {/* Floating Magic Button - Desktop (bottom-6, smaller circular) */}
+      <button
+        onClick={() => {
+            triggerHaptic();
+            setIsMagicBarOpen(true);
+        }}
+        className="fixed bottom-6 right-6 z-40 hidden lg:flex w-12 h-12 rounded-full items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95"
+        style={{ 
+            background: 'linear-gradient(135deg, var(--color-ai-500) 0%, var(--color-primary-500) 100%)',
+            boxShadow: '0 6px 24px rgba(139, 92, 246, 0.35)'
+        }}
+        title="AI Worklog Asistanı (Ctrl+K)"
+      >
+        <Sparkles size={20} className="text-white" />
       </button>
 
         <MagicCommandBar

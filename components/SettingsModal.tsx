@@ -326,19 +326,26 @@ export const SettingsModal: React.FC<Props> = ({ isOpen, onClose, settings, onSa
           </div>
         </section>
         
-        {/* Action Buttons - Apple Style */}
+        {/* Action Buttons - Premium Style */}
         <div className="flex gap-3 pt-2">
           <button 
             onClick={onClose} 
-            className="flex-1 py-3 rounded-xl text-[15px] font-semibold transition-all active:scale-[0.98]"
-            style={{ backgroundColor: 'var(--color-surface-container)', color: 'var(--color-on-surface)' }}
+            className="flex-1 py-3 rounded-xl text-[15px] font-semibold transition-all active:scale-[0.98] hover:scale-[1.01]"
+            style={{ 
+              background: 'linear-gradient(135deg, rgba(0,0,0,0.04) 0%, rgba(0,0,0,0.08) 100%)',
+              border: '1px solid rgba(0,0,0,0.06)',
+              color: 'var(--color-on-surface)' 
+            }}
           >
             İptal
           </button>
           <button 
             onClick={() => onSave(formData)}
-            className="flex-1 py-3 rounded-xl text-[15px] font-semibold text-white transition-all active:scale-[0.98] flex items-center justify-center gap-2"
-            style={{ backgroundColor: 'var(--color-primary-500)' }}
+            className="flex-1 py-3 rounded-xl text-[15px] font-semibold text-white transition-all active:scale-[0.98] hover:scale-[1.01] flex items-center justify-center gap-2"
+            style={{ 
+              background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-ai-500) 100%)',
+              boxShadow: '0 4px 16px rgba(59, 130, 246, 0.25)'
+            }}
           >
             <Save size={16} /> Kaydet
           </button>

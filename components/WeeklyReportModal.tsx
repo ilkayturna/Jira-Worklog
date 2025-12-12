@@ -216,32 +216,46 @@ export const WeeklyReportModal: React.FC<Props> = ({
     
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in" onClick={onClose}>
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+            <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
             
             <div 
-                className="relative w-full max-w-7xl max-h-[90vh] rounded-3xl shadow-2xl overflow-hidden animate-scale-in flex flex-col"
-                style={{ backgroundColor: 'var(--color-surface)' }}
+                className="relative w-full max-w-7xl max-h-[90vh] rounded-3xl overflow-hidden animate-scale-in flex flex-col glass-modal"
                 onClick={e => e.stopPropagation()}
             >
+                {/* Gradient Accent Line */}
+                <div className="absolute top-0 left-0 right-0 h-1" style={{ background: 'linear-gradient(90deg, var(--color-primary-500) 0%, var(--color-ai-500) 50%, var(--color-success) 100%)' }} />
+                
                 {/* Header */}
-                <div className="flex items-center justify-between p-6 border-b" style={{ borderColor: 'var(--color-border)' }}>
+                <div className="flex items-center justify-between p-6 glass-modal-header">
                     <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ backgroundColor: 'var(--color-primary-100)' }}>
-                            <FileSpreadsheet size={24} style={{ color: 'var(--color-primary-600)' }} />
+                        <div 
+                            className="w-12 h-12 rounded-2xl flex items-center justify-center"
+                            style={{ 
+                                background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-ai-500) 100%)',
+                                boxShadow: '0 4px 16px rgba(59, 130, 246, 0.3)'
+                            }}
+                        >
+                            <FileSpreadsheet size={24} className="text-white" />
                         </div>
                         <div>
-                            <h2 className="text-xl font-bold" style={{ color: 'var(--color-text-primary)' }}>
+                            <h2 className="text-xl font-bold bg-clip-text text-transparent" style={{ backgroundImage: 'linear-gradient(135deg, var(--color-on-surface) 0%, var(--color-primary-600) 100%)' }}>
                                 Haftalık Plan Oluştur
                             </h2>
                             <div className="flex items-center gap-2 mt-1">
-                                <button onClick={() => setWeekOffset(w => w - 1)} className="p-1 rounded hover:bg-black/5">
-                                    <ChevronLeft size={16} />
+                                <button 
+                                    onClick={() => setWeekOffset(w => w - 1)} 
+                                    className="p-1.5 rounded-lg transition-all hover:scale-110 hover:bg-black/5"
+                                >
+                                    <ChevronLeft size={16} style={{ color: 'var(--color-on-surface-variant)' }} />
                                 </button>
-                                <span className="text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
+                                <span className="text-sm font-medium px-2" style={{ color: 'var(--color-on-surface-variant)' }}>
                                     {weekOffset === 1 ? 'Önümüzdeki Hafta' : weekOffset === 0 ? 'Bu Hafta' : `${Math.abs(weekOffset)} Hafta ${weekOffset > 0 ? 'Sonra' : 'Önce'}`}: {formatDateRange(weekDates.start, weekDates.end)}
                                 </span>
-                                <button onClick={() => setWeekOffset(w => w + 1)} className="p-1 rounded hover:bg-black/5">
-                                    <ChevronRight size={16} />
+                                <button 
+                                    onClick={() => setWeekOffset(w => w + 1)} 
+                                    className="p-1.5 rounded-lg transition-all hover:scale-110 hover:bg-black/5"
+                                >
+                                    <ChevronRight size={16} style={{ color: 'var(--color-on-surface-variant)' }} />
                                 </button>
                             </div>
                         </div>
@@ -252,8 +266,8 @@ export const WeeklyReportModal: React.FC<Props> = ({
                         <button
                             onClick={() => { setItems([]); loadLastWeekWorklogs(); }}
                             disabled={isLoading}
-                            className="flex items-center gap-2 px-3 py-2 rounded-xl font-medium transition-all hover:scale-105 disabled:opacity-50"
-                            style={{ backgroundColor: 'var(--color-surface-container)', color: 'var(--color-text-primary)' }}
+                            className="flex items-center gap-2 px-3 py-2.5 rounded-xl font-medium transition-all hover:scale-105 disabled:opacity-50 glass-icon-btn"
+                            style={{ color: 'var(--color-on-surface)' }}
                             title="Listeyi yenile"
                         >
                             <RefreshCw size={18} className={isLoading ? 'animate-spin' : ''} />
@@ -263,8 +277,12 @@ export const WeeklyReportModal: React.FC<Props> = ({
                             <button
                                 onClick={handleAIGenerate}
                                 disabled={isAIGenerating}
-                                className="flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all hover:scale-105 disabled:opacity-50"
-                                style={{ backgroundColor: 'var(--color-primary-100)', color: 'var(--color-primary-700)' }}
+                                className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all hover:scale-105 disabled:opacity-50"
+                                style={{ 
+                                    background: 'linear-gradient(135deg, var(--color-ai-500) 0%, var(--color-ai-600) 100%)',
+                                    color: 'white',
+                                    boxShadow: '0 4px 16px rgba(139, 92, 246, 0.3)'
+                                }}
                             >
                                 <Wand2 size={18} className={isAIGenerating ? 'animate-spin' : ''} />
                                 {isAIGenerating ? 'Planlanıyor...' : 'AI ile Planla'}
@@ -273,41 +291,56 @@ export const WeeklyReportModal: React.FC<Props> = ({
                         <button
                             onClick={exportToExcel}
                             disabled={items.length === 0}
-                            className="flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all hover:scale-105 disabled:opacity-50"
-                            style={{ backgroundColor: 'var(--color-success)', color: 'white' }}
+                            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all hover:scale-105 disabled:opacity-50"
+                            style={{ 
+                                background: 'linear-gradient(135deg, var(--color-success) 0%, #059669 100%)',
+                                color: 'white',
+                                boxShadow: '0 4px 16px rgba(16, 185, 129, 0.3)'
+                            }}
                         >
                             <Download size={18} />
                             Excel İndir
                         </button>
-                        <button onClick={onClose} className="p-2 rounded-xl hover:bg-black/5">
-                            <X size={20} />
+                        <button 
+                            onClick={onClose} 
+                            className="w-10 h-10 flex items-center justify-center rounded-xl transition-all hover:scale-105 glass-icon-btn"
+                        >
+                            <X size={20} style={{ color: 'var(--color-on-surface-variant)' }} />
                         </button>
                     </div>
                 </div>
                 
                 {/* Content */}
-                <div className="flex-1 overflow-auto p-6">
+                <div className="flex-1 overflow-auto p-6 glass-modal-content">
                     {isLoading ? (
                         <div className="flex items-center justify-center h-64">
                             <div className="text-center">
-                                <div className="w-8 h-8 border-2 rounded-full animate-spin mx-auto mb-3" style={{ borderColor: 'var(--color-primary-500)', borderTopColor: 'transparent' }} />
-                                <p className="text-sm" style={{ color: 'var(--color-text-secondary)' }}>Geçen hafta verileri yükleniyor...</p>
+                                <div 
+                                    className="w-10 h-10 border-3 rounded-full animate-spin mx-auto mb-4" 
+                                    style={{ 
+                                        borderColor: 'var(--color-primary-200)', 
+                                        borderTopColor: 'var(--color-primary-500)' 
+                                    }} 
+                                />
+                                <p className="text-sm font-medium" style={{ color: 'var(--color-on-surface-variant)' }}>
+                                    Geçen hafta verileri yükleniyor...
+                                </p>
                             </div>
                         </div>
                     ) : (
                         <div className="flex gap-6">
                             {/* Left: Last Week Issues */}
                             <div className="w-72 shrink-0">
-                                <h3 className="text-sm font-semibold mb-3 px-1" style={{ color: 'var(--color-text-primary)' }}>
+                                <h3 className="text-sm font-bold mb-2 px-1" style={{ color: 'var(--color-on-surface)' }}>
                                     Geçen Hafta İşleri ({lastWeekIssues.length})
                                 </h3>
-                                <p className="text-xs mb-3 px-1" style={{ color: 'var(--color-text-tertiary)' }}>
+                                <p className="text-xs mb-3 px-1" style={{ color: 'var(--color-on-surface-variant)' }}>
                                     Önem sırasına göre (en çok çalışılan üstte)
                                 </p>
                                 
                                 {lastWeekIssues.length === 0 ? (
-                                    <div className="text-center py-8 px-4 rounded-xl" style={{ backgroundColor: 'var(--color-surface-container)' }}>
-                                        <p className="text-sm" style={{ color: 'var(--color-text-tertiary)' }}>
+                                    <div className="text-center py-8 px-4 rounded-2xl glass-card">
+                                        <p className="text-sm" style={{ color: 'var(--color-on-surface-variant)' }}>
                                             Geçen hafta worklog bulunamadı
                                         </p>
                                     </div>
@@ -320,14 +353,16 @@ export const WeeklyReportModal: React.FC<Props> = ({
                                                     key={issueKey}
                                                     onClick={() => !isAdded && addFromLastWeek(worklog)}
                                                     disabled={isAdded}
-                                                    className={`w-full text-left p-3 rounded-xl border transition-all ${isAdded ? 'opacity-60' : 'hover:scale-[1.02] hover:shadow-md'}`}
-                                                    style={{ 
-                                                        borderColor: isAdded ? 'var(--color-success)' : 'var(--color-border)',
-                                                        backgroundColor: isAdded ? 'var(--color-success-light)' : 'var(--color-surface-container)'
-                                                    }}
+                                                    className={`w-full text-left p-3 rounded-xl transition-all glass-card ${isAdded ? 'added opacity-60' : 'hover:scale-[1.02]'}`}
                                                 >
                                                     <div className="flex items-center justify-between mb-1">
-                                                        <span className="text-xs font-mono font-semibold" style={{ color: 'var(--color-primary-600)' }}>
+                                                        <span 
+                                                            className="text-xs font-mono font-bold px-1.5 py-0.5 rounded"
+                                                            style={{ 
+                                                                background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-primary-600) 100%)',
+                                                                color: 'white'
+                                                            }}
+                                                        >
                                                             {issueKey}
                                                         </span>
                                                         <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: 'var(--color-primary-100)', color: 'var(--color-primary-700)' }}>
@@ -468,12 +503,12 @@ export const WeeklyReportModal: React.FC<Props> = ({
                                                                         onChange={e => updateItem(globalIndex, 'status', e.target.value)}
                                                                         className="text-xs px-2 py-0.5 rounded-full mt-2 cursor-pointer"
                                                                         style={{
-                                                                            backgroundColor: item.status === 'tamamlandı' ? '#dcfce7' :
-                                                                                item.status === 'test' ? '#fef3c7' :
-                                                                                item.status === 'devam' ? '#dbeafe' : '#f3e8ff',
-                                                                            color: item.status === 'tamamlandı' ? '#166534' :
-                                                                                item.status === 'test' ? '#92400e' :
-                                                                                item.status === 'devam' ? '#1e40af' : '#7c3aed'
+                                                                            backgroundColor: item.status === 'tamamlandı' ? 'var(--color-success-container)' :
+                                                                                item.status === 'test' ? 'var(--color-warning-container)' :
+                                                                                item.status === 'devam' ? 'var(--color-primary-100)' : 'var(--color-ai-100)',
+                                                                            color: item.status === 'tamamlandı' ? 'var(--color-success)' :
+                                                                                item.status === 'test' ? 'var(--color-warning-dark)' :
+                                                                                item.status === 'devam' ? 'var(--color-primary-700)' : 'var(--color-ai-600)'
                                                                         }}
                                                                     >
                                                                         <option value="devam">Devam Edilecek</option>

@@ -3,47 +3,111 @@
 @tailwind utilities;
 
 /* ============================================
-   🍎 APPLE DESIGN SYSTEM
-   Inspired by Apple Human Interface Guidelines
-   Clean • Minimal • Elegant • Premium
+   🎨 HYBRID PREMIUM DESIGN SYSTEM
+   Apple's Minimalism + Google's Color Harmony
+   Premium • Clean • Playful • Accessible
    ============================================ */
 
 :root {
-  /* Apple Blue Palette */
-  --color-primary-50: #f0f7ff;
-  --color-primary-100: #e6f0ff;
-  --color-primary-200: #bdd9ff;
-  --color-primary-300: #94c2ff;
-  --color-primary-400: #5ba3ff;
-  --color-primary-500: #007AFF;
-  --color-primary-600: #0062cc;
-  --color-primary-700: #004a99;
-  --color-primary-800: #003366;
-  --color-primary-900: #001a33;
+  /* ═══════════════════════════════════════
+     PRIMARY PALETTE - Ocean Blue
+     Inspired by both Apple Blue & Material
+     ═══════════════════════════════════════ */
+  --color-primary-50: #EFF6FF;
+  --color-primary-100: #DBEAFE;
+  --color-primary-200: #BFDBFE;
+  --color-primary-300: #93C5FD;
+  --color-primary-400: #60A5FA;
+  --color-primary-500: #3B82F6;
+  --color-primary-600: #2563EB;
+  --color-primary-700: #1D4ED8;
+  --color-primary-800: #1E40AF;
+  --color-primary-900: #1E3A8A;
 
-  /* Apple Gray Scale - Ultra Clean */
-  --color-surface: #ffffff;
-  --color-surface-dim: #f2f2f7;
-  --color-surface-container: #f2f2f7;
-  --color-surface-container-high: #e5e5ea;
-  --color-on-surface: #000000;
-  --color-on-surface-variant: #8e8e93;
-  --color-outline: #c7c7cc;
-  --color-outline-variant: #e5e5ea;
+  /* ═══════════════════════════════════════
+     AI ACCENT - Violet/Indigo
+     For AI-powered features
+     ═══════════════════════════════════════ */
+  --color-ai-50: #F5F3FF;
+  --color-ai-100: #EDE9FE;
+  --color-ai-200: #DDD6FE;
+  --color-ai-300: #C4B5FD;
+  --color-ai-400: #A78BFA;
+  --color-ai-500: #8B5CF6;
+  --color-ai-600: #7C3AED;
+  --color-ai-700: #6D28D9;
 
-  /* Apple Semantic Colors */
-  --color-success: #30d158;
-  --color-success-container: #e8faf0;
-  --color-warning: #ff9f0a;
-  --color-warning-container: #fff8e6;
-  --color-error: #ff453a;
-  --color-error-container: #ffeded;
+  /* ═══════════════════════════════════════
+     NEUTRAL PALETTE - Zinc (Warmer than pure gray)
+     ═══════════════════════════════════════ */
+  --color-neutral-50: #FAFAFA;
+  --color-neutral-100: #F4F4F5;
+  --color-neutral-200: #E4E4E7;
+  --color-neutral-300: #D4D4D8;
+  --color-neutral-400: #A1A1AA;
+  --color-neutral-500: #71717A;
+  --color-neutral-600: #52525B;
+  --color-neutral-700: #3F3F46;
+  --color-neutral-800: #27272A;
+  --color-neutral-900: #18181B;
 
-  /* Apple Typography */
-  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', system-ui, sans-serif;
-  --font-mono: 'SF Mono', ui-monospace, 'Menlo', monospace;
+  /* ═══════════════════════════════════════
+     SEMANTIC COLORS - Muted & Harmonious
+     ═══════════════════════════════════════ */
+  --color-success: #10B981;
+  --color-success-light: #D1FAE5;
+  --color-success-container: #ECFDF5;
+  
+  --color-warning: #F59E0B;
+  --color-warning-dark: #D97706;
+  --color-warning-light: #FEF3C7;
+  --color-warning-container: #FFFBEB;
+  
+  --color-error: #EF4444;
+  --color-error-light: #FEE2E2;
+  --color-error-container: #FEF2F2;
 
-  /* Spacing - Apple 8pt Grid */
+  --color-info: #06B6D4;
+  --color-info-container: #ECFEFF;
+
+  /* ═══════════════════════════════════════
+     AI GRADIENTS - For AI-powered features
+     ═══════════════════════════════════════ */
+  --gradient-ai: linear-gradient(135deg, var(--color-ai-500) 0%, var(--color-ai-600) 100%);
+  --gradient-ai-glow: linear-gradient(135deg, var(--color-ai-400) 0%, var(--color-primary-500) 100%);
+  --color-ai-primary: var(--color-ai-500);
+
+  /* ═══════════════════════════════════════
+     SURFACE COLORS - Clean & Layered
+     ═══════════════════════════════════════ */
+  --color-surface: #FFFFFF;
+  --color-surface-dim: #FAFAFA;
+  --color-surface-container: #F4F4F5;
+  --color-surface-container-high: #E4E4E7;
+  --color-surface-elevated: #FFFFFF;
+  
+  --color-on-surface: #18181B;
+  --color-on-surface-variant: #71717A;
+  --color-outline: #D4D4D8;
+  --color-outline-variant: #E4E4E7;
+
+  /* ═══════════════════════════════════════
+     TYPOGRAPHY - System Fonts
+     ═══════════════════════════════════════ */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --font-mono: 'SF Mono', 'Cascadia Code', 'Fira Code', ui-monospace, monospace;
+
+  /* Font Weights */
+  --font-light: 300;
+  --font-regular: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+  --font-bold: 700;
+
+  /* ═══════════════════════════════════════
+     SPACING - 4px Base Grid (More Breathable)
+     ═══════════════════════════════════════ */
+  --space-0: 0;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -53,42 +117,175 @@
   --space-8: 32px;
   --space-10: 40px;
   --space-12: 48px;
+  --space-16: 64px;
 
-  /* Border Radius - Apple Continuous Corners */
+  /* ═══════════════════════════════════════
+     BORDER RADIUS - Smooth Corners
+     ═══════════════════════════════════════ */
+  --radius-xs: 4px;
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 16px;
-  --radius-xl: 22px;
-  --radius-2xl: 28px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-3xl: 32px;
   --radius-full: 9999px;
 
-  /* Apple Shadows - Subtle & Elegant */
-  --elevation-1: 0 0.5px 1px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.06);
-  --elevation-2: 0 2px 8px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
-  --elevation-3: 0 4px 16px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.04);
-  --elevation-4: 0 8px 32px rgba(0, 0, 0, 0.12), 0 4px 8px rgba(0, 0, 0, 0.04);
-
-  /* Apple Transitions - Smooth & Natural */
-  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-spring: 500ms cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  /* ═══════════════════════════════════════
+     SHADOWS - Soft & Layered (Apple-inspired)
+     ═══════════════════════════════════════ */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.03);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.03);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.03);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.06), 0 10px 10px -5px rgba(0, 0, 0, 0.02);
+  --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.12);
   
-  /* Apple Blur */
-  --blur-amount: 24px;
-  --blur-light: 10px;
+  /* Colored shadows for special elements */
+  --shadow-primary: 0 4px 14px -2px rgba(59, 130, 246, 0.25);
+  --shadow-ai: 0 4px 14px -2px rgba(139, 92, 246, 0.25);
+  --shadow-success: 0 4px 14px -2px rgba(16, 185, 129, 0.25);
+  --shadow-error: 0 4px 14px -2px rgba(239, 68, 68, 0.25);
+
+  /* Legacy elevation vars for compatibility */
+  --elevation-1: var(--shadow-sm);
+  --elevation-2: var(--shadow-md);
+  --elevation-3: var(--shadow-lg);
+  --elevation-4: var(--shadow-xl);
+
+  /* ═══════════════════════════════════════
+     TRANSITIONS - Smooth & Natural
+     ═══════════════════════════════════════ */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 350ms;
+  --duration-slower: 500ms;
+
+  --transition-fast: var(--duration-fast) var(--ease-out);
+  --transition-normal: var(--duration-normal) var(--ease-out);
+  --transition-slow: var(--duration-slow) var(--ease-out);
+  --transition-spring: var(--duration-slower) var(--ease-spring);
+
+  /* ═══════════════════════════════════════
+     BLUR & GLASS EFFECTS
+     ═══════════════════════════════════════ */
+  --blur-sm: 8px;
+  --blur-md: 16px;
+  --blur-lg: 24px;
+  --blur-xl: 40px;
 }
 
-/* Glassmorphism Utilities */
-.glass-panel {
+/* ═══════════════════════════════════════
+   🌙 DARK MODE - Premium Dark Theme
+   ═══════════════════════════════════════ */
+.dark {
+  --color-surface: #0a0a0b;
+  --color-surface-dim: #121214;
+  --color-surface-container: #1a1a1d;
+  --color-surface-container-high: #252528;
+  --color-surface-elevated: #1a1a1d;
+  
+  --color-on-surface: #FAFAFA;
+  --color-on-surface-variant: #A1A1AA;
+  --color-outline: #3f3f46;
+  --color-outline-variant: #27272a;
+
+  /* Adjusted primary for dark */
+  --color-primary-50: rgba(59, 130, 246, 0.1);
+  --color-primary-100: rgba(59, 130, 246, 0.15);
+  --color-primary-200: rgba(59, 130, 246, 0.2);
+  
+  /* Adjusted semantic containers for dark */
+  --color-success-container: rgba(16, 185, 129, 0.15);
+  --color-warning-container: rgba(245, 158, 11, 0.15);
+  --color-error-container: rgba(239, 68, 68, 0.15);
+  --color-info-container: rgba(6, 182, 212, 0.15);
+  --color-ai-50: rgba(139, 92, 246, 0.1);
+  --color-ai-100: rgba(139, 92, 246, 0.15);
+
+  /* Dark shadows - more subtle */
+  --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3), 0 1px 2px rgba(0, 0, 0, 0.2);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 10px 10px -5px rgba(0, 0, 0, 0.4);
+  
+  /* Glow shadows in dark mode */
+  --shadow-primary: 0 4px 20px -2px rgba(59, 130, 246, 0.35);
+  --shadow-ai: 0 4px 20px -2px rgba(139, 92, 246, 0.35);
+}
+
+/* Dark mode body background */
+.dark body,
+html.dark body {
+  background: linear-gradient(135deg, #0a0a0b 0%, #121218 50%, #0d0d10 100%) !important;
+}
+
+/* Dark mode glassmorphism cards */
+.dark section[style*="rgba(255, 255, 255"],
+.dark article[style*="background: var(--color-surface)"],
+.dark div[style*="rgba(255, 255, 255, 0.8)"],
+.dark div[style*="rgba(255, 255, 255, 0.9)"],
+.dark div[style*="rgba(255, 255, 255, 0.95)"] {
+  background: rgba(26, 26, 29, 0.85) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Dark mode header */
+.dark header[style*="rgba(255, 255, 255"] {
+  background: rgba(18, 18, 20, 0.9) !important;
+  border-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* ═══════════════════════════════════════
+   ✨ GLASSMORPHISM UTILITIES
+   ═══════════════════════════════════════ */
+.glass {
   background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(var(--blur-lg));
+  -webkit-backdrop-filter: blur(var(--blur-lg));
+}
+
+.dark .glass {
+  background: rgba(24, 24, 27, 0.7);
+}
+
+.glass-subtle {
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(var(--blur-md));
+  -webkit-backdrop-filter: blur(var(--blur-md));
+}
+
+.dark .glass-subtle {
+  background: rgba(24, 24, 27, 0.5);
+}
+
+.glass-panel {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(var(--blur-lg)) saturate(180%);
+  -webkit-backdrop-filter: blur(var(--blur-lg)) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 .dark .glass-panel {
-  background: rgba(28, 28, 30, 0.7);
+  background: rgba(24, 24, 27, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Glassmorphism Modal */
+.glass-modal-content {
+  background: rgba(255, 255, 255, 0.9) !important;
+  backdrop-filter: blur(var(--blur-xl)) saturate(200%);
+  -webkit-backdrop-filter: blur(var(--blur-xl)) saturate(200%);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.dark .glass-modal-content {
+  background: rgba(24, 24, 27, 0.9) !important;
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
@@ -180,41 +377,175 @@
   background: var(--color-surface-container);
 }
 
-/* Glassmorphism Modal */
+/* ============================================
+   🔮 GLASSMORPHISM COMPONENTS - Theme Aware
+   ============================================ */
+
+/* Drawer/Side Panel */
+.glass-drawer {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(40px) saturate(200%);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  border-left: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: -10px 0 40px rgba(0, 0, 0, 0.1);
+}
+
+.glass-drawer-header {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.glass-drawer-content {
+  background: transparent;
+}
+
+/* Modal */
+.glass-modal {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(40px) saturate(200%);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.15), 0 8px 24px rgba(0, 0, 0, 0.1);
+}
+
+.glass-modal-header {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.5);
+}
+
 .glass-modal-content {
-  background: rgba(255, 255, 255, 0.85) !important;
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+/* Cards */
+.glass-card {
+  background: rgba(255, 255, 255, 0.8);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.glass-card.drag-over {
+  background: rgba(59, 130, 246, 0.08);
+  transform: scale(1.02);
+}
+
+.glass-card.dismissed {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.glass-card.expanded {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+.glass-card.added {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.3);
+  box-shadow: none;
+}
+
+/* Error Alert */
+.error-alert {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  color: var(--color-error);
+}
+
+/* Icon Buttons */
+.glass-icon-btn {
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.03) 0%, rgba(0, 0, 0, 0.06) 100%);
+  border: 1px solid rgba(0, 0, 0, 0.04);
+}
+
+.glass-icon-btn:hover {
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.06) 0%, rgba(0, 0, 0, 0.1) 100%);
+}
+
+/* Empty State */
+.glass-empty-state {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+/* ============================================
+   🌙 DARK MODE - Glassmorphism Components
+   ============================================ */
+
+.dark .glass-drawer {
+  background: rgba(26, 26, 29, 0.95);
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: -10px 0 40px rgba(0, 0, 0, 0.4);
+}
+
+.dark .glass-drawer-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.dark .glass-modal {
+  background: rgba(26, 26, 29, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5), 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.dark .glass-modal-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .dark .glass-modal-content {
-  background: rgba(30, 30, 30, 0.85) !important;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.02);
 }
 
-/* Dark Mode - Apple Dark Vibrancy */
-.dark {
-  --color-surface: #000000;
-  --color-surface-dim: #1c1c1e;
-  --color-surface-container: #2c2c2e;
-  --color-surface-container-high: #3a3a3c;
-  --color-on-surface: #ffffff;
-  --color-on-surface-variant: #98989d;
-  --color-outline: #48484a;
-  --color-outline-variant: #3a3a3c;
-
-  --color-primary-50: rgba(0, 122, 255, 0.1);
-  --color-primary-100: rgba(0, 122, 255, 0.15);
-  --color-success-container: rgba(48, 209, 88, 0.15);
-  --color-warning-container: rgba(255, 159, 10, 0.15);
-  --color-error-container: rgba(255, 69, 58, 0.15);
-
-  --elevation-1: 0 0.5px 1px rgba(0, 0, 0, 0.3);
-  --elevation-2: 0 2px 8px rgba(0, 0, 0, 0.4);
-  --elevation-3: 0 4px 16px rgba(0, 0, 0, 0.5);
-  --elevation-4: 0 8px 32px rgba(0, 0, 0, 0.6);
+.dark .glass-card {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
+
+.dark .glass-card.drag-over {
+  background: rgba(59, 130, 246, 0.15);
+}
+
+.dark .glass-card.dismissed {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.dark .glass-card.expanded {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.dark .glass-card.added {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.25);
+}
+
+.dark .error-alert {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.dark .glass-icon-btn {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.08) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.dark .glass-icon-btn:hover {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.12) 100%);
+}
+
+.dark .glass-empty-state {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Hover Overlay - Theme Aware */
+.hover-overlay:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.dark .hover-overlay:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Dark Mode defined above in main section */
 
 /* ============================================
    📐 BASE STYLES
@@ -232,10 +563,17 @@ html {
 
 body {
   font-family: var(--font-sans);
-  background-color: var(--color-surface-dim);
+  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #f1f5f9 100%);
+  background-attachment: fixed;
   color: var(--color-on-surface);
   line-height: 1.6;
-  transition: background-color var(--transition-normal), color var(--transition-normal);
+  min-height: 100vh;
+  transition: background var(--transition-normal), color var(--transition-normal);
+}
+
+.dark body,
+body.dark {
+  background: linear-gradient(135deg, #0a0a0b 0%, #18181b 50%, #0f0f10 100%);
 }
 
 /* Line Clamp Utility */
@@ -283,204 +621,390 @@ body {
 }
 
 /* ============================================
-   🧩 APPLE COMPONENTS
+   🧩 HYBRID PREMIUM COMPONENTS
    ============================================ */
 
 @layer components {
-  /* Apple Surface Cards - Clean & Minimal with Glassmorphism */
+  /* ═══════════════════════════════════════
+     SURFACE CARDS - Clean, Elevated, Premium
+     ═══════════════════════════════════════ */
   .surface-card {
-    background-color: rgba(255, 255, 255, 0.8);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--elevation-1);
-    border: 1px solid rgba(255, 255, 255, 0.5);
+    background-color: var(--color-surface);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--color-outline-variant);
     transition: all var(--transition-normal);
+    position: relative;
+    overflow: hidden;
   }
 
   .dark .surface-card {
-    background-color: rgba(28, 28, 30, 0.8);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background-color: var(--color-surface-container);
+    border-color: var(--color-outline-variant);
   }
 
   .surface-card:hover {
-    box-shadow: var(--elevation-2);
-    transform: translateY(-1px);
-    background-color: rgba(255, 255, 255, 0.9);
+    box-shadow: var(--shadow-md);
+    border-color: var(--color-outline);
   }
 
   .dark .surface-card:hover {
-    background-color: rgba(44, 44, 46, 0.9);
+    border-color: var(--color-outline);
   }
 
   .surface-card-elevated {
-    background-color: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    border-radius: var(--radius-xl);
-    box-shadow: var(--elevation-3);
-    border: 1px solid rgba(255, 255, 255, 0.6);
+    background-color: var(--color-surface);
+    border-radius: var(--radius-2xl);
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--color-outline-variant);
   }
 
   .dark .surface-card-elevated {
-    background-color: rgba(44, 44, 46, 0.9);
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    background-color: var(--color-surface-elevated);
+    border-color: var(--color-outline-variant);
   }
 
-  /* Apple Buttons - Pill Shape, Clean */
+  /* Interactive card with subtle lift */
+  .surface-card-interactive {
+    background-color: var(--color-surface);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--color-outline-variant);
+    transition: all var(--transition-normal);
+    cursor: pointer;
+  }
+
+  .surface-card-interactive:hover {
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-2px);
+    border-color: var(--color-primary-300);
+  }
+
+  .dark .surface-card-interactive:hover {
+    border-color: var(--color-primary-500);
+  }
+
+  /* ═══════════════════════════════════════
+     BUTTONS - Modern, Clean, Hierarchical
+     ═══════════════════════════════════════ */
+  
+  /* Primary Filled Button */
   .btn-filled {
-    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 font-semibold text-sm;
+    @apply inline-flex items-center justify-center gap-2 font-medium text-sm;
+    padding: 10px 20px;
     background: var(--color-primary-500);
     color: white;
-    border-radius: var(--radius-full);
+    border-radius: var(--radius-lg);
     transition: all var(--transition-fast);
     border: none;
-    letter-spacing: -0.01em;
+    box-shadow: var(--shadow-sm);
   }
 
   .btn-filled:hover {
-    filter: brightness(1.1);
-    transform: scale(1.02);
+    background: var(--color-primary-600);
+    box-shadow: var(--shadow-primary);
+    transform: translateY(-1px);
   }
 
   .btn-filled:active {
-    transform: scale(0.98);
-    filter: brightness(0.95);
+    transform: translateY(0) scale(0.98);
+    box-shadow: var(--shadow-xs);
   }
 
+  .btn-filled:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  /* Tonal Button (Secondary) */
   .btn-tonal {
-    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 font-semibold text-sm;
+    @apply inline-flex items-center justify-center gap-2 font-medium text-sm;
+    padding: 10px 20px;
     background-color: var(--color-primary-50);
-    color: var(--color-primary-500);
-    border-radius: var(--radius-full);
+    color: var(--color-primary-600);
+    border-radius: var(--radius-lg);
     transition: all var(--transition-fast);
-    letter-spacing: -0.01em;
+    border: none;
+  }
+
+  .dark .btn-tonal {
+    background-color: var(--color-primary-100);
+    color: var(--color-primary-400);
   }
 
   .btn-tonal:hover {
     background-color: var(--color-primary-100);
-    transform: scale(1.02);
+    transform: translateY(-1px);
+  }
+
+  .dark .btn-tonal:hover {
+    background-color: var(--color-primary-200);
   }
 
   .btn-tonal:active {
-    transform: scale(0.98);
+    transform: translateY(0) scale(0.98);
   }
 
+  /* Outlined Button */
   .btn-outlined {
-    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 font-semibold text-sm;
+    @apply inline-flex items-center justify-center gap-2 font-medium text-sm;
+    padding: 10px 20px;
     background-color: transparent;
-    color: var(--color-primary-500);
-    border: 1.5px solid var(--color-primary-500);
-    border-radius: var(--radius-full);
+    color: var(--color-primary-600);
+    border: 1.5px solid var(--color-primary-300);
+    border-radius: var(--radius-lg);
     transition: all var(--transition-fast);
-    letter-spacing: -0.01em;
+  }
+
+  .dark .btn-outlined {
+    color: var(--color-primary-400);
+    border-color: var(--color-primary-500);
   }
 
   .btn-outlined:hover {
     background-color: var(--color-primary-50);
-    transform: scale(1.02);
+    border-color: var(--color-primary-500);
+    transform: translateY(-1px);
   }
 
   .btn-outlined:active {
-    transform: scale(0.98);
+    transform: translateY(0) scale(0.98);
   }
 
+  /* Text Button (Minimal) */
   .btn-text {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2 font-semibold text-sm;
+    @apply inline-flex items-center justify-center gap-2 font-medium text-sm;
+    padding: 10px 16px;
     background-color: transparent;
-    color: var(--color-primary-500);
-    border-radius: var(--radius-full);
+    color: var(--color-primary-600);
+    border-radius: var(--radius-lg);
     transition: all var(--transition-fast);
-    letter-spacing: -0.01em;
+  }
+
+  .dark .btn-text {
+    color: var(--color-primary-400);
   }
 
   .btn-text:hover {
     background-color: var(--color-primary-50);
-    transform: scale(1.02);
+  }
+
+  .dark .btn-text:hover {
+    background-color: var(--color-primary-100);
   }
 
   .btn-text:active {
     transform: scale(0.98);
   }
 
-  /* Apple Icon Buttons */
-  .btn-icon {
-    @apply inline-flex items-center justify-center p-2.5;
+  /* Ghost Button (Even more minimal) */
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 font-medium text-sm;
+    padding: 10px 16px;
+    background-color: transparent;
     color: var(--color-on-surface-variant);
-    border-radius: var(--radius-full);
+    border-radius: var(--radius-lg);
     transition: all var(--transition-fast);
+  }
+
+  .btn-ghost:hover {
+    background-color: var(--color-surface-container);
+    color: var(--color-on-surface);
+  }
+
+  .btn-ghost:active {
+    transform: scale(0.98);
+  }
+
+  /* Icon Buttons */
+  .btn-icon {
+    @apply inline-flex items-center justify-center;
+    padding: 10px;
+    color: var(--color-on-surface-variant);
+    border-radius: var(--radius-lg);
+    transition: all var(--transition-fast);
+    background: transparent;
   }
 
   .btn-icon:hover {
     background-color: var(--color-surface-container);
     color: var(--color-on-surface);
-    transform: scale(1.05);
   }
 
   .btn-icon:active {
-    transform: scale(0.95);
+    transform: scale(0.92);
   }
 
-  /* Apple Input Fields - Rounded & Clean */
-  .input-outlined {
-    @apply w-full px-4 py-3 text-sm;
-    background-color: var(--color-surface-container);
+  .btn-icon-primary {
+    @apply btn-icon;
+    color: var(--color-primary-500);
+  }
+
+  .btn-icon-primary:hover {
+    background-color: var(--color-primary-50);
+  }
+
+  /* ═══════════════════════════════════════
+     AI SPECIAL BUTTONS - Gradient Accent
+     ═══════════════════════════════════════ */
+  .btn-ai {
+    @apply inline-flex items-center justify-center gap-2 font-medium text-sm;
+    padding: 10px 20px;
+    background: linear-gradient(135deg, var(--color-ai-500) 0%, var(--color-ai-600) 100%);
+    color: white;
+    border-radius: var(--radius-lg);
+    transition: all var(--transition-fast);
     border: none;
-    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-ai);
+  }
+
+  .btn-ai:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px -2px rgba(139, 92, 246, 0.4);
+  }
+
+  .btn-ai:active {
+    transform: translateY(0) scale(0.98);
+  }
+
+  .btn-ai-tonal {
+    @apply inline-flex items-center justify-center gap-2 font-medium text-sm;
+    padding: 10px 20px;
+    background-color: var(--color-ai-50);
+    color: var(--color-ai-600);
+    border-radius: var(--radius-lg);
+    transition: all var(--transition-fast);
+  }
+
+  .dark .btn-ai-tonal {
+    background-color: var(--color-ai-100);
+    color: var(--color-ai-400);
+  }
+
+  .btn-ai-tonal:hover {
+    background-color: var(--color-ai-100);
+    transform: translateY(-1px);
+  }
+
+  /* ═══════════════════════════════════════
+     INPUT FIELDS - Clean & Modern
+     ═══════════════════════════════════════ */
+  .input-outlined {
+    @apply w-full text-sm;
+    padding: 12px 16px;
+    background-color: var(--color-surface);
+    border: 1.5px solid var(--color-outline-variant);
+    border-radius: var(--radius-lg);
     color: var(--color-on-surface);
     transition: all var(--transition-fast);
   }
 
   .input-outlined:hover {
-    background-color: var(--color-surface-container-high);
+    border-color: var(--color-outline);
   }
 
   .input-outlined:focus {
     outline: none;
+    border-color: var(--color-primary-500);
     box-shadow: 0 0 0 3px var(--color-primary-100);
-    background-color: var(--color-surface);
+  }
+
+  .dark .input-outlined {
+    background-color: var(--color-surface-container);
+    border-color: var(--color-outline-variant);
+  }
+
+  .dark .input-outlined:focus {
+    box-shadow: 0 0 0 3px var(--color-primary-200);
   }
 
   .input-filled {
-    @apply w-full px-4 py-3 text-sm;
+    @apply w-full text-sm;
+    padding: 12px 16px;
     background-color: var(--color-surface-container);
-    border: none;
-    border-radius: var(--radius-md);
+    border: 1.5px solid transparent;
+    border-radius: var(--radius-lg);
     color: var(--color-on-surface);
     transition: all var(--transition-fast);
   }
 
   .input-filled:focus {
     outline: none;
-    box-shadow: 0 0 0 3px var(--color-primary-100);
+    border-color: var(--color-primary-500);
     background-color: var(--color-surface);
   }
 
-  /* Apple Chips / Pills */
+  /* ═══════════════════════════════════════
+     CHIPS & BADGES
+     ═══════════════════════════════════════ */
   .chip {
-    @apply inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold;
+    @apply inline-flex items-center gap-1.5 text-xs font-medium;
+    padding: 6px 12px;
     background-color: var(--color-surface-container);
     color: var(--color-on-surface-variant);
     border-radius: var(--radius-full);
     border: none;
     transition: all var(--transition-fast);
-    letter-spacing: -0.01em;
   }
 
   .chip:hover {
     background-color: var(--color-surface-container-high);
-    transform: scale(1.02);
   }
 
-  .chip-filled {
+  .chip-primary {
     background-color: var(--color-primary-100);
-    color: var(--color-primary-500);
-    border: none;
+    color: var(--color-primary-700);
   }
 
-  /* Apple Progress Bar */
+  .dark .chip-primary {
+    background-color: var(--color-primary-200);
+    color: var(--color-primary-300);
+  }
+
+  .chip-ai {
+    background-color: var(--color-ai-100);
+    color: var(--color-ai-700);
+  }
+
+  .chip-success {
+    background-color: var(--color-success-container);
+    color: var(--color-success);
+  }
+
+  .chip-warning {
+    background-color: var(--color-warning-container);
+    color: var(--color-warning);
+  }
+
+  .chip-error {
+    background-color: var(--color-error-container);
+    color: var(--color-error);
+  }
+
+  /* Badge (smaller than chip) */
+  .badge {
+    @apply inline-flex items-center justify-center text-xs font-semibold;
+    padding: 2px 8px;
+    min-width: 20px;
+    border-radius: var(--radius-full);
+  }
+
+  .badge-primary {
+    background-color: var(--color-primary-500);
+    color: white;
+  }
+
+  .badge-ai {
+    background-color: var(--color-ai-500);
+    color: white;
+  }
+
+  /* ═══════════════════════════════════════
+     PROGRESS INDICATORS
+     ═══════════════════════════════════════ */
   .progress-track {
-    @apply w-full h-1.5 overflow-hidden;
+    @apply w-full h-2 overflow-hidden;
     background-color: var(--color-surface-container-high);
     border-radius: var(--radius-full);
   }
@@ -616,32 +1140,23 @@ body {
 .stagger-animation > *:nth-child(8) { animation-delay: 350ms; }
 
 /* ============================================
-   🌙 APPLE DARK MODE
+   🌙 DARK MODE COMPONENT OVERRIDES
    ============================================ */
 
 .dark .surface-card {
-  background-color: var(--color-surface-dim);
-  border-color: transparent;
-  box-shadow: var(--elevation-2);
-}
-
-.dark .btn-tonal {
-  background-color: rgba(0, 122, 255, 0.2);
-  color: var(--color-primary-400);
-}
-
-.dark .btn-tonal:hover {
-  background-color: rgba(0, 122, 255, 0.3);
-}
-
-.dark .chip {
   background-color: var(--color-surface-container);
+  border-color: var(--color-outline-variant);
+  box-shadow: var(--shadow-md);
+}
+
+.dark .surface-card:hover {
+  background-color: var(--color-surface-container-high);
   border-color: var(--color-outline);
 }
 
-.dark .chip-filled {
-  background-color: rgba(138, 180, 248, 0.2);
-  color: var(--color-primary-300);
+.dark .chip {
+  background-color: var(--color-surface-container-high);
+  border-color: transparent;
 }
 
 /* ============================================
@@ -650,41 +1165,39 @@ body {
 
 /* Floating Action Button (FAB) */
 .fab {
-  @apply fixed bottom-6 right-6 p-4 z-40;
-  background-color: var(--color-primary-600);
+  @apply fixed bottom-6 right-6 z-40;
+  padding: 16px;
+  background: linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-primary-600) 100%);
   color: white;
-  border-radius: var(--radius-lg);
-  box-shadow: var(--elevation-3);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg), var(--shadow-primary);
   transition: all var(--transition-fast);
 }
 
 .fab:hover {
-  background-color: var(--color-primary-700);
-  box-shadow: var(--elevation-4);
-  transform: scale(1.05);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: var(--shadow-xl), 0 8px 25px -4px rgba(59, 130, 246, 0.4);
 }
 
 .fab:active {
-  transform: scale(0.98);
+  transform: translateY(0) scale(0.98);
 }
 
 /* Surface Elevated - for modals */
 .surface-elevated {
   background-color: var(--color-surface);
-  box-shadow: var(--elevation-4);
+  box-shadow: var(--shadow-2xl);
+  border-radius: var(--radius-2xl);
 }
 
-/* Badge/Counter */
-.badge {
-  @apply inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 text-xs font-bold;
-  background-color: var(--color-error);
-  color: white;
-  border-radius: var(--radius-full);
+.dark .surface-elevated {
+  background-color: var(--color-surface-container);
 }
 
 /* Tertiary Container */
 .tertiary-container {
   background-color: var(--color-surface-container);
+  border-radius: var(--radius-lg);
 }
 
 .dark .tertiary-container {
@@ -1155,14 +1668,17 @@ body {
 }
 
 /* ============================================
-   🍎 APPLE GROUPED LIST (Settings Style)
+   🍎 APPLE GROUPED LIST (Settings Style) - Premium
    ============================================ */
 
 .apple-grouped-list {
-  background: var(--color-surface);
-  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-radius: 16px;
   overflow: hidden;
-  border: 0.5px solid var(--color-outline-variant);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
 }
 
 .apple-list-item {
@@ -1225,8 +1741,10 @@ body {
 }
 
 .dark .apple-grouped-list {
-  background: var(--color-surface-dim);
-  border-color: transparent;
+  background: rgba(30, 30, 35, 0.9);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 /* ============================================
@@ -1254,16 +1772,17 @@ body {
   padding: 10px 12px;
   font-size: 15px;
   color: var(--color-on-surface);
-  background: var(--color-surface-container);
-  border: none;
-  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid transparent;
+  border-radius: 12px;
   outline: none;
-  transition: all 150ms ease;
+  transition: all 200ms ease;
 }
 
 .apple-input:focus {
-  background: var(--color-surface-container-high);
-  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
+  background: rgba(255, 255, 255, 0.9);
+  border-color: var(--color-primary-500);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
 .apple-input::placeholder {
@@ -1275,9 +1794,9 @@ body {
   padding: 10px 12px;
   font-size: 15px;
   color: var(--color-on-surface);
-  background: var(--color-surface-container);
-  border: none;
-  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid transparent;
+  border-radius: 12px;
   outline: none;
   cursor: pointer;
   appearance: none;
@@ -1285,11 +1804,13 @@ body {
   background-repeat: no-repeat;
   background-position: right 12px center;
   padding-right: 36px;
+  transition: all 200ms ease;
 }
 
 .apple-select:focus {
-  background-color: var(--color-surface-container-high);
-  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
+  background-color: rgba(255, 255, 255, 0.9);
+  border-color: var(--color-primary-500);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
 .apple-textarea {
@@ -1298,17 +1819,19 @@ body {
   font-size: 13px;
   font-family: var(--font-mono);
   color: var(--color-on-surface);
-  background: var(--color-surface-container);
-  border: none;
-  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid transparent;
+  border-radius: 12px;
   outline: none;
   resize: vertical;
   min-height: 80px;
+  transition: all 200ms ease;
 }
 
 .apple-textarea:focus {
-  background: var(--color-surface-container-high);
-  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.2);
+  background: rgba(255, 255, 255, 0.9);
+  border-color: var(--color-primary-500);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
 /* Dark mode inputs */

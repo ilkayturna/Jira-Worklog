@@ -68,32 +68,30 @@ export const NotificationHistory: React.FC<NotificationHistoryProps> = ({
         <>
             {/* Backdrop */}
             <div 
-                className="fixed inset-0 z-40 bg-black/30 backdrop-blur-sm animate-fade-in"
+                className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm animate-fade-in"
                 onClick={onClose}
             />
             
-            {/* Side Panel */}
+            {/* Side Panel - Premium Glassmorphism */}
             <div 
                 className="fixed right-0 top-0 bottom-0 w-full max-w-md z-50 animate-slide-in-right"
-                style={{ animationDuration: '200ms' }}
+                style={{ animationDuration: '250ms' }}
             >
-                <div 
-                    className="h-full flex flex-col"
-                    style={{ 
-                        backgroundColor: 'var(--color-surface)',
-                        boxShadow: 'var(--elevation-4)'
-                    }}
-                >
-                    {/* Header */}
-                    <div className="px-6 py-5 border-b flex items-center justify-between shrink-0"
-                         style={{ borderColor: 'var(--color-outline-variant)' }}>
+                <div className="h-full flex flex-col glass-drawer">
+                    {/* Header - Premium Style */}
+                    <div className="px-5 py-4 flex items-center justify-between shrink-0 glass-drawer-header">
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-xl flex items-center justify-center" 
-                                 style={{ backgroundColor: 'var(--color-secondary-container)' }}>
-                                <Bell size={20} style={{ color: 'var(--color-on-surface)' }} />
+                            <div 
+                                className="w-10 h-10 rounded-xl flex items-center justify-center"
+                                style={{ 
+                                    background: 'linear-gradient(135deg, var(--color-ai-500) 0%, var(--color-primary-500) 100%)',
+                                    boxShadow: '0 4px 12px rgba(139, 92, 246, 0.25)'
+                                }}
+                            >
+                                <Bell size={18} className="text-white" />
                             </div>
                             <div>
-                                <h2 className="text-lg font-semibold" style={{ color: 'var(--color-on-surface)' }}>
+                                <h2 className="font-bold text-base bg-clip-text text-transparent" style={{ backgroundImage: 'linear-gradient(135deg, var(--color-on-surface) 0%, var(--color-ai-600) 100%)' }}>
                                     Geçmiş
                                 </h2>
                                 <p className="text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>
@@ -101,18 +99,21 @@ export const NotificationHistory: React.FC<NotificationHistoryProps> = ({
                                 </p>
                             </div>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1">
                             {notifications.length > 0 && (
                                 <button 
                                     onClick={onClear} 
-                                    className="btn-icon"
+                                    className="w-9 h-9 flex items-center justify-center rounded-xl transition-all hover:scale-105 glass-icon-btn"
                                     title="Tümünü temizle"
                                 >
-                                    <Trash2 size={18} />
+                                    <Trash2 size={16} style={{ color: 'var(--color-on-surface-variant)' }} />
                                 </button>
                             )}
-                            <button onClick={onClose} className="btn-icon">
-                                <X size={20} />
+                            <button 
+                                onClick={onClose} 
+                                className="w-9 h-9 flex items-center justify-center rounded-xl transition-all hover:scale-105 glass-icon-btn"
+                            >
+                                <X size={18} style={{ color: 'var(--color-on-surface-variant)' }} />
                             </button>
                         </div>
                     </div>
@@ -121,9 +122,8 @@ export const NotificationHistory: React.FC<NotificationHistoryProps> = ({
                     <div className="flex-1 overflow-y-auto p-4">
                         {notifications.length === 0 ? (
                             <div className="flex flex-col items-center justify-center h-full text-center">
-                                <div className="w-16 h-16 rounded-full flex items-center justify-center mb-4"
-                                     style={{ backgroundColor: 'var(--color-surface-variant)' }}>
-                                    <Bell size={28} style={{ color: 'var(--color-on-surface-variant)' }} />
+                                <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4 glass-empty-state">
+                                    <span className="text-3xl">🔔</span>
                                 </div>
                                 <p className="font-medium" style={{ color: 'var(--color-on-surface)' }}>
                                     Geçmiş boş
@@ -142,18 +142,15 @@ export const NotificationHistory: React.FC<NotificationHistoryProps> = ({
                                     return (
                                         <div 
                                             key={notification.id}
-                                            className="rounded-xl border overflow-hidden transition-all"
+                                            className={`rounded-xl overflow-hidden transition-all glass-card ${notification.dismissed ? 'dismissed' : ''} ${isExpanded ? 'expanded' : ''}`}
                                             style={{ 
-                                                borderColor: isExpanded ? getTypeColor(notification.type) : 'var(--color-outline-variant)',
-                                                backgroundColor: notification.dismissed 
-                                                    ? 'var(--color-surface-variant)' 
-                                                    : 'var(--color-surface-elevated)',
+                                                borderColor: isExpanded ? getTypeColor(notification.type) : undefined,
                                                 opacity: notification.dismissed ? 0.7 : 1
                                             }}
                                         >
                                             {/* Main Row - Clickable */}
                                             <div 
-                                                className={`p-3 flex items-start gap-3 ${canExpand ? 'cursor-pointer hover:bg-black/5' : ''}`}
+                                                className={`p-3 flex items-start gap-3 ${canExpand ? 'cursor-pointer hover-overlay' : ''}`}
                                                 onClick={() => canExpand && toggleExpand(notification.id)}
                                             >
                                                 <div className="shrink-0 mt-0.5">
@@ -273,10 +270,11 @@ export const NotificationHistory: React.FC<NotificationHistoryProps> = ({
                                                                 e.stopPropagation();
                                                                 onUndo(notification);
                                                             }}
-                                                            className="btn-tonal w-full text-sm py-2"
+                                                            className="w-full text-sm py-2.5 rounded-xl font-medium flex items-center justify-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
                                                             style={{ 
-                                                                backgroundColor: 'var(--color-primary-container)',
-                                                                color: 'var(--color-primary-600)'
+                                                                background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-ai-500) 100%)',
+                                                                color: 'white',
+                                                                boxShadow: '0 4px 12px rgba(59, 130, 246, 0.25)'
                                                             }}
                                                         >
                                                             <Undo2 size={16} /> Geri Al

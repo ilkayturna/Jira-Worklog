@@ -277,33 +277,67 @@ SADECE sayı yaz:`;
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in" onClick={onClose}>
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+            <div className="absolute inset-0 backdrop-blur-xl" style={{ background: 'linear-gradient(135deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.5) 100%)' }} />
             
             <div 
                 className="relative w-full max-w-lg animate-scale-in"
                 onClick={e => e.stopPropagation()}
             >
-                <div className="surface-card p-0 overflow-hidden" style={{ boxShadow: 'var(--elevation-4)' }}>
+                <div 
+                    className="overflow-hidden"
+                    style={{ 
+                        background: 'rgba(255, 255, 255, 0.95)',
+                        backdropFilter: 'blur(40px) saturate(200%)',
+                        WebkitBackdropFilter: 'blur(40px) saturate(200%)',
+                        borderRadius: '24px',
+                        border: '1px solid rgba(255, 255, 255, 0.6)',
+                        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.8)'
+                    }}
+                >
+                    {/* Gradient accent at top */}
+                    <div style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: '24px',
+                        right: '24px',
+                        height: '3px',
+                        background: 'linear-gradient(90deg, var(--color-primary-400), var(--color-ai-400), var(--color-success))',
+                        borderRadius: '0 0 4px 4px'
+                    }} />
                     
                     {/* Header */}
-                    <div className="px-6 py-5 border-b" style={{ borderColor: 'var(--color-outline-variant)' }}>
+                    <div className="px-6 py-5 border-b" style={{ borderColor: 'rgba(0,0,0,0.06)' }}>
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 rounded-xl flex items-center justify-center" 
-                                     style={{ backgroundColor: 'var(--color-primary-container)' }}>
-                                    <Plus size={22} style={{ color: 'var(--color-primary-600)' }} />
+                                <div className="relative">
+                                    <div className="absolute inset-0 rounded-xl blur-lg opacity-40" style={{ background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-ai-500))' }} />
+                                    <div className="relative w-11 h-11 rounded-xl flex items-center justify-center" 
+                                         style={{ 
+                                             background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-ai-500) 100%)',
+                                             boxShadow: '0 4px 15px rgba(59, 130, 246, 0.3)'
+                                         }}>
+                                        <Plus size={22} className="text-white" />
+                                    </div>
                                 </div>
                                 <div>
-                                    <h2 className="text-lg font-semibold" style={{ color: 'var(--color-on-surface)' }}>
+                                    <h2 className="text-lg font-bold bg-clip-text text-transparent" style={{ backgroundImage: 'linear-gradient(135deg, var(--color-on-surface) 0%, var(--color-primary-600) 100%)' }}>
                                         Worklog Ekle
                                     </h2>
-                                    <p className="text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>
+                                    <p className="text-xs flex items-center gap-1.5" style={{ color: 'var(--color-on-surface-variant)' }}>
+                                        <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
                                         {formatDate(selectedDate)}
                                     </p>
                                 </div>
                             </div>
-                            <button onClick={onClose} className="btn-icon">
-                                <X size={20} />
+                            <button 
+                                onClick={onClose} 
+                                className="w-9 h-9 flex items-center justify-center rounded-full transition-all hover:scale-110"
+                                style={{ 
+                                    background: 'linear-gradient(135deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.08) 100%)',
+                                    border: '1px solid rgba(0,0,0,0.06)'
+                                }}
+                            >
+                                <X size={18} style={{ color: 'var(--color-on-surface-variant)' }} />
                             </button>
                         </div>
                     </div>
@@ -487,7 +521,7 @@ SADECE sayı yaz:`;
                                         }}
                                     >
                                         <div className="flex items-start gap-2">
-                                            <Sparkles size={16} style={{ color: '#22c55e', marginTop: 2, flexShrink: 0 }} />
+                                            <Sparkles size={16} style={{ color: 'var(--color-success)', marginTop: 2, flexShrink: 0 }} />
                                             <div className="flex-1 min-w-0">
                                                 <p className="text-sm" style={{ color: 'var(--color-on-surface)' }}>
                                                     {aiSuggestedComment}
@@ -511,7 +545,7 @@ SADECE sayı yaz:`;
                                         }}
                                     >
                                         <div className="flex items-center gap-2">
-                                            <TrendingUp size={16} style={{ color: '#eab308' }} />
+                                            <TrendingUp size={16} style={{ color: 'var(--color-warning)' }} />
                                             <span className="text-sm" style={{ color: 'var(--color-on-surface)' }}>
                                                 Önerilen süre
                                             </span>
@@ -519,7 +553,7 @@ SADECE sayı yaz:`;
                                         <div className="flex items-center gap-2">
                                             <span 
                                                 className="text-lg font-bold"
-                                                style={{ fontFamily: 'var(--font-mono)', color: '#eab308' }}
+                                                style={{ fontFamily: 'var(--font-mono)', color: 'var(--color-warning)' }}
                                             >
                                                 {aiSuggestedHours.toFixed(1)}h
                                             </span>
@@ -552,9 +586,9 @@ SADECE sayı yaz:`;
                             >
                                 <TrendingUp size={18} style={{ 
                                     color: timeEstimation.confidence === 'high' 
-                                        ? '#22c55e' 
+                                        ? 'var(--color-success)' 
                                         : timeEstimation.confidence === 'medium'
-                                        ? '#eab308'
+                                        ? 'var(--color-warning)'
                                         : 'var(--color-on-surface-variant)' 
                                 }} />
                                 <div className="flex-1">

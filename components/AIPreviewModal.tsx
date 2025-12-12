@@ -456,10 +456,11 @@ export const AIPreviewModal: React.FC<AIPreviewModalProps> = ({
 };
 
 // Helper component for diff display
-const DiffDisplay: React.FC<{ diff: DiffPart[]; type: 'added' | 'removed' }> = ({ diff, type }) => {
+const DiffDisplay: React.FC<{ diff: { beforeParts: DiffPart[]; afterParts: DiffPart[] }; type: 'added' | 'removed' }> = ({ diff, type }) => {
+  const parts = type === 'removed' ? diff.beforeParts : diff.afterParts;
   return (
     <span className="whitespace-pre-wrap">
-      {diff.map((part, index) => {
+      {parts.map((part, index) => {
         if (type === 'removed' && part.type === 'removed') {
           return (
             <span key={index} className="line-through opacity-70">

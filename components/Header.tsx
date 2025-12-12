@@ -34,32 +34,55 @@ export const Header: React.FC<HeaderProps> = ({
     const showShortcuts = isCtrlPressed || isMetaPressed;
 
     return (
-        <header className="apple-header">
+        <header className="apple-header" style={{
+            background: 'linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 100%)',
+            backdropFilter: 'blur(20px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+            borderBottom: '1px solid rgba(0,0,0,0.06)'
+        }}>
             <div className="flex items-center gap-4">
-                {/* Apple-style Logo */}
-                <div className="w-12 h-12 md:w-14 md:h-14 rounded-[18px] flex items-center justify-center shadow-lg" style={{ background: 'linear-gradient(135deg, #007AFF 0%, #5856D6 100%)' }}>
-                    <CalendarIcon className="text-white" size={28} strokeWidth={1.5} />
+                {/* Modern Logo with glow effect */}
+                <div className="relative">
+                    <div className="absolute inset-0 rounded-2xl blur-xl opacity-40" style={{ background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-ai-500) 100%)' }} />
+                    <div className="relative w-12 h-12 md:w-14 md:h-14 rounded-2xl flex items-center justify-center shadow-xl" 
+                         style={{ 
+                             background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-ai-500) 100%)',
+                             boxShadow: '0 8px 32px rgba(59, 130, 246, 0.3)'
+                         }}>
+                        <CalendarIcon className="text-white" size={28} strokeWidth={1.5} />
+                    </div>
                 </div>
                 <div>
-                    <h1 className="text-2xl md:text-[28px] font-bold" style={{ color: 'var(--color-on-surface)', letterSpacing: '-0.03em' }}>
+                    <h1 className="text-2xl md:text-[28px] font-bold bg-clip-text text-transparent" 
+                        style={{ 
+                            backgroundImage: 'linear-gradient(135deg, var(--color-on-surface) 0%, var(--color-primary-600) 100%)',
+                            letterSpacing: '-0.03em' 
+                        }}>
                         Worklog
                     </h1>
-                    <p className="text-[13px] mt-0.5" style={{ color: 'var(--color-on-surface-variant)', letterSpacing: '-0.01em' }}>
+                    <p className="text-[13px] mt-0.5 flex items-center gap-1.5" style={{ color: 'var(--color-on-surface-variant)', letterSpacing: '-0.01em' }}>
+                        <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                         Jira Cloud ile senkronize
                     </p>
                 </div>
             </div>
 
             {/* Header Actions */}
-            <div className="flex items-center gap-1">
-                {/* Add Worklog Button - Apple style */}
+            <div className="flex items-center gap-2">
+                {/* Add Worklog Button - Premium gradient with glow */}
                 <button 
                     onClick={() => setIsAddWorklogOpen(true)} 
-                    className="hidden sm:flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-full transition-all hover:scale-[1.02] active:scale-[0.98] relative"
-                    style={{ background: 'linear-gradient(135deg, #007AFF 0%, #0055d4 100%)', color: 'white' }}
+                    className="hidden sm:flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-xl transition-all hover:scale-[1.03] active:scale-[0.98] relative group"
+                    style={{ 
+                        background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-ai-500) 100%)', 
+                        color: 'white',
+                        boxShadow: '0 4px 15px rgba(59, 130, 246, 0.35), inset 0 1px 0 rgba(255,255,255,0.2)'
+                    }}
                 >
-                    <Plus size={16} strokeWidth={2.5}/> Yeni
+                    <Plus size={18} strokeWidth={2.5}/> Yeni Worklog
                     {showShortcuts && <ShortcutBadge char="N" />}
+                    <div className="absolute inset-0 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity" 
+                         style={{ background: 'linear-gradient(135deg, rgba(255,255,255,0.2) 0%, transparent 100%)' }} />
                 </button>
                 <button 
                     onClick={() => setIsAddWorklogOpen(true)} 

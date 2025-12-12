@@ -25,10 +25,10 @@ interface Props {
 }
 
 const getHourIndicator = (hours: number) => {
-    if (hours >= 4) return { color: '#ea4335', label: 'Uzun' };
-    if (hours >= 2) return { color: '#f9ab00', label: 'Orta' };
-    if (hours >= 1) return { color: '#34a853', label: 'Normal' };
-    return { color: '#4285f4', label: 'Kısa' };
+    if (hours >= 4) return { color: 'var(--color-error)', label: 'Uzun' };
+    if (hours >= 2) return { color: 'var(--color-warning)', label: 'Orta' };
+    if (hours >= 1) return { color: 'var(--color-success)', label: 'Normal' };
+    return { color: 'var(--color-primary-500)', label: 'Kısa' };
 };
 
 const WorklogRow: React.FC<{ 
@@ -181,9 +181,27 @@ const WorklogRow: React.FC<{
     return (
         <article 
             onContextMenu={handleContextMenu}
-            className={`group surface-card p-4 md:p-5 rounded-2xl relative transition-all duration-200 ${isProcessing ? 'opacity-60' : ''}`}
-            style={{ animationDelay: `${index * 50}ms` }}
+            className={`group relative transition-all duration-300 ${isProcessing ? 'opacity-60' : ''}`}
+            style={{ 
+                animationDelay: `${index * 50}ms`,
+                background: 'var(--color-surface)',
+                borderRadius: '20px',
+                padding: '20px',
+                border: '1px solid var(--color-outline-variant)',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.04)',
+            }}
         >
+            {/* Gradient accent line at top */}
+            <div style={{
+                position: 'absolute',
+                top: 0,
+                left: '20px',
+                right: '20px',
+                height: '3px',
+                background: 'linear-gradient(90deg, var(--color-primary-400), var(--color-ai-400))',
+                borderRadius: '0 0 4px 4px',
+                opacity: 0.7
+            }} />
             {isProcessing && (
                 <div className="absolute inset-0 flex items-center justify-center z-10 rounded-2xl" style={{ backgroundColor: 'var(--color-surface)', opacity: 0.8 }}>
                     <div className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: 'var(--color-primary-500)', borderTopColor: 'transparent' }} />
@@ -214,10 +232,14 @@ const WorklogRow: React.FC<{
                             style={{ fontFamily: 'var(--font-mono)', backgroundColor: 'var(--color-surface-container)', border: '2px solid var(--color-primary-500)' }} />
                     ) : (
                         <button onClick={() => setIsTimeEditing(true)}
-                            className="flex items-center gap-2 px-3 py-1.5 rounded-full transition-all hover:scale-105"
-                            style={{ backgroundColor: `${hourInfo.color}15`, border: `1px solid ${hourInfo.color}30` }}>
-                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: hourInfo.color }} />
-                            <span className="font-semibold text-sm" style={{ fontFamily: 'var(--font-mono)', color: hourInfo.color }}>
+                            className="flex items-center gap-2 px-4 py-2 rounded-full transition-all hover:scale-105 hover:shadow-lg"
+                            style={{ 
+                                background: `linear-gradient(135deg, ${hourInfo.color}20 0%, ${hourInfo.color}10 100%)`,
+                                border: `2px solid ${hourInfo.color}40`,
+                                backdropFilter: 'blur(8px)'
+                            }}>
+                            <div className="w-2.5 h-2.5 rounded-full animate-pulse" style={{ backgroundColor: hourInfo.color, boxShadow: `0 0 8px ${hourInfo.color}` }} />
+                            <span className="font-bold text-sm" style={{ fontFamily: 'var(--font-mono)', color: hourInfo.color }}>
                                 {wl.hours.toFixed(2)}h
                             </span>
                         </button>
@@ -243,10 +265,21 @@ const WorklogRow: React.FC<{
                     </div>
                 ) : (
                     <div onClick={() => setIsEditing(true)}
-                        className="p-4 text-sm rounded-xl cursor-pointer transition-all group/comment"
-                        style={{ backgroundColor: 'var(--color-surface-container)', color: 'var(--color-on-surface)', border: '1px solid transparent' }}
-                        onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--color-outline)'}
-                        onMouseLeave={(e) => e.currentTarget.style.borderColor = 'transparent'}>
+                        className="p-4 text-sm rounded-2xl cursor-pointer transition-all group/comment hover:shadow-md"
+                        style={{ 
+                            background: 'linear-gradient(135deg, var(--color-surface-container) 0%, var(--color-surface-dim) 100%)',
+                            color: 'var(--color-on-surface)', 
+                            border: '1px solid var(--color-outline-variant)',
+                            backdropFilter: 'blur(8px)'
+                        }}
+                        onMouseEnter={(e) => {
+                            e.currentTarget.style.borderColor = 'var(--color-primary-300)';
+                            e.currentTarget.style.transform = 'translateY(-2px)';
+                        }}
+                        onMouseLeave={(e) => {
+                            e.currentTarget.style.borderColor = 'var(--color-outline-variant)';
+                            e.currentTarget.style.transform = 'translateY(0)';
+                        }}>
                         <div className="flex items-start justify-between gap-3">
                             <p className="whitespace-pre-wrap leading-relaxed flex-1">
                                 {wl.comment || <span style={{ color: 'var(--color-on-surface-variant)', fontStyle: 'italic' }}>Açıklama girilmemiş. Düzenlemek için tıklayın...</span>}
@@ -278,8 +311,7 @@ const WorklogRow: React.FC<{
                 </div>
                 <div className="flex flex-wrap gap-2">
                     <button onClick={handleImprove} disabled={!wl.comment}
-                        className="btn-tonal text-xs px-3 py-2 disabled:opacity-40 disabled:cursor-not-allowed"
-                        style={{ backgroundColor: 'rgba(156, 39, 176, 0.1)', color: '#9c27b0' }}>
+                        className="btn-ai-tonal text-xs px-3 py-2 disabled:opacity-40 disabled:cursor-not-allowed">
                         <Wand2 size={14} /> AI İyileştir
                     </button>
                     <button onClick={handleSpellCheck} disabled={!wl.comment}
@@ -289,7 +321,7 @@ const WorklogRow: React.FC<{
                     {onDelete && (
                         <button onClick={handleDelete}
                             className="btn-tonal text-xs px-3 py-2"
-                            style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', color: '#ef4444' }} title="Worklog'u sil">
+                            style={{ backgroundColor: 'var(--color-error-container)', color: 'var(--color-error)' }} title="Worklog'u sil">
                             <Trash2 size={14} /> Sil
                         </button>
                     )}
@@ -355,9 +387,9 @@ export const WorklogList: React.FC<Props & { targetDailyHours?: number }> = ({
                                         style={{ backgroundColor: 'var(--color-primary-100)' }}
                                     >
                                         {aiProcessingMode === 'IMPROVE' ? (
-                                            <Brain size={20} className="animate-pulse" style={{ color: '#8b5cf6' }} />
+                                            <Brain size={20} className="animate-pulse" style={{ color: 'var(--color-ai-primary)' }} />
                                         ) : (
-                                            <SpellCheck size={20} className="animate-pulse" style={{ color: '#f59e0b' }} />
+                                            <SpellCheck size={20} className="animate-pulse" style={{ color: 'var(--color-warning)' }} />
                                         )}
                                     </div>
                                     <div>
@@ -399,8 +431,8 @@ export const WorklogList: React.FC<Props & { targetDailyHours?: number }> = ({
                     className="fixed bottom-32 left-1/2 -translate-x-1/2 z-50 px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3"
                     style={{
                         background: aiProcessingMode === 'IMPROVE'
-                            ? 'linear-gradient(135deg, #8b5cf6 0%, #6366f1 100%)'
-                            : 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+                            ? 'var(--gradient-ai)'
+                            : 'linear-gradient(135deg, var(--color-warning) 0%, var(--color-warning-dark) 100%)',
                         color: 'white'
                     }}
                 >
