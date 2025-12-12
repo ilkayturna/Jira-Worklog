@@ -16,6 +16,7 @@ import { formatHours } from './utils/adf';
 import { useSettings } from './hooks/useSettings';
 import { useWorklogs } from './hooks/useWorklogs';
 import { useNotifications } from './hooks/useNotifications';
+import { useIsMobile } from './hooks/useIsMobile';
 import { SUGGESTIONS_KEY, NOTIFICATION_HISTORY_KEY, WORKLOG_HISTORY_KEY } from './constants';
 import { toLocalDateStr, getWeekMonday, getWeekDays } from './utils/date';
 import { computeWordDiff, DiffPart } from './utils/diff';
@@ -53,6 +54,7 @@ export default function App() {
     updateTargetDailyHours,
     toggleTheme
   } = useSettings();
+  const isMobileDevice = useIsMobile();
   const [isAddWorklogOpen, setIsAddWorklogOpen] = useState(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const [isWeeklyReportOpen, setIsWeeklyReportOpen] = useState(false);
@@ -60,6 +62,13 @@ export default function App() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isEditingTarget, setIsEditingTarget] = useState(false);
   const [selectedDate, setSelectedDate] = useState(getDefaultStartDate());
+
+  // Add device class to body for CSS targeting
+  useEffect(() => {
+    document.body.classList.toggle('is-mobile-device', isMobileDevice);
+    document.body.classList.toggle('is-desktop-device', !isMobileDevice);
+  }, [isMobileDevice]);
+
   const { 
     notifications, 
     notificationHistory, 
@@ -834,25 +843,30 @@ status: devam/test/tamamlandı/beklemede`;
   const cleanAIOutput = (text: string, isSpellMode: boolean = false): string => {
     let cleaned = text.trim();
     
-    // SPELL modu için daha agresif temizlik ve "Split & Take Last" stratejisi
+    // Ortak temizlik: Başlangıç ve bitiş pattern'leri
+    const commonPrefixes = [
+        /^(GELİŞTİRİLMİŞ NOT:|DÜZELTİLMİŞ METİN:|Geliştirilmiş Not:|Düzeltilmiş Metin:)\s*/i,
+        /^(Output:|Çıktı:|Result:|Sonuç:|Cevap:|Answer:)\s*/i,
+        /^(İşte|Burada|Here is)[^:]*:\s*/i
+    ];
+    
+    for (const prefix of commonPrefixes) {
+        cleaned = cleaned.replace(prefix, '');
+    }
+    
+    // SPELL modu için daha agresif temizlik
     if (isSpellMode) {
         // 1. Splitter Strategy: Eğer "YENİ", "Düzeltilmiş" gibi ayırıcılar varsa, ondan sonrasını al.
-        // Bu sayede "ÖNCEKİ: ... YENİ: ..." formatındaki cevapların sadece YENİ kısmını alırız.
         const splitters = [
-            // Satır başı veya yeni satır sonrası gelen ayırıcılar
             /(?:^|\n)(?:YENİ|NEW|AFTER|SONRA|Düzeltilmi[şs](?:\s+(?:metin|hali|versiyon))?|Corrected(?:\s+(?:text|version))?|Output|Result|Cevap|Answer|Çıktı)[:|]?\s*(?:\n|$)/i
         ];
 
         for (const splitter of splitters) {
             const match = cleaned.match(splitter);
             if (match && match.index !== undefined) {
-                // Ayırıcı bulundu. Ayırıcının bitişinden sonrasını al.
                 const potentialContent = cleaned.substring(match.index + match[0].length).trim();
-                // Eğer ayırıcıdan sonra bir şey varsa, onu kullan. (Yoksa belki sadece başlık vardır, devam et)
                 if (potentialContent.length > 0) {
                     cleaned = potentialContent;
-                    // İlk geçerli ayırıcıda dur. Genelde en sonuncusu değil, "YENİ" bloğunun başı önemlidir.
-                    // Ancak bazen birden fazla olabilir, en güvenlisi ilk bulduğumuz "YENİ"den sonrasını almak.
                     break; 
                 }
             }
@@ -868,8 +882,6 @@ status: devam/test/tamamlandı/beklemede`;
         const lines = cleaned.split('\n');
         cleaned = lines.filter(line => {
             const trimmed = line.trim();
-            // Başlık gibi görünen satırları filtrele
-            // Örn: "Düzeltilmiş metin:", "Not:", "İşte düzeltilmiş hali:"
             if (/^(Düzeltilmi[şs]|Düzeltme|Output|Çıktı|Result|ÖNCEKİ|YENİ|BEFORE|AFTER|Original|Fixed|Corrected|Spell|Check|Note|Info|Cevap|Answer|Sonuç|Modified|Changed|Burada|İşte|Here)[:|]?\s*(?:metin|text|hali|version|versiyon)?[:|]?\s*$/i.test(trimmed)) {
                 return false;
             }
@@ -879,10 +891,16 @@ status: devam/test/tamamlandı/beklemede`;
         // Boş satırları temizle
         cleaned = cleaned.replace(/\n\n+/g, '\n').trim();
     } else {
-        // IMPROVE modu için hafif temizlik
+        // IMPROVE modu için temizlik
         cleaned = cleaned.replace(/^["'"'""'']+|["'"'""'']+$/g, '');
         cleaned = cleaned.replace(/^[#*_`]+|[#*_`]+$/g, '');
-        cleaned = cleaned.replace(/^(Düzeltilmi[şs]:?|Düzeltme:?|Output:?|Çıktı:?|Result:?)\s*/i, '');
+        
+        // Markdown temizliği
+        cleaned = cleaned.replace(/\*\*(.+?)\*\*/g, '$1');
+        cleaned = cleaned.replace(/\*(.+?)\*/g, '$1');
+        
+        // Başlık temizliği
+        cleaned = cleaned.replace(/^(Düzeltilmi[şs]:?|Düzeltme:?|Output:?|Çıktı:?|Result:?|Geliştirilmiş:?)\s*/i, '');
     }
     
     return cleaned.trim();
@@ -906,39 +924,40 @@ status: devam/test/tamamlandı/beklemede`;
             // Get historical context for writing style only
             const historicalContext = getHistoricalContext(wl, worklogCacheRef, 3);
             
-            prompt = `Sen profesyonel bir worklog yazarısın. Verilen kısa notu daha detaylı ve profesyonel hale getir.
+            prompt = `Sen profesyonel bir worklog asistanısın. Verilen kısa worklog notunu geliştir.
 
-İŞ KONUSU: ${wl.summary}
-MEVCUT NOT: ${wl.comment}
+BAĞLAM (Issue Özeti): ${wl.summary}
 ${historicalContext}
 
-GÖREV:
-1. Mevcut notu genişlet (2-3 cümle, 100-200 karakter)
-2. İŞ KONUSU'ndaki bilgiyi kullanarak detay ekle
-3. Yapılan işi somut eylemlerle anlat: görüşüldü, incelendi, düzeltildi, eklendi, test edildi
-4. Doğal Türkçe kullan
+KURALLAR:
+- Metni 2-3 cümleye genişlet (150-250 karakter arası).
+- Doğal, profesyonel Türkçe kullan.
+- Yapılan işi somut eylemlerle anlat: görüşüldü, incelendi, düzeltildi, eklendi, test edildi.
+- "Gerçekleştirildi", "sağlandı", "tamamlandı", "optimize edildi" gibi klişelerden KAÇIN.
+- Orijinal metinde olmayan teknik terim veya detay EKLEME.
+- Tırnak işareti, emoji, madde işareti KULLANMA.
+- Sadece düz metin döndür, başka bir şey yazma.
 
-YASAKLAR:
-- İş konusuyla alakasız bilgi ekleme
-- "gerçekleştirildi", "sağlandı", "optimize edildi" gibi boş ifadeler
-- Tırnak, emoji, madde işareti kullanma
-- Yazım tarzı örneklerinin içeriğini kopyalama
+ORİJİNAL NOT:
+${wl.comment}
 
-ÖRNEK:
-İŞ KONUSU: "Raporlama hatası"  
-MEVCUT: "Düzeltildi"
-ÇIKTI: "Raporlama modülündeki hata incelendi. Sorununun kaynağı tespit edilerek düzeltildi ve test edildi."
-
-SADECE genişletilmiş notu yaz:`;
-            maxTokensForMode = 800;
+GELİŞTİRİLMİŞ NOT:`;
+            maxTokensForMode = 500;
         } else {
-            // SPELL modu: Ultra temiz prompt - sadece metni düzelt
+            // SPELL modu: Sadece yazım hatalarını düzelt
             maxTokensForMode = Math.max(wl.comment.length * 2, 500);
-            prompt = `Sadece yazım ve noktalama hatalarını düzelt. Cümle yapısını veya kelimeleri DEĞİŞTİRME.
+            prompt = `Sen bir yazım denetleyicisisin. Verilen metindeki yazım ve noktalama hatalarını düzelt.
 
-METİN: ${wl.comment}
+KURALLAR:
+- SADECE yazım ve noktalama hatalarını düzelt.
+- Cümle yapısını veya kelimeleri DEĞİŞTİRME (yanlış yazılmış kelimeler hariç).
+- Anlamı AYNEN koru.
+- Sadece düzeltilmiş metni döndür, başka bir şey yazma.
 
-SADECE düzeltilmiş metni yaz:`;
+ORİJİNAL METİN:
+${wl.comment}
+
+DÜZELTİLMİŞ METİN:`;
         }
 
         const originalComment = wl.comment;
@@ -1028,37 +1047,37 @@ SADECE düzeltilmiş metni yaz:`;
 
         let prompt = '';
         if (mode === 'IMPROVE') {
-            prompt = `Sen profesyonel bir worklog yazarısın. Aşağıdaki kısa notları daha detaylı ve profesyonel hale getir.
+            prompt = `Sen profesyonel bir worklog asistanısın. Aşağıdaki worklog notlarını geliştir.
 
 KURALLAR:
-1. Her notu 2-3 cümleye genişlet (100-200 karakter)
-2. 'summary' alanındaki İŞ KONUSUNA uygun detay ekle
-3. Somut eylemler kullan: görüşüldü, incelendi, düzeltildi, eklendi, test edildi
-4. Doğal Türkçe kullan
-5. İş konusuyla ALAKASIZ bilgi EKLEME
-6. YASAK: "gerçekleştirildi", "sağlandı", "optimize edildi"
-7. SADECE JSON array döndür
+- Her notu 2-3 cümleye genişlet (150-250 karakter).
+- Bağlam için verilen 'summary' alanını kullan.
+- Doğal, profesyonel Türkçe kullan.
+- Yapılan işi somut eylemlerle anlat: görüşüldü, incelendi, düzeltildi, eklendi, test edildi.
+- "Gerçekleştirildi", "sağlandı", "tamamlandı", "optimize edildi" gibi klişelerden KAÇIN.
+- Orijinal metinde olmayan teknik terim EKLEME.
+- SADECE JSON array döndür, başka bir şey yazma.
 ${historicalContext}
 
-GİRİŞ:
+GİRİŞ JSON:
 ${JSON.stringify(items, null, 2)}
 
-ÇIKIŞ FORMAT (SADECE JSON):
+ÇIKIŞ JSON FORMATI:
 [{"id": "xxx", "text": "Geliştirilmiş metin..."}]`;
         } else {
-            // SPELL MODE - Ultra minimal prompt for accuracy
-            prompt = `Yazım ve noktalama hatalarını düzelt. Cümle yapısını veya kelimeleri DEĞİŞTİRME.
+            // SPELL MODE - Sadece yazım hatalarını düzelt
+            prompt = `Sen bir yazım denetleyicisisin. Aşağıdaki metinlerdeki yazım ve noktalama hatalarını düzelt.
 
 KURALLAR:
-1. SADECE yazım ve noktalama hatalarını düzelt
-2. Cümle yapısını KORU
-3. Kelimeleri DEĞİŞTİRME (sadece yanlış yazılmışsa düzelt)
-4. SADECE JSON array döndür
+- SADECE yazım ve noktalama hatalarını düzelt.
+- Cümle yapısını veya kelimeleri DEĞİŞTİRME (yanlış yazılmış kelimeler hariç).
+- Anlamı AYNEN koru.
+- SADECE JSON array döndür, başka bir şey yazma.
 
-GİRİŞ:
+GİRİŞ JSON:
 ${JSON.stringify(items, null, 2)}
 
-ÇIKIŞ (SADECE JSON):
+ÇIKIŞ JSON FORMATI:
 [{"id": "xxx", "text": "Düzeltilmiş metin..."}]`;
         }
 
@@ -1516,7 +1535,7 @@ JSON ÇIKTI (SADECE ARRAY):
   };
 
   return (
-    <main ref={mainRef} className="min-h-screen py-6 px-4 md:py-10 md:px-6 animate-fade-in">
+    <main ref={mainRef} className={`min-h-screen py-4 px-3 sm:py-6 sm:px-4 md:py-10 md:px-6 animate-fade-in overflow-x-hidden ${isMobileDevice ? 'pb-24' : ''}`}>
       
       {/* Pull to Refresh Indicator */}
       <div 
@@ -2160,28 +2179,13 @@ JSON ÇIKTI (SADECE ARRAY):
         </span>
       </footer>
 
-      {/* Floating Magic Button - Mobile (bottom-24) */}
+      {/* Floating Magic Button - Desktop only */}
       <button
         onClick={() => {
             triggerHaptic();
             setIsMagicBarOpen(true);
         }}
-        className="fixed bottom-24 right-4 z-40 lg:hidden w-14 h-14 rounded-full flex items-center justify-center shadow-xl animate-bounce-subtle"
-        style={{ 
-            background: 'var(--gradient-ai)',
-            boxShadow: 'var(--shadow-ai)'
-        }}
-      >
-        <Sparkles size={24} className="text-white" />
-      </button>
-
-      {/* Floating Magic Button - Desktop (bottom-6, smaller circular) */}
-      <button
-        onClick={() => {
-            triggerHaptic();
-            setIsMagicBarOpen(true);
-        }}
-        className="fixed bottom-6 right-6 z-40 hidden lg:flex w-12 h-12 rounded-full items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95"
+        className="desktop-only fixed bottom-6 right-6 z-40 w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95"
         style={{ 
             background: 'linear-gradient(135deg, var(--color-ai-500) 0%, var(--color-primary-500) 100%)',
             boxShadow: '0 6px 24px rgba(139, 92, 246, 0.35)'

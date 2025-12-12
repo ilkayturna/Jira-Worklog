@@ -50,4 +50,9 @@ export default defineConfig({
       }
     })
   ],
+  server: {
+    host: '0.0.0.0', // Tüm ağ arayüzlerinde dinle (LAN erişimi için)
+    port: 5173,
+    strictPort: false, // Port meşgulse alternatif port kullan
+  }
 });

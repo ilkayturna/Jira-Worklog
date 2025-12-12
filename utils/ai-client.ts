@@ -115,50 +115,76 @@ export async function callAI(
 // ===================================================================
 
 /**
- * Improve worklog text with AI
+ * Improve worklog text with AI (Single Item)
+ * Uses the same logic as batch version for consistency
  */
 export async function improveText(
   text: string,
   summary: string,
   settings: AppSettings
 ): Promise<string> {
-  const prompt = `Sen profesyonel bir worklog asistanısın. Verilen kısa notu, bağlama uygun şekilde 2-3 cümlelik profesyonel Türkçe'ye çevir.
+  const prompt = `Sen profesyonel bir worklog asistanısın. Verilen kısa worklog notunu, bağlama uygun şekilde geliştir.
 
 BAĞLAM (Issue Özeti): ${summary}
 
-KURAL:
-- 150-250 karakter arası, doğal Türkçe
-- "Gerçekleştirildi", "sağlandı" gibi klişelerden kaçın
-- Metinde olmayan teknik terim ekleme
-- Tırnak, emoji, madde işareti kullanma
+KURALLAR:
+- Metni 2-3 cümleye genişlet (150-250 karakter arası).
+- Doğal, profesyonel Türkçe kullan.
+- "Gerçekleştirildi", "sağlandı", "tamamlandı" gibi klişelerden KAÇIN.
+- Orijinal metinde olmayan teknik terim veya detay EKLEME.
+- Tırnak işareti, emoji, madde işareti KULLANMA.
+- Sadece düz metin döndür, başka bir şey yazma.
 
-Orijinal Not: ${text}
+ORİJİNAL NOT:
+${text}
 
-Geliştirilmiş Not:`;
+GELİŞTİRİLMİŞ NOT:`;
 
-  return callAI({
+  const response = await callAI({
     prompt,
-    maxTokens: 1000,
+    maxTokens: 500,
     temperature: 0.3
   }, settings);
+
+  // Clean up response - remove any quotes, prefixes, etc.
+  return response
+    .replace(/^["']|["']$/g, '') // Remove surrounding quotes
+    .replace(/^(Geliştirilmiş Not:|İyileştirilmiş:)\s*/i, '') // Remove prefixes
+    .trim();
 }
 
 /**
- * Fix spelling in text
+ * Fix spelling in text (Single Item)
+ * Uses the same logic as batch version for consistency
  */
 export async function fixSpelling(
   text: string,
   settings: AppSettings
 ): Promise<string> {
-  const prompt = `Sadece yazım ve noktalama hatalarını düzelt. Cümle yapısını veya kelimeleri değiştirme:
+  const prompt = `Sen bir yazım denetleyicisisin. Verilen metindeki yazım ve noktalama hatalarını düzelt.
 
-${text}`;
+KURALLAR:
+- SADECE yazım ve noktalama hatalarını düzelt.
+- Cümle yapısını veya kelimeleri DEĞİŞTİRME (yanlış yazılmış kelimeler hariç).
+- Anlamı AYNEN koru.
+- Sadece düzeltilmiş metni döndür, başka bir şey yazma.
 
-  return callAI({
+ORİJİNAL METİN:
+${text}
+
+DÜZELTİLMİŞ METİN:`;
+
+  const response = await callAI({
     prompt,
-    maxTokens: Math.max(text.length * 2, 800),
-    temperature: 0.1 // Low temperature for deterministic results
+    maxTokens: Math.max(text.length * 2, 500),
+    temperature: 0.1
   }, settings);
+
+  // Clean up response - remove any quotes, prefixes, etc.
+  return response
+    .replace(/^["']|["']$/g, '') // Remove surrounding quotes
+    .replace(/^(Düzeltilmiş Metin:|Düzeltilmiş:)\s*/i, '') // Remove prefixes
+    .trim();
 }
 
 /**
@@ -168,22 +194,22 @@ export async function batchImproveTexts(
   items: Array<{ id: string; summary: string; text: string }>,
   settings: AppSettings
 ): Promise<Array<{ id: string; text: string }>> {
-  const prompt = `You are a professional worklog assistant. Improve the following worklog comments to be more professional and slightly expanded (150-250 chars).
+  const prompt = `Sen profesyonel bir worklog asistanısın. Aşağıdaki worklog notlarını geliştir.
 
-INSTRUCTIONS:
-- Expand each comment to 2-3 sentences.
-- Use the provided 'summary' for context.
-- Use natural, professional Turkish.
-- Avoid clichés like "gerçekleştirildi", "sağlandı".
-- Do NOT use technical terms not present in the original text.
-- Return ONLY a JSON array.
+KURALLAR:
+- Her notu 2-3 cümleye genişlet (150-250 karakter).
+- Bağlam için verilen 'summary' alanını kullan.
+- Doğal, profesyonel Türkçe kullan.
+- "Gerçekleştirildi", "sağlandı", "tamamlandı" gibi klişelerden KAÇIN.
+- Orijinal metinde olmayan teknik terim EKLEME.
+- SADECE JSON array döndür, başka bir şey yazma.
 
-INPUT JSON:
+GİRİŞ JSON:
 ${JSON.stringify(items)}
 
-OUTPUT JSON FORMAT:
+ÇIKIŞ JSON FORMATI:
 [
-  {"id": "...", "text": "Improved text here..."},
+  {"id": "...", "text": "Geliştirilmiş metin..."},
   ...
 ]`;
 
@@ -202,7 +228,7 @@ OUTPUT JSON FORMAT:
     return JSON.parse(response);
   } catch (error) {
     console.error('JSON Parse Error:', error);
-    throw new Error('❌ AI response format error');
+    throw new Error('❌ AI yanıt format hatası');
   }
 }
 
@@ -213,20 +239,20 @@ export async function batchFixSpelling(
   items: Array<{ id: string; text: string }>,
   settings: AppSettings
 ): Promise<Array<{ id: string; text: string }>> {
-  const prompt = `You are a spell checker. Fix spelling and punctuation errors in the following texts.
+  const prompt = `Sen bir yazım denetleyicisisin. Aşağıdaki metinlerdeki yazım ve noktalama hatalarını düzelt.
 
-INSTRUCTIONS:
-- Fix ONLY spelling and punctuation.
-- Do NOT change sentence structure or words unless they are misspelled.
-- Keep the meaning exactly the same.
-- Return ONLY a JSON array.
+KURALLAR:
+- SADECE yazım ve noktalama hatalarını düzelt.
+- Cümle yapısını veya kelimeleri DEĞİŞTİRME (yanlış yazılmış kelimeler hariç).
+- Anlamı AYNEN koru.
+- SADECE JSON array döndür, başka bir şey yazma.
 
-INPUT JSON:
+GİRİŞ JSON:
 ${JSON.stringify(items)}
 
-OUTPUT JSON FORMAT:
+ÇIKIŞ JSON FORMATI:
 [
-  {"id": "...", "text": "Fixed text here..."},
+  {"id": "...", "text": "Düzeltilmiş metin..."},
   ...
 ]`;
 
@@ -245,6 +271,6 @@ OUTPUT JSON FORMAT:
     return JSON.parse(response);
   } catch (error) {
     console.error('JSON Parse Error:', error);
-    throw new Error('❌ AI response format error');
+    throw new Error('❌ AI yanıt format hatası');
   }
 }

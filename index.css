@@ -569,6 +569,7 @@ body {
   line-height: 1.6;
   min-height: 100vh;
   transition: background var(--transition-normal), color var(--transition-normal);
+  overflow-x: hidden; /* Yatay taşmayı engelle */
 }
 
 .dark body,
@@ -820,11 +821,18 @@ body.dark {
   /* Icon Buttons */
   .btn-icon {
     @apply inline-flex items-center justify-center;
-    padding: 10px;
+    padding: 8px;
     color: var(--color-on-surface-variant);
     border-radius: var(--radius-lg);
     transition: all var(--transition-fast);
     background: transparent;
+    flex-shrink: 0;
+  }
+
+  @media (min-width: 640px) {
+    .btn-icon {
+      padding: 10px;
+    }
   }
 
   .btn-icon:hover {
@@ -1557,13 +1565,28 @@ body.dark {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1.25rem 1.5rem;
+  padding: 0.75rem 1rem;
   background: rgba(255, 255, 255, 0.72);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border-radius: var(--radius-xl);
   border: 0.5px solid rgba(0, 0, 0, 0.04);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  gap: 0.5rem;
+  overflow: hidden;
+}
+
+@media (min-width: 640px) {
+  .apple-header {
+    padding: 1rem 1.25rem;
+    gap: 1rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .apple-header {
+    padding: 1.25rem 1.5rem;
+  }
 }
 
 .dark .apple-header {
@@ -2268,4 +2291,101 @@ body.dark {
   background-size: 200% 100%;
   animation: apple-shimmer 1.5s infinite;
   border-radius: var(--radius-lg);
+}
+
+/* ============================================
+   📱 DEVICE-AWARE STYLES
+   Mobile vs Desktop (not screen size based)
+   ============================================ */
+
+/* Desktop Device - Always show all buttons regardless of window size */
+body.is-desktop-device .desktop-only {
+  display: flex !important;
+}
+
+body.is-desktop-device .mobile-only {
+  display: none !important;
+}
+
+/* Mobile Device - Hide desktop-specific elements */
+body.is-mobile-device .desktop-only {
+  display: none !important;
+}
+
+body.is-mobile-device .mobile-only {
+  display: flex !important;
+}
+
+/* Desktop: Always show these elements even on small windows */
+body.is-desktop-device .btn-icon.hide-mobile-only {
+  display: inline-flex !important;
+}
+
+/* Desktop floating button */
+body.is-desktop-device .floating-ai-desktop {
+  display: flex !important;
+}
+
+body.is-mobile-device .floating-ai-desktop {
+  display: none !important;
+}
+
+/* Mobile floating button */
+body.is-desktop-device .floating-ai-mobile {
+  display: none !important;
+}
+
+body.is-mobile-device .floating-ai-mobile {
+  display: flex !important;
+}
+
+/* Mobile bottom nav - only on mobile devices */
+body.is-desktop-device .mobile-bottom-nav,
+body.is-desktop-device .bottom-nav {
+  display: none !important;
+}
+
+body.is-mobile-device .mobile-bottom-nav,
+body.is-mobile-device .bottom-nav {
+  display: flex !important;
+}
+
+/* Safe area bottom for iPhone notch */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Desktop sidebar - always visible on desktop regardless of window size */
+body.is-desktop-device .desktop-sidebar {
+  display: block !important;
+}
+
+body.is-mobile-device .desktop-sidebar {
+  display: none !important;
+}
+
+/* Header responsive on desktop - keep full size even on small window */
+body.is-desktop-device .apple-header {
+  padding: 1.25rem 1.5rem;
+  gap: 1rem;
+}
+
+/* Mobile header - compact */
+body.is-mobile-device .apple-header {
+  padding: 0.75rem 1rem;
+  gap: 0.5rem;
+}
+
+/* Mobile device specific adjustments */
+body.is-mobile-device .btn-icon {
+  padding: 8px;
+}
+
+/* Desktop always shows full button text */
+body.is-desktop-device .header-btn-text {
+  display: inline !important;
+}
+
+body.is-mobile-device .header-btn-text {
+  display: none !important;
 }
