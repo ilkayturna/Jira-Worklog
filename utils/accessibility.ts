@@ -31,8 +31,12 @@ export const trapFocus = (element: HTMLElement): (() => void) => {
 
   element.addEventListener('keydown', handleTabKey);
   
-  // Focus first element on mount
-  setTimeout(() => firstElement?.focus(), 100);
+  // Focus first element on mount using requestAnimationFrame for better timing
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      firstElement?.focus();
+    });
+  });
 
   // Return cleanup function
   return () => {
@@ -90,13 +94,18 @@ export const announce = (message: string, priority: 'polite' | 'assertive' = 'po
     document.body.appendChild(liveRegion);
   }
 
-  // Update the message
-  liveRegion.textContent = '';
-  setTimeout(() => {
-    if (liveRegion) {
-      liveRegion.textContent = message;
-    }
-  }, 100);
+  // Update the message - clear first to ensure screen readers pick up the change
+  // Some screen readers need the content to change to announce it
+  if (liveRegion.textContent === message) {
+    liveRegion.textContent = '';
+    requestAnimationFrame(() => {
+      if (liveRegion) {
+        liveRegion.textContent = message;
+      }
+    });
+  } else {
+    liveRegion.textContent = message;
+  }
 };
 
 /**
