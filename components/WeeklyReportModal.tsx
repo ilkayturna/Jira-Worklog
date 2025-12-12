@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { X, FileSpreadsheet, Download, Plus, Trash2, Check, ChevronLeft, ChevronRight, Wand2, GripVertical, RefreshCw } from 'lucide-react';
 import { Worklog, WeeklyReportItem, AppSettings } from '../types';
-import * as XLSX from 'xlsx';
 
 interface Props {
     isOpen: boolean;
@@ -162,7 +161,15 @@ export const WeeklyReportModal: React.FC<Props> = ({
         }
     };
     
-    const exportToExcel = () => {
+    const exportToExcel = async () => {
+        let XLSX: typeof import('xlsx');
+        try {
+            XLSX = await import('xlsx');
+        } catch (e) {
+            console.error('Failed to load XLSX module:', e);
+            return;
+        }
+
         const wsData: any[][] = [];
         wsData.push(['', ...DAYS]);
         
