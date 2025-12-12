@@ -166,6 +166,9 @@ export default function App() {
   const [pullProgress, setPullProgress] = useState(0);
   const pullStartY = useRef(0);
   const mainRef = useRef<HTMLElement>(null);
+  
+  // Timeout ref for cleanup - Memory leak prevention
+  const refreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // --- Effects ---
 
@@ -180,6 +183,11 @@ export default function App() {
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      // Cleanup pending timeouts
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+        refreshTimeoutRef.current = null;
+      }
     };
   }, []);
 
@@ -1025,13 +1033,15 @@ DÜZELTİLMİŞ METİN:`;
                 { before: originalComment, after: improvedText, issueKey: wl.issueKey }
             );
             
-            // Refresh data after AI action
-            setTimeout(() => loadData(true), 500);
+            // Refresh data after AI action - with cleanup
+            if (refreshTimeoutRef.current) clearTimeout(refreshTimeoutRef.current);
+            refreshTimeoutRef.current = setTimeout(() => loadData(true), 500);
         } else if (improvedText) {
             // Metin var ama çok benzer - yine de uygula
             await handleUpdateWorklog(id, improvedText, undefined, true);
             notify('Güncellendi', `${wl.issueKey} metni güncellendi`, 'success');
-            setTimeout(() => loadData(true), 500);
+            if (refreshTimeoutRef.current) clearTimeout(refreshTimeoutRef.current);
+            refreshTimeoutRef.current = setTimeout(() => loadData(true), 500);
         } else {
             notify('Hata', 'AI yanıt veremedi, tekrar deneyin.', 'error');
         }

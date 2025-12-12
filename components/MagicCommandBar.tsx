@@ -33,6 +33,7 @@ export const MagicCommandBar: React.FC<MagicCommandBarProps> = ({
     const [isListening, setIsListening] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
     const recognitionRef = useRef<any>(null);
+    const abortControllerRef = useRef<AbortController | null>(null);
 
     // Focus input when opened
     useEffect(() => {
@@ -44,6 +45,11 @@ export const MagicCommandBar: React.FC<MagicCommandBarProps> = ({
             setResult(null);
             setError(null);
             stopListening();
+            // Abort any pending requests
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort();
+                abortControllerRef.current = null;
+            }
         }
     }, [isOpen]);
 
@@ -125,70 +131,172 @@ export const MagicCommandBar: React.FC<MagicCommandBarProps> = ({
     const analyzeInput = async () => {
         if (!input.trim() || !settings.groqApiKey) return;
         
+        // Cancel any previous request
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+        }
+        abortControllerRef.current = new AbortController();
+        
         setIsAnalyzing(true);
         setLoadingStep('Jira taranıyor...');
         setError(null);
 
         try {
-            // 1. Search for relevant issues in Jira first to give context to AI
-            // Extract potential keywords (simple split for now, AI will do better but we need data first)
-            const keywords = input.split(' ').filter(w => w.length > 3).slice(0, 3).join(' ');
-            let relevantIssues: JiraIssue[] = [];
+            // 1. Akıllı anahtar kelime çıkarımı
+            // Kullanıcı "logos crystal reports yaptım" derse -> "crystal reports" ve "logos" aranmalı
+            const inputLower = input.toLowerCase();
             
-            try {
-                // Search with broad keywords
-                relevantIssues = await searchIssues(keywords || input, settings);
-            } catch (err) {
-                console.warn('Jira search failed, proceeding without context', err);
+            // Saat bilgisini çıkar
+            const hourMatch = input.match(/(\d+(?:[.,]\d+)?)\s*(?:saat|sa|h|hour)/i);
+            const extractedHours = hourMatch ? parseFloat(hourMatch[1].replace(',', '.')) : null;
+            
+            // Özel anahtar kelimeleri çıkar (ürün/modül isimleri, teknolojiler)
+            const specialKeywords = [
+                'crystal', 'report', 'reports', 'rapor',
+                'logo', 'logos', 'netsis', 'tiger', 'go', 'erp',
+                'entegrasyon', 'integration', 'api',
+                'satınalma', 'satış', 'stok', 'muhasebe', 'finans',
+                'fatura', 'irsaliye', 'sipariş', 'order',
+                'kullanıcı', 'user', 'yetki', 'permission',
+                'parametre', 'parameter', 'ayar', 'setting',
+                'hata', 'bug', 'fix', 'düzeltme', 'sorun', 'problem'
+            ];
+            
+            const foundKeywords: string[] = [];
+            specialKeywords.forEach(kw => {
+                if (inputLower.includes(kw)) foundKeywords.push(kw);
+            });
+            
+            // Genel kelimeleri de ekle (3+ karakter)
+            const generalWords = input
+                .replace(/[^\wğüşıöçĞÜŞİÖÇ\s]/gi, '')
+                .split(/\s+/)
+                .filter(w => w.length > 3 && !['yaptım', 'ettim', 'için', 'olan', 'saat', 'gün', 'çalıştım'].includes(w.toLowerCase()));
+            
+            const searchQueries = [...new Set([...foundKeywords, ...generalWords])].slice(0, 5);
+            
+            console.log('🔍 Arama kelimeleri:', searchQueries);
+
+            // 2. Paralel arama - her kelime için ayrı arama yap
+            let allIssues: JiraIssue[] = [];
+            
+            setLoadingStep('Issue\'lar aranıyor...');
+            
+            for (const query of searchQueries) {
+                try {
+                    const issues = await searchIssues(query, settings);
+                    allIssues.push(...issues);
+                } catch (err) {
+                    console.warn(`Arama başarısız (${query}):`, err);
+                }
+            }
+            
+            // Duplicate'leri kaldır (key bazında)
+            const uniqueIssues = Array.from(new Map(allIssues.map(i => [i.key, i])).values());
+            
+            // Issue numarasına göre sırala (büyük = yeni)
+            uniqueIssues.sort((a, b) => {
+                const numA = parseInt(a.key.split('-')[1] || '0');
+                const numB = parseInt(b.key.split('-')[1] || '0');
+                return numB - numA; // Büyükten küçüğe (yeniden eskiye)
+            });
+            
+            console.log('📋 Bulunan issue sayısı:', uniqueIssues.length);
+
+            // 3. Genel destek issue'larını da al (fallback için)
+            const supportKeywords = ['destek', 'genel', 'talep', 'canlı geçiş', 'kullanıcı destek'];
+            let supportIssues: JiraIssue[] = [];
+            
+            if (uniqueIssues.length === 0) {
+                setLoadingStep('Genel destek issue\'ları aranıyor...');
+                for (const kw of supportKeywords) {
+                    try {
+                        const issues = await searchIssues(kw, settings);
+                        supportIssues.push(...issues);
+                    } catch (err) {
+                        // Ignore
+                    }
+                }
+                supportIssues = Array.from(new Map(supportIssues.map(i => [i.key, i])).values());
             }
 
             setLoadingStep('Yapay zeka analiz ediyor...');
 
-            // 2. Ask AI to analyze intent, match issue, estimate time, and format comment
+            // 4. AI ile en uygun issue'yu seç
+            const allFoundIssues = uniqueIssues.length > 0 ? uniqueIssues : supportIssues;
+            
             const prompt = `
-Sen akıllı bir Jira Worklog asistanısın. Kullanıcının girdiği doğal dildeki ifadeyi analiz et.
+Sen akıllı bir Jira Worklog asistanısın. Kullanıcının girdiği doğal dildeki ifadeyi analiz et ve EN UYGUN issue'ya eşleştir.
 
 KULLANICI GİRDİSİ: "${input}"
+${extractedHours ? `KULLANICININ BELİRTTİĞİ SÜRE: ${extractedHours} saat` : ''}
 
-MEVCUT JIRA KAYITLARI (Bulunanlar):
-${relevantIssues.map(i => `- [${i.key}] ${i.summary} (Proje: ${i.projectName})\n  Detay: ${i.description ? i.description.substring(0, 300).replace(/\n/g, ' ') : 'Yok'}`).join('\n')}
+BULUNAN JIRA ISSUE'LARI (Yeniden eskiye sıralı):
+${allFoundIssues.slice(0, 15).map((i, idx) => 
+    `${idx + 1}. [${i.key}] ${i.summary}
+   Proje: ${i.projectName || 'Bilinmiyor'} | Durum: ${i.status || 'Bilinmiyor'}
+   Açıklama: ${i.description ? i.description.substring(0, 200).replace(/\n/g, ' ') : 'Yok'}`
+).join('\n\n')}
+
+${uniqueIssues.length === 0 ? `
+⚠️ DİKKAT: Kullanıcının anlattığı işle doğrudan ilgili issue bulunamadı.
+Yukarıdaki listede GENEL DESTEK issue'ları var. Bunlardan birini seç:
+- "Destek Talepleri", "Genel Destek", "Kullanıcı Destek" gibi issue'ları tercih et.
+- Canlı geçiş öncesi/sonrası destek, kullanıcı destek işlemleri gibi genel kategorileri düşün.
+` : ''}
 
 GÖREVLER:
+
 1. EN UYGUN ISSUE'YU SEÇ:
-   - Kullanıcı girdisiyle en alakalı issue'yu bul.
-   - Eğer başlıkta veya DETAYDA (açıklamada) ipucu varsa onu kullan.
-   - Eğer birden fazla benzer varsa (örn: AGC-250 ve AGC-427), ID'si daha büyük olanı (daha güncel) tercih et.
-   - Hiçbir issue eşleşmiyorsa null dön.
+   - Kullanıcının anlattığı işle EN ALAKALI issue'yu bul.
+   - ÖNCELİK SIRASI:
+     a) Başlık veya açıklamada anahtar kelimeler geçiyorsa (örn: "crystal reports" -> Crystal Reports içeren issue)
+     b) Aynı konuda birden fazla issue varsa, ID NUMARASI BÜYÜK OLANI seç (daha güncel)
+     c) Hiç eşleşme yoksa, GENEL DESTEK issue'larından birini seç
+   - KESİNLİKLE null dönme, mutlaka bir issue seç!
 
-2. SÜRE TAHMİN ET:
-   - Yapılan işin tanımına göre mantıklı bir süre (saat cinsinden) belirle.
-   - Kullanıcı süre belirttiyse (örn: "2 saat", "yarım gün") onu kullan.
-   - Belirtilmediyse işin zorluğuna göre tahmin et (Basit: 0.5-1, Orta: 1-3, Zor: 3+).
+2. SÜRE BELİRLE:
+   ${extractedHours ? `- Kullanıcı ${extractedHours} saat belirtmiş, BUNU KULLAN.` : `
+   - Kullanıcı süre belirtmediyse, işin türüne göre tahmin et:
+     * Basit kontrol/inceleme: 0.5-1 saat
+     * Orta düzey iş: 1-2 saat  
+     * Karmaşık iş: 2-4 saat`}
 
-3. YORUMU DÜZENLE:
-   - Kullanıcının ifadesini profesyonel bir Jira worklog açıklamasına dönüştür.
-   - Issue'nun detayından (açıklamasından) bağlam alarak yorumu zenginleştir.
-   - Yazım hatalarını düzelt, kurumsal bir dil kullan.
+3. YORUMU PROFESYONELCE DÜZENLE:
+   - Kullanıcının ifadesini kurumsal ve teknik bir worklog açıklamasına dönüştür.
+   - Issue'nun konusuyla uyumlu olsun.
+   - "yaptım", "ettim" gibi günlük ifadeler yerine "gerçekleştirildi", "tamamlandı" kullan.
 
-ÇIKTI FORMATI (Sadece JSON):
+ÇIKTI (SADECE JSON, başka hiçbir şey yazma):
 {
-  "issueKey": "AGC-427" veya null,
-  "issueSummary": "Bulunan issue başlığı" veya null,
-  "hours": 1.5,
+  "issueKey": "XXX-123",
+  "issueSummary": "Issue başlığı",
+  "hours": ${extractedHours || 1},
   "comment": "Profesyonelce düzenlenmiş açıklama",
   "confidence": "high" | "medium" | "low",
   "reasoning": "Neden bu issue'yu seçtiğinin kısa açıklaması"
 }
 `;
 
-            const response = await callGroq(prompt, settings, 800, 0.1); // Low temp for precision
+            const response = await callGroq(prompt, settings, 1000, 0.1);
             
             try {
                 const jsonMatch = response.match(/\{[\s\S]*\}/);
                 if (!jsonMatch) throw new Error('JSON yanıtı alınamadı');
                 const analysis = JSON.parse(jsonMatch[0]);
+                
+                // Validate that we have an issue
+                if (!analysis.issueKey && allFoundIssues.length > 0) {
+                    // AI null döndüyse, ilk issue'yu kullan
+                    analysis.issueKey = allFoundIssues[0].key;
+                    analysis.issueSummary = allFoundIssues[0].summary;
+                    analysis.confidence = 'low';
+                    analysis.reasoning = 'AI eşleştirme yapamadı, en güncel issue seçildi.';
+                }
+                
                 setResult(analysis);
             } catch (parseErr) {
+                console.error('Parse error:', parseErr, response);
                 throw new Error('AI yanıtı işlenemedi.');
             }
 
@@ -215,28 +323,14 @@ GÖREVLER:
             />
             
             <div className="relative w-full max-w-2xl flex flex-col gap-4 animate-scale-in">
-                {/* Hero Title with BETA badge */}
+                {/* Hero Title */}
                 <div className="text-center mb-2">
                     <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full glass-card relative">
                         <Wand2 size={16} style={{ color: 'var(--color-ai-500)' }} />
                         <span className="text-sm font-medium" style={{ color: 'var(--color-on-surface)' }}>
                             AI Worklog Asistanı
                         </span>
-                        {/* BETA Badge */}
-                        <span 
-                            className="ml-1 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-full animate-pulse"
-                            style={{ 
-                                background: 'linear-gradient(135deg, #F59E0B 0%, #F97316 100%)',
-                                color: 'white',
-                                boxShadow: '0 2px 8px rgba(245, 158, 11, 0.4)'
-                            }}
-                        >
-                            BETA
-                        </span>
                     </div>
-                    <p className="text-xs mt-2" style={{ color: 'var(--color-on-surface-variant)' }}>
-                        🧪 Bu özellik test aşamasındadır. Geri bildirimlerinizi bekliyoruz!
-                    </p>
                 </div>
 
                 {/* Main Input Card - Premium Design */}
@@ -515,29 +609,6 @@ GÖREVLER:
                     </div>
                 )}
 
-                {/* Tips - when no result */}
-                {!result && !isAnalyzing && !error && (
-                    <div className="grid grid-cols-3 gap-3">
-                        {[
-                            { icon: '🎤', title: 'Sesle Anlat', desc: 'Mikrofona tıklayıp konuş' },
-                            { icon: '✍️', title: 'Yazarak Anlat', desc: 'Ne yaptığını yaz' },
-                            { icon: '🚀', title: 'AI İşlesin', desc: 'Play butonuna bas' }
-                        ].map((tip, i) => (
-                            <div 
-                                key={i}
-                                className="glass-card p-4 rounded-xl text-center"
-                            >
-                                <span className="text-2xl">{tip.icon}</span>
-                                <h4 className="font-bold text-sm mt-2" style={{ color: 'var(--color-on-surface)' }}>
-                                    {tip.title}
-                                </h4>
-                                <p className="text-xs mt-1" style={{ color: 'var(--color-on-surface-variant)' }}>
-                                    {tip.desc}
-                                </p>
-                            </div>
-                        ))}
-                    </div>
-                )}
             </div>
         </div>
     );

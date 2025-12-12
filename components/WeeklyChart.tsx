@@ -49,6 +49,7 @@ export const WeeklyChart: React.FC<WeeklyChartProps> = ({
     
     const handleDrop = (e: React.DragEvent, date: string) => {
         e.preventDefault();
+        e.stopPropagation();
         setDragOverDate(null);
         
         try {

@@ -3,6 +3,19 @@ import { X, Search, Clock, MessageSquare, Plus, Sparkles, Loader2, Zap, Trending
 import { AppSettings, JiraIssue, WorklogSuggestion } from '../types';
 import { searchIssues, callGroq } from '../services/api';
 
+// XSS Prevention - Sanitize AI output
+const sanitizeAIOutput = (text: string): string => {
+    if (!text) return '';
+    return text
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#x27;')
+        .replace(/&(?!(?:lt|gt|quot|#x27|amp);)/g, '&amp;')
+        .trim()
+        .replace(/^["'“”‘’]+|["'“”‘’]+$/g, ''); // Remove surrounding quotes
+};
+
 interface TimeEstimation {
     estimate: number;
     confidence: 'high' | 'medium' | 'low';
@@ -157,7 +170,7 @@ ${historyContext}
 SADECE worklog açıklamasını yaz, başka hiçbir şey yazma:`;
 
             const response = await callGroq(prompt, settings, 150);
-            const cleaned = response.trim().replace(/^["'"'""'']+|["'"'""'']+$/g, '');
+            const cleaned = sanitizeAIOutput(response);
             setAiSuggestedComment(cleaned);
         } catch (e) {
             console.error('AI comment error:', e);

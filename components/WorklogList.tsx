@@ -5,6 +5,7 @@ import { parseSmartTimeInput } from '../utils/adf';
 import { IssueHoverCard } from './IssueHoverCard';
 import { ContextMenu } from './ui/ContextMenu';
 import { triggerHaptic } from '../utils/ui';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 const MAX_HISTORY_SIZE = 20;
 
@@ -24,6 +25,79 @@ interface Props {
   aiProcessingMode?: 'IMPROVE' | 'SPELL' | null;
   selectedDate?: string;
 }
+
+// AI-based worklog intensity analyzer - İş yoğunluğuna göre renk belirleme
+// 🔴 Kırmızı: Yoğun/karmaşık iş (bug fix, acil, production, hata, kritik)
+// 🔵 Mavi: Normal/rutin iş (toplantı, dokümantasyon, analiz)
+// 🟢 Yeşil: Hafif iş (küçük düzenleme, inceleme, test)
+const analyzeWorklogIntensity = (comment: string, hours: number, summary: string): { color: string; intensity: 'high' | 'medium' | 'low'; label: string } => {
+    const text = (comment + ' ' + summary).toLowerCase();
+    
+    // Yoğun iş anahtar kelimeleri (Kırmızı)
+    const highIntensityKeywords = [
+        'bug', 'hata', 'fix', 'düzeltme', 'acil', 'urgent', 'kritik', 'critical',
+        'production', 'prod', 'canlı', 'live', 'hotfix', 'sorun', 'problem',
+        'geliştirme', 'development', 'kodlama', 'implementation', 'refactor',
+        'entegrasyon', 'integration', 'migration', 'taşıma', 'dönüşüm',
+        'performans', 'optimization', 'kompleks', 'karmaşık', 'zor'
+    ];
+    
+    // Orta yoğunluk anahtar kelimeleri (Mavi)
+    const mediumIntensityKeywords = [
+        'toplantı', 'meeting', 'görüşme', 'analiz', 'analysis', 'inceleme',
+        'dokümantasyon', 'documentation', 'rapor', 'report', 'planlama',
+        'tasarım', 'design', 'konfigürasyon', 'configuration', 'ayar',
+        'destek', 'support', 'yardım', 'eğitim', 'training', 'review',
+        'test', 'qa', 'kontrol', 'doğrulama', 'validation'
+    ];
+    
+    // Hafif iş anahtar kelimeleri (Yeşil)
+    const lowIntensityKeywords = [
+        'küçük', 'minor', 'basit', 'simple', 'düzenleme', 'update',
+        'güncelleme', 'değişiklik', 'change', 'ekleme', 'add',
+        'takip', 'follow', 'izleme', 'monitoring', 'kontrol'
+    ];
+    
+    // Puan hesaplama
+    let score = 0;
+    
+    // Anahtar kelime kontrolü
+    highIntensityKeywords.forEach(kw => { if (text.includes(kw)) score += 3; });
+    mediumIntensityKeywords.forEach(kw => { if (text.includes(kw)) score += 1; });
+    lowIntensityKeywords.forEach(kw => { if (text.includes(kw)) score -= 1; });
+    
+    // Saat faktörü - uzun süren işler daha yoğun
+    if (hours >= 4) score += 4;
+    else if (hours >= 2) score += 2;
+    else if (hours < 0.5) score -= 2;
+    
+    // Yorum uzunluğu faktörü - detaylı açıklama = önemli iş
+    const wordCount = comment.split(/\s+/).filter(w => w.length > 2).length;
+    if (wordCount > 20) score += 2;
+    else if (wordCount > 10) score += 1;
+    else if (wordCount < 3) score -= 1;
+    
+    // Sonuç belirleme
+    if (score >= 5) {
+        return { 
+            color: '#EF4444', // Kırmızı
+            intensity: 'high',
+            label: 'Yoğun'
+        };
+    } else if (score >= 1) {
+        return { 
+            color: '#3B82F6', // Mavi
+            intensity: 'medium',
+            label: 'Normal'
+        };
+    } else {
+        return { 
+            color: '#10B981', // Yeşil
+            intensity: 'low',
+            label: 'Hafif'
+        };
+    }
+};
 
 const getHourIndicator = (hours: number) => {
     if (hours >= 4) return { color: 'var(--color-error)', label: 'Uzun' };
@@ -52,8 +126,15 @@ const WorklogRow: React.FC<{
     const [isTimeEditing, setIsTimeEditing] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+    
+    // Mobilde drag & drop devre dışı
+    const isMobile = useIsMobile();
 
-    const hourInfo = getHourIndicator(wl.hours);
+    // AI-based intensity analysis for color coding
+    const intensityInfo = useMemo(() => 
+        analyzeWorklogIntensity(wl.comment, wl.hours, wl.summary),
+        [wl.comment, wl.hours, wl.summary]
+    );
     
     const entries = history?.entries || [];
     const historyIndex = history?.index ?? -1;
@@ -181,8 +262,12 @@ const WorklogRow: React.FC<{
         }
     };
     
-    // Drag handlers
+    // Drag handlers - Mobilde devre dışı
     const handleDragStart = (e: React.DragEvent) => {
+        if (isMobile) {
+            e.preventDefault();
+            return;
+        }
         setIsDragging(true);
         e.dataTransfer.setData('application/worklog', JSON.stringify({
             worklogId: wl.id,
@@ -200,10 +285,10 @@ const WorklogRow: React.FC<{
     return (
         <article 
             onContextMenu={handleContextMenu}
-            draggable
+            draggable={!isMobile}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
-            className={`group relative transition-all duration-300 ${isProcessing ? 'opacity-60' : ''} ${isDragging ? 'opacity-50 scale-95 cursor-grabbing' : 'cursor-grab'}`}
+            className={`group relative transition-all duration-300 ${isProcessing ? 'opacity-60' : ''} ${isDragging ? 'opacity-50 scale-95 cursor-grabbing' : ''} ${!isMobile ? 'cursor-grab' : ''}`}
             style={{ 
                 animationDelay: `${index * 50}ms`,
                 background: 'var(--color-surface)',
@@ -213,23 +298,25 @@ const WorklogRow: React.FC<{
                 boxShadow: isDragging ? '0 8px 32px rgba(59, 130, 246, 0.2)' : '0 4px 20px rgba(0,0,0,0.04)',
             }}
         >
-            {/* Drag Handle */}
-            <div 
-                className="absolute left-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-50 hover:!opacity-100 transition-opacity cursor-grab active:cursor-grabbing p-1"
-                title="Sürükleyerek başka güne taşı"
-            >
-                <GripVertical size={16} style={{ color: 'var(--color-on-surface-variant)' }} />
-            </div>
-            {/* Gradient accent line at top */}
+            {/* Drag Handle - Only show on desktop */}
+            {!isMobile && (
+                <div 
+                    className="absolute left-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-50 hover:!opacity-100 transition-opacity cursor-grab active:cursor-grabbing p-1"
+                    title="Sürükleyerek başka güne taşı"
+                >
+                    <GripVertical size={16} style={{ color: 'var(--color-on-surface-variant)' }} />
+                </div>
+            )}
+            {/* Gradient accent line at top - color based on intensity */}
             <div style={{
                 position: 'absolute',
                 top: 0,
                 left: '20px',
                 right: '20px',
                 height: '3px',
-                background: 'linear-gradient(90deg, var(--color-primary-400), var(--color-ai-400))',
+                background: `linear-gradient(90deg, ${intensityInfo.color}, ${intensityInfo.color}80)`,
                 borderRadius: '0 0 4px 4px',
-                opacity: 0.7
+                opacity: 0.8
             }} />
             {isProcessing && (
                 <div className="absolute inset-0 flex items-center justify-center z-10 rounded-2xl" style={{ backgroundColor: 'var(--color-surface)', opacity: 0.8 }}>
@@ -238,7 +325,35 @@ const WorklogRow: React.FC<{
             )}
             
             <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 sm:gap-4 mb-4">
-                <div className="min-w-0 flex-1">
+                {/* Saat göstergesi - Mobilde sağ üstte, masaüstünde sağda */}
+                <div className="absolute top-4 right-4 sm:relative sm:top-auto sm:right-auto sm:order-2 shrink-0">
+                    {isTimeEditing ? (
+                        <input value={timeStr} onChange={(e) => setTimeStr(e.target.value)} onBlur={handleSaveTime}
+                            onKeyDown={(e) => e.key === 'Enter' && handleSaveTime()} autoFocus
+                            className="w-20 px-2 py-1.5 text-center text-sm font-semibold rounded-lg"
+                            style={{ fontFamily: 'var(--font-mono)', backgroundColor: 'var(--color-surface-container)', border: '2px solid var(--color-primary-500)' }} />
+                    ) : (
+                        <button onClick={() => setIsTimeEditing(true)}
+                            className="flex items-center gap-2 px-4 py-2 rounded-full transition-all hover:scale-105 hover:shadow-lg group/time"
+                            style={{ 
+                                background: `linear-gradient(135deg, ${intensityInfo.color}20 0%, ${intensityInfo.color}10 100%)`,
+                                border: `2px solid ${intensityInfo.color}40`,
+                                backdropFilter: 'blur(8px)'
+                            }}
+                            title={`${intensityInfo.label} yoğunluk`}>
+                            <div className="w-2.5 h-2.5 rounded-full animate-pulse" style={{ backgroundColor: intensityInfo.color, boxShadow: `0 0 8px ${intensityInfo.color}` }} />
+                            <span className="font-bold text-sm" style={{ fontFamily: 'var(--font-mono)', color: intensityInfo.color }}>
+                                {wl.hours.toFixed(2)}h
+                            </span>
+                            {/* Intensity indicator tooltip on hover */}
+                            <span className="hidden group-hover/time:inline-block text-[10px] font-medium px-1.5 py-0.5 rounded-md ml-1"
+                                style={{ backgroundColor: `${intensityInfo.color}20`, color: intensityInfo.color }}>
+                                {intensityInfo.label}
+                            </span>
+                        </button>
+                    )}
+                </div>
+                <div className="min-w-0 flex-1 sm:order-1 pr-20 sm:pr-0">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
                         <IssueHoverCard issueKey={wl.issueKey} jiraBaseUrl={jiraBaseUrl} settings={settings}>
                             <a href={`${jiraBaseUrl}/browse/${wl.issueKey}`} target="_blank" rel="noopener noreferrer"
@@ -252,27 +367,6 @@ const WorklogRow: React.FC<{
                             {wl.summary}
                         </span>
                     </div>
-                </div>
-                <div className="shrink-0 self-end sm:self-auto">
-                    {isTimeEditing ? (
-                        <input value={timeStr} onChange={(e) => setTimeStr(e.target.value)} onBlur={handleSaveTime}
-                            onKeyDown={(e) => e.key === 'Enter' && handleSaveTime()} autoFocus
-                            className="w-20 px-2 py-1.5 text-center text-sm font-semibold rounded-lg"
-                            style={{ fontFamily: 'var(--font-mono)', backgroundColor: 'var(--color-surface-container)', border: '2px solid var(--color-primary-500)' }} />
-                    ) : (
-                        <button onClick={() => setIsTimeEditing(true)}
-                            className="flex items-center gap-2 px-4 py-2 rounded-full transition-all hover:scale-105 hover:shadow-lg"
-                            style={{ 
-                                background: `linear-gradient(135deg, ${hourInfo.color}20 0%, ${hourInfo.color}10 100%)`,
-                                border: `2px solid ${hourInfo.color}40`,
-                                backdropFilter: 'blur(8px)'
-                            }}>
-                            <div className="w-2.5 h-2.5 rounded-full animate-pulse" style={{ backgroundColor: hourInfo.color, boxShadow: `0 0 8px ${hourInfo.color}` }} />
-                            <span className="font-bold text-sm" style={{ fontFamily: 'var(--font-mono)', color: hourInfo.color }}>
-                                {wl.hours.toFixed(2)}h
-                            </span>
-                        </button>
-                    )}
                 </div>
             </div>
 

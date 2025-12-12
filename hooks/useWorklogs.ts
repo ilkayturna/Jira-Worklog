@@ -488,18 +488,45 @@ export const useWorklogs = (
 
     const editWorklog = async (
         worklog: Worklog, 
-        newComment: string, 
-        newSeconds: number, 
+        newComment?: string, 
+        newSeconds?: number, 
         newDate?: string
     ): Promise<boolean> => {
-        // Validation
-        if (newSeconds <= 0 || newSeconds > 604800) {
+        // Use existing values if not provided (for date-only moves)
+        const finalComment = newComment !== undefined ? newComment : worklog.comment;
+        const finalSeconds = newSeconds !== undefined ? newSeconds : worklog.seconds;
+        
+        // Validation - only validate if seconds is being changed
+        if (newSeconds !== undefined && (newSeconds <= 0 || newSeconds > 604800)) {
             notify('❌ Geçersiz Süre', 'Süre 0 ile 7 gün (168 saat) arasında olmalı', 'error');
             return false;
         }
+        
+        // Date range validation - prevent moving to unreasonable dates
+        if (newDate) {
+            const targetDate = new Date(newDate);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            
+            const minDate = new Date(today);
+            minDate.setDate(minDate.getDate() - 30); // Max 30 days in past
+            
+            const maxDate = new Date(today);
+            maxDate.setDate(maxDate.getDate() + 7); // Max 7 days in future
+            
+            if (targetDate < minDate) {
+                notify('❌ Geçersiz Tarih', 'Worklog en fazla 30 gün öncesine taşınabilir', 'error');
+                return false;
+            }
+            
+            if (targetDate > maxDate) {
+                notify('❌ Geçersiz Tarih', 'Worklog en fazla 7 gün sonrasına taşınabilir', 'error');
+                return false;
+            }
+        }
 
         // Sanitize
-        const sanitizedComment = sanitizeWorklogInput(newComment);
+        const sanitizedComment = sanitizeWorklogInput(finalComment);
 
         // Store previous state for rollback
         const previousWorklogs = [...worklogs];
@@ -511,8 +538,8 @@ export const useWorklogs = (
                     ? { 
                         ...w, 
                         comment: sanitizedComment, 
-                        seconds: newSeconds, 
-                        hours: newSeconds / 3600,
+                        seconds: finalSeconds, 
+                        hours: finalSeconds / 3600,
                         // Keep originalADF intact for proper API serialization
                         originalADF: w.originalADF 
                       }
@@ -524,7 +551,7 @@ export const useWorklogs = (
         if (!navigator.onLine) {
             addToQueue({
                 type: 'UPDATE',
-                data: { worklog, comment: sanitizedComment, seconds: newSeconds, date: newDate }
+                data: { worklog, comment: sanitizedComment, seconds: finalSeconds, date: newDate }
             });
             notify('💾 Çevrimdışı Güncellendi', 'İnternet geldiğinde senkronize edilecek.', 'info');
             return true;
@@ -533,7 +560,7 @@ export const useWorklogs = (
         try {
             setLoadingState(LoadingState.LOADING);
 
-            await updateWorklog(worklog, settings, sanitizedComment, newSeconds, newDate);
+            await updateWorklog(worklog, settings, sanitizedComment, finalSeconds, newDate);
 
             if (!isMountedRef.current) return false;
 
@@ -554,7 +581,7 @@ export const useWorklogs = (
             if (isNetworkError) {
                 addToQueue({
                     type: 'UPDATE',
-                    data: { worklog, comment: sanitizedComment, seconds: newSeconds, date: newDate }
+                    data: { worklog, comment: sanitizedComment, seconds: finalSeconds, date: newDate }
                 });
                 notify('📡 Ağ Hatası', 'Güncelleme kuyruğa eklendi.', 'warning');
                 return true;
