@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { JiraIssue, AppSettings } from '../types';
 import { fetchAssignedIssues, fetchIssueTransitions, transitionIssue } from '../services/api';
 import { GripVertical, RefreshCw, AlertCircle, X, ExternalLink, ChevronDown, Check, Loader2 } from 'lucide-react';
+import { useIsMobile } from '../hooks/useIsMobile';
 
 interface Transition {
     id: string;
@@ -22,6 +23,8 @@ export const AssignedIssuesDrawer: React.FC<AssignedIssuesDrawerProps> = ({ isOp
     const [error, setError] = useState<string | null>(null);
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
     const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+    const isMobile = useIsMobile();
     
     // Status change state
     const [statusMenuOpen, setStatusMenuOpen] = useState<string | null>(null);
@@ -29,22 +32,7 @@ export const AssignedIssuesDrawer: React.FC<AssignedIssuesDrawerProps> = ({ isOp
     const [loadingTransitions, setLoadingTransitions] = useState(false);
     const [changingStatus, setChangingStatus] = useState<string | null>(null);
 
-    useEffect(() => {
-        if (isOpen) {
-            loadIssues();
-        }
-    }, [isOpen]);
-    
-    // Close status menu when clicking outside
-    useEffect(() => {
-        const handleClickOutside = () => setStatusMenuOpen(null);
-        if (statusMenuOpen) {
-            document.addEventListener('click', handleClickOutside);
-            return () => document.removeEventListener('click', handleClickOutside);
-        }
-    }, [statusMenuOpen]);
-
-    const loadIssues = async () => {
+    const loadIssues = useCallback(async () => {
         setIsLoading(true);
         setError(null);
         try {
@@ -55,8 +43,23 @@ export const AssignedIssuesDrawer: React.FC<AssignedIssuesDrawerProps> = ({ isOp
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [settings]);
+
+    useEffect(() => {
+        if (isOpen) {
+            loadIssues();
+        }
+    }, [isOpen, loadIssues]);
     
+    // Close status menu when clicking outside
+    useEffect(() => {
+        const handleClickOutside = () => setStatusMenuOpen(null);
+        if (statusMenuOpen) {
+            document.addEventListener('click', handleClickOutside);
+            return () => document.removeEventListener('click', handleClickOutside);
+        }
+    }, [statusMenuOpen]);
+
     const handleStatusClick = async (e: React.MouseEvent, issueKey: string) => {
         e.stopPropagation();
         
@@ -102,11 +105,15 @@ export const AssignedIssuesDrawer: React.FC<AssignedIssuesDrawerProps> = ({ isOp
 
     // Drag & Drop handlers for reordering
     const handleDragStart = useCallback((e: React.DragEvent, index: number, issue: JiraIssue) => {
+        if (isMobile) {
+            e.preventDefault();
+            return;
+        }
         setDraggedIndex(index);
         e.dataTransfer.setData('text/plain', JSON.stringify(issue));
         e.dataTransfer.effectAllowed = 'move';
         onDragStart(issue);
-    }, [onDragStart]);
+    }, [isMobile, onDragStart]);
 
     const handleDragOver = useCallback((e: React.DragEvent, index: number) => {
         e.preventDefault();
@@ -151,7 +158,7 @@ export const AssignedIssuesDrawer: React.FC<AssignedIssuesDrawerProps> = ({ isOp
             
             {/* Drawer */}
             <div 
-                className={`fixed inset-y-0 right-0 w-96 z-40 transform transition-transform duration-300 ease-out glass-drawer ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
+                className={`fixed inset-y-0 right-0 w-full max-w-md z-40 transform transition-transform duration-300 ease-out glass-drawer ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
             >
                 {/* Header */}
                 <div className="px-5 py-4 flex justify-between items-center glass-drawer-header">
@@ -204,7 +211,7 @@ export const AssignedIssuesDrawer: React.FC<AssignedIssuesDrawerProps> = ({ isOp
                         {issues.map((issue, index) => (
                             <div 
                                 key={issue.key}
-                                draggable
+                                draggable={!isMobile}
                                 onDragStart={(e) => handleDragStart(e, index, issue)}
                                 onDragOver={(e) => handleDragOver(e, index)}
                                 onDragLeave={handleDragLeave}

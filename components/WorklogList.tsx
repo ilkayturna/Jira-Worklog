@@ -12,7 +12,7 @@ const MAX_HISTORY_SIZE = 20;
 interface Props {
   worklogs: Worklog[];
   loading: LoadingState;
-  onUpdate: (id: string, comment?: string, hours?: number, isUndoRedo?: boolean, newDate?: string) => Promise<void>;
+    onUpdate: (id: string, comment?: string, seconds?: number, isUndoRedo?: boolean, newDate?: string) => Promise<void>;
   onImprove: (id: string) => Promise<void>;
   onSpellCheck: (id: string) => Promise<void>;
   jiraBaseUrl: string;
@@ -109,7 +109,7 @@ const getHourIndicator = (hours: number) => {
 const WorklogRow: React.FC<{ 
     wl: Worklog; 
     index: number;
-    onUpdate: (id: string, comment?: string, hours?: number, isUndoRedo?: boolean, newDate?: string) => Promise<void>;
+    onUpdate: (id: string, comment?: string, seconds?: number, isUndoRedo?: boolean, newDate?: string) => Promise<void>;
     onImprove: (id: string) => Promise<void>;
     onSpellCheck: (id: string) => Promise<void>;
     jiraBaseUrl: string;
@@ -155,9 +155,9 @@ const WorklogRow: React.FC<{
     };
 
     const handleMoveToTomorrow = async () => {
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const dateStr = tomorrow.toISOString().split('T')[0];
+        const base = selectedDate ? new Date(selectedDate) : new Date();
+        base.setDate(base.getDate() + 1);
+        const dateStr = base.toISOString().split('T')[0];
         setIsProcessing(true);
         await onUpdate(wl.id, undefined, undefined, false, dateStr);
         setIsProcessing(false);
@@ -165,8 +165,12 @@ const WorklogRow: React.FC<{
     };
 
     const handleCopy = () => {
-        navigator.clipboard.writeText(`${wl.issueKey} ${wl.summary}\n${wl.comment}`);
-        triggerHaptic();
+        try {
+            navigator.clipboard.writeText(`${wl.issueKey} ${wl.summary}\n${wl.comment}`);
+            triggerHaptic();
+        } catch {
+            // Ignore clipboard failures (non-secure context / denied permissions)
+        }
     };
 
     const saveToHistory = () => {
@@ -272,7 +276,7 @@ const WorklogRow: React.FC<{
         e.dataTransfer.setData('application/worklog', JSON.stringify({
             worklogId: wl.id,
             issueKey: wl.issueKey,
-            currentDate: selectedDate
+            currentDate: wl.started?.split('T')[0] || selectedDate
         }));
         e.dataTransfer.effectAllowed = 'move';
         triggerHaptic();

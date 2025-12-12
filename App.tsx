@@ -241,7 +241,7 @@ export default function App() {
       main.removeEventListener('touchmove', handleTouchMove);
       main.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [isPulling, pullProgress, settings]);
+    }, [isPulling, pullProgress, settings, loadData]);
 
   // Swipe left/right for day change
   useEffect(() => {
@@ -380,7 +380,7 @@ export default function App() {
     
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedDate, settings]);
+    }, [selectedDate, settings, loadData]);
 
   // WeeklyHours'u cache'den güncelle (Pazartesi-Pazar sıralaması)
   const updateWeeklyHoursFromCache = useCallback(() => {

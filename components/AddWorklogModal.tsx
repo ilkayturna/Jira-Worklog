@@ -58,10 +58,15 @@ export const AddWorklogModal: React.FC<AddWorklogModalProps> = ({
     
     const searchInputRef = useRef<HTMLInputElement>(null);
     const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+    const focusTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Reset form when modal opens
     useEffect(() => {
         if (isOpen) {
+            if (focusTimeoutRef.current) {
+                clearTimeout(focusTimeoutRef.current);
+                focusTimeoutRef.current = null;
+            }
             setSearchQuery('');
             setSearchResults([]);
             setSelectedIssue(null);
@@ -74,8 +79,18 @@ export const AddWorklogModal: React.FC<AddWorklogModalProps> = ({
             setIsAiCommentLoading(false);
             setIsAiTimeLoading(false);
             setError('');
-            setTimeout(() => searchInputRef.current?.focus(), 100);
+            focusTimeoutRef.current = setTimeout(() => {
+                searchInputRef.current?.focus();
+                focusTimeoutRef.current = null;
+            }, 100);
         }
+
+        return () => {
+            if (focusTimeoutRef.current) {
+                clearTimeout(focusTimeoutRef.current);
+                focusTimeoutRef.current = null;
+            }
+        };
     }, [isOpen]);
 
     // Update time estimation when issue changes

@@ -38,11 +38,13 @@ export default async function handler(
 ): Promise<void> {
   // Handle preflight
   if (req.method === 'OPTIONS') {
-    return res.status(200).json({});
+    res.status(200).json({});
+    return;
   }
 
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    res.status(405).json({ error: 'Method not allowed' });
+    return;
   }
 
   try {
@@ -50,7 +52,8 @@ export default async function handler(
 
     // Validation
     if (!body.prompt || typeof body.prompt !== 'string') {
-      return res.status(400).json({ error: 'Invalid prompt' });
+      res.status(400).json({ error: 'Invalid prompt' });
+      return;
     }
 
     // Get API keys from environment
@@ -65,37 +68,43 @@ export default async function handler(
     switch (provider) {
       case 'groq':
         if (!GROQ_API_KEY) {
-          return res.status(500).json({ error: 'Groq API key not configured' });
+          res.status(500).json({ error: 'Groq API key not configured' });
+          return;
         }
         response = await callGroq(body, GROQ_API_KEY);
         break;
 
       case 'openai':
         if (!OPENAI_API_KEY) {
-          return res.status(500).json({ error: 'OpenAI API key not configured' });
+          res.status(500).json({ error: 'OpenAI API key not configured' });
+          return;
         }
         response = await callOpenAI(body, OPENAI_API_KEY);
         break;
 
       case 'gemini':
         if (!GEMINI_API_KEY) {
-          return res.status(500).json({ error: 'Gemini API key not configured' });
+          res.status(500).json({ error: 'Gemini API key not configured' });
+          return;
         }
         response = await callGemini(body, GEMINI_API_KEY);
         break;
 
       default:
-        return res.status(400).json({ error: 'Invalid provider' });
+        res.status(400).json({ error: 'Invalid provider' });
+        return;
     }
 
     // Return success
-    return res.status(200).json(response);
+    res.status(200).json(response);
+    return;
   } catch (error: any) {
     console.error('AI API Error:', error);
-    return res.status(500).json({ 
+    res.status(500).json({ 
       error: error.message || 'Internal server error',
       details: error.toString()
     });
+    return;
   }
 }
 
