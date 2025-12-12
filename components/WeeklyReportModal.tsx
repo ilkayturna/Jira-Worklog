@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { X, FileSpreadsheet, Download, Plus, Trash2, Check, ChevronLeft, ChevronRight, Wand2, GripVertical, RefreshCw } from 'lucide-react';
 import { Worklog, WeeklyReportItem, AppSettings } from '../types';
 import * as XLSX from 'xlsx';
@@ -58,23 +58,8 @@ export const WeeklyReportModal: React.FC<Props> = ({
     const weekDates = useMemo(() => getWeekDates(weekOffset), [weekOffset]);
     const lastWeekDates = useMemo(() => getWeekDates(weekOffset - 1), [weekOffset]);
     
-    // Reset when modal opens - ALWAYS start empty
-    useEffect(() => {
-        if (isOpen) {
-            setItems([]);
-            setLastWeekWorklogs([]);
-            loadLastWeekWorklogs();
-        }
-    }, [isOpen]);
-    
-    // Reload when week changes
-    useEffect(() => {
-        if (isOpen && lastWeekWorklogs.length >= 0) {
-            loadLastWeekWorklogs();
-        }
-    }, [weekOffset]);
-    
-    const loadLastWeekWorklogs = async () => {
+    // Load worklogs function - memoized to prevent unnecessary re-renders
+    const loadLastWeekWorklogs = useCallback(async () => {
         setIsLoading(true);
         try {
             const logs = await onFetchWeekWorklogs(lastWeekDates.start, lastWeekDates.end);
@@ -84,7 +69,23 @@ export const WeeklyReportModal: React.FC<Props> = ({
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [lastWeekDates.start, lastWeekDates.end, onFetchWeekWorklogs]);
+    
+    // Reset when modal opens - ALWAYS start empty
+    useEffect(() => {
+        if (isOpen) {
+            setItems([]);
+            setLastWeekWorklogs([]);
+            loadLastWeekWorklogs();
+        }
+    }, [isOpen, loadLastWeekWorklogs]);
+    
+    // Reload when week changes (but only if modal is already open)
+    useEffect(() => {
+        if (isOpen) {
+            loadLastWeekWorklogs();
+        }
+    }, [weekOffset, isOpen, loadLastWeekWorklogs]);
     
     const handleAIGenerate = async () => {
         if (!onAIGenerate || lastWeekWorklogs.length === 0) return;
