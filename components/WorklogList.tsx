@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Worklog, LoadingState, WorklogHistoryEntry, AppSettings } from '../types';
-import { Clock, Edit3, Wand2, SpellCheck, Check, X, ExternalLink, Undo2, Redo2, Trash2, PieChart, Copy, CalendarDays, ExternalLink as LinkIcon, Sparkles, Brain, GripVertical } from 'lucide-react';
+import { Clock, Edit3, Wand2, SpellCheck, Check, X, Undo2, Redo2, Trash2, PieChart, Copy, CalendarDays, ExternalLink as LinkIcon, Sparkles, Brain, GripVertical } from 'lucide-react';
 import { parseSmartTimeInput } from '../utils/adf';
 import { IssueHoverCard } from './IssueHoverCard';
 import { ContextMenu } from './ui/ContextMenu';
@@ -30,61 +30,146 @@ interface Props {
 // 🔴 Kırmızı: Yoğun/karmaşık iş (bug fix, acil, production, hata, kritik)
 // 🔵 Mavi: Normal/rutin iş (toplantı, dokümantasyon, analiz)
 // 🟢 Yeşil: Hafif iş (küçük düzenleme, inceleme, test)
+const tokenize = (input: string): string[] => {
+    if (!input) return [];
+    // Unicode-aware tokens: letters + numbers
+    const tokens = input
+        .toLowerCase()
+        .normalize('NFKC')
+        .match(/[\p{L}\p{N}]+/gu);
+    return tokens ?? [];
+};
+
+const hexToRgb = (hex: string): { r: number; g: number; b: number } | null => {
+    const h = hex.trim();
+    const m = /^#?([0-9a-fA-F]{6})$/.exec(h);
+    if (!m) return null;
+    const intVal = parseInt(m[1], 16);
+    return {
+        r: (intVal >> 16) & 255,
+        g: (intVal >> 8) & 255,
+        b: intVal & 255
+    };
+};
+
+const withAlpha = (hex: string, alpha: number): string => {
+    const rgb = hexToRgb(hex);
+    const a = Math.max(0, Math.min(1, alpha));
+    if (!rgb) return hex;
+    return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${a})`;
+};
+
 const analyzeWorklogIntensity = (comment: string, hours: number, summary: string): { color: string; intensity: 'high' | 'medium' | 'low'; label: string } => {
-    const text = (comment + ' ' + summary).toLowerCase();
-    
-    // Yoğun iş anahtar kelimeleri (Kırmızı)
-    const highIntensityKeywords = [
-        'bug', 'hata', 'fix', 'düzeltme', 'acil', 'urgent', 'kritik', 'critical',
-        'production', 'prod', 'canlı', 'live', 'hotfix', 'sorun', 'problem',
-        'geliştirme', 'development', 'kodlama', 'implementation', 'refactor',
-        'entegrasyon', 'integration', 'migration', 'taşıma', 'dönüşüm',
-        'performans', 'optimization', 'kompleks', 'karmaşık', 'zor'
+    const combinedTokens = tokenize(`${comment} ${summary}`);
+    const commentTokens = tokenize(comment);
+    const tokenSet = new Set(combinedTokens);
+
+    type KeywordRule = { k: string; w: number; mode?: 'exact' | 'prefix' };
+    const rules: KeywordRule[] = [
+        // High intensity (red)
+        { k: 'bug', w: 3 },
+        { k: 'hata', w: 3 },
+        { k: 'fix', w: 3, mode: 'prefix' },
+        { k: 'düzeltme', w: 3 },
+        { k: 'acil', w: 3 },
+        { k: 'urgent', w: 3 },
+        { k: 'kritik', w: 3 },
+        { k: 'critical', w: 3 },
+        { k: 'production', w: 3 },
+        { k: 'prod', w: 2 },
+        { k: 'canlı', w: 3 },
+        { k: 'live', w: 2 },
+        { k: 'hotfix', w: 3 },
+        { k: 'sorun', w: 2 },
+        { k: 'problem', w: 2 },
+        { k: 'refactor', w: 3, mode: 'prefix' },
+        { k: 'entegrasyon', w: 3 },
+        { k: 'integration', w: 3 },
+        { k: 'migration', w: 3, mode: 'prefix' },
+        { k: 'taşıma', w: 3 },
+        { k: 'dönüşüm', w: 3 },
+        { k: 'performans', w: 3 },
+        { k: 'optimization', w: 3, mode: 'prefix' },
+        { k: 'kompleks', w: 2 },
+        { k: 'karmaşık', w: 2 },
+
+        // Medium intensity (blue)
+        { k: 'toplantı', w: 1 },
+        { k: 'meeting', w: 1 },
+        { k: 'görüşme', w: 1 },
+        { k: 'analiz', w: 1 },
+        { k: 'analysis', w: 1 },
+        { k: 'inceleme', w: 1 },
+        { k: 'dokümantasyon', w: 1 },
+        { k: 'documentation', w: 1 },
+        { k: 'rapor', w: 1 },
+        { k: 'report', w: 1 },
+        { k: 'planlama', w: 1 },
+        { k: 'tasarım', w: 1 },
+        { k: 'design', w: 1 },
+        { k: 'konfigürasyon', w: 1 },
+        { k: 'configuration', w: 1 },
+        { k: 'ayar', w: 1 },
+        { k: 'destek', w: 1 },
+        { k: 'support', w: 1 },
+        { k: 'review', w: 1 },
+        { k: 'test', w: 1 },
+        { k: 'qa', w: 1 },
+        { k: 'doğrulama', w: 1 },
+        { k: 'validation', w: 1 },
+
+        // Low intensity (green)
+        { k: 'küçük', w: -1 },
+        { k: 'minor', w: -1 },
+        { k: 'basit', w: -1 },
+        { k: 'simple', w: -1 },
+        { k: 'düzenleme', w: -1 },
+        { k: 'update', w: -1, mode: 'prefix' },
+        { k: 'güncelleme', w: -1 },
+        { k: 'değişiklik', w: -1 },
+        { k: 'change', w: -1 },
+        { k: 'ekleme', w: -1 },
+        { k: 'add', w: -1 }
     ];
-    
-    // Orta yoğunluk anahtar kelimeleri (Mavi)
-    const mediumIntensityKeywords = [
-        'toplantı', 'meeting', 'görüşme', 'analiz', 'analysis', 'inceleme',
-        'dokümantasyon', 'documentation', 'rapor', 'report', 'planlama',
-        'tasarım', 'design', 'konfigürasyon', 'configuration', 'ayar',
-        'destek', 'support', 'yardım', 'eğitim', 'training', 'review',
-        'test', 'qa', 'kontrol', 'doğrulama', 'validation'
-    ];
-    
-    // Hafif iş anahtar kelimeleri (Yeşil)
-    const lowIntensityKeywords = [
-        'küçük', 'minor', 'basit', 'simple', 'düzenleme', 'update',
-        'güncelleme', 'değişiklik', 'change', 'ekleme', 'add',
-        'takip', 'follow', 'izleme', 'monitoring', 'kontrol'
-    ];
-    
-    // Puan hesaplama
+
     let score = 0;
-    
-    // Anahtar kelime kontrolü
-    highIntensityKeywords.forEach(kw => { if (text.includes(kw)) score += 3; });
-    mediumIntensityKeywords.forEach(kw => { if (text.includes(kw)) score += 1; });
-    lowIntensityKeywords.forEach(kw => { if (text.includes(kw)) score -= 1; });
-    
-    // Saat faktörü - uzun süren işler daha yoğun
-    if (hours >= 4) score += 4;
+
+    for (const rule of rules) {
+        if (rule.mode === 'prefix') {
+            // Avoid very short prefixes causing false positives
+            if (rule.k.length < 3) continue;
+            if (combinedTokens.some(t => t.startsWith(rule.k))) score += rule.w;
+        } else {
+            if (tokenSet.has(rule.k)) score += rule.w;
+        }
+    }
+
+    // Hours factor (smooth-ish, avoids big jumps)
+    if (hours >= 6) score += 5;
+    else if (hours >= 4) score += 4;
     else if (hours >= 2) score += 2;
     else if (hours < 0.5) score -= 2;
-    
-    // Yorum uzunluğu faktörü - detaylı açıklama = önemli iş
-    const wordCount = comment.split(/\s+/).filter(w => w.length > 2).length;
-    if (wordCount > 20) score += 2;
-    else if (wordCount > 10) score += 1;
-    else if (wordCount < 3) score -= 1;
-    
-    // Sonuç belirleme
-    if (score >= 5) {
+
+    // Comment detail factor
+    const wc = commentTokens.length;
+    if (wc >= 30) score += 2;
+    else if (wc >= 14) score += 1;
+    else if (wc <= 2) score -= 1;
+
+    // Slight boost for explicit technical signals (error codes, stack traces)
+    if (/\b\d{3}\b/.test(comment) || /exception|stack|trace|error/i.test(comment)) score += 1;
+
+    // Keep score in a reasonable range (prevents outliers)
+    score = Math.max(-4, Math.min(14, score));
+
+    // Decision thresholds (wider bands => fewer flips)
+    if (score >= 7) {
         return { 
             color: '#EF4444', // Kırmızı
             intensity: 'high',
             label: 'Yoğun'
         };
-    } else if (score >= 1) {
+    } else if (score >= 2) {
         return { 
             color: '#3B82F6', // Mavi
             intensity: 'medium',
@@ -131,6 +216,20 @@ const WorklogRow: React.FC<{
     const isMobile = useIsMobile();
 
     const normalizedJiraBaseUrl = useMemo(() => normalizeJiraBaseUrl(jiraBaseUrl), [jiraBaseUrl]);
+
+    const handleDrag = (e: React.DragEvent) => {
+        if (isMobile) return;
+        // Auto-scroll while dragging so WeeklyChart drop targets are reachable
+        const edgeThresholdPx = 90;
+        const scrollStepPx = 22;
+        const y = e.clientY;
+        if (!y) return;
+        if (y < edgeThresholdPx) {
+            window.scrollBy({ top: -scrollStepPx, left: 0 });
+        } else if (y > window.innerHeight - edgeThresholdPx) {
+            window.scrollBy({ top: scrollStepPx, left: 0 });
+        }
+    };
 
     // AI-based intensity analysis for color coding
     const intensityInfo = useMemo(() => 
@@ -293,6 +392,7 @@ const WorklogRow: React.FC<{
             onContextMenu={handleContextMenu}
             draggable={!isMobile}
             onDragStart={handleDragStart}
+            onDrag={handleDrag}
             onDragEnd={handleDragEnd}
             className={`group relative transition-all duration-300 ${isProcessing ? 'opacity-60' : ''} ${isDragging ? 'opacity-50 scale-95 cursor-grabbing' : ''} ${!isMobile ? 'cursor-grab' : ''}`}
             style={{ 
@@ -320,7 +420,7 @@ const WorklogRow: React.FC<{
                 left: '20px',
                 right: '20px',
                 height: '3px',
-                background: `linear-gradient(90deg, ${intensityInfo.color}, ${intensityInfo.color}80)`,
+                background: `linear-gradient(90deg, ${intensityInfo.color}, ${withAlpha(intensityInfo.color, 0.5)})`,
                 borderRadius: '0 0 4px 4px',
                 opacity: 0.8
             }} />
@@ -342,18 +442,18 @@ const WorklogRow: React.FC<{
                         <button onClick={() => setIsTimeEditing(true)}
                             className="flex items-center gap-2 px-4 py-2 rounded-full transition-all hover:scale-105 hover:shadow-lg group/time"
                             style={{ 
-                                background: `linear-gradient(135deg, ${intensityInfo.color}20 0%, ${intensityInfo.color}10 100%)`,
-                                border: `2px solid ${intensityInfo.color}40`,
+                                background: `linear-gradient(135deg, ${withAlpha(intensityInfo.color, 0.12)} 0%, ${withAlpha(intensityInfo.color, 0.06)} 100%)`,
+                                border: `2px solid ${withAlpha(intensityInfo.color, 0.25)}`,
                                 backdropFilter: 'blur(8px)'
                             }}
                             title={`${intensityInfo.label} yoğunluk`}>
-                            <div className="w-2.5 h-2.5 rounded-full animate-pulse" style={{ backgroundColor: intensityInfo.color, boxShadow: `0 0 8px ${intensityInfo.color}` }} />
+                            <div className="w-2.5 h-2.5 rounded-full animate-pulse" style={{ backgroundColor: intensityInfo.color, boxShadow: `0 0 8px ${withAlpha(intensityInfo.color, 0.9)}` }} />
                             <span className="font-bold text-sm" style={{ fontFamily: 'var(--font-mono)', color: intensityInfo.color }}>
                                 {wl.hours.toFixed(2)}h
                             </span>
                             {/* Intensity indicator tooltip on hover */}
                             <span className="hidden group-hover/time:inline-block text-[10px] font-medium px-1.5 py-0.5 rounded-md ml-1"
-                                style={{ backgroundColor: `${intensityInfo.color}20`, color: intensityInfo.color }}>
+                                style={{ backgroundColor: withAlpha(intensityInfo.color, 0.12), color: intensityInfo.color }}>
                                 {intensityInfo.label}
                             </span>
                         </button>
@@ -361,24 +461,31 @@ const WorklogRow: React.FC<{
                 </div>
                 <div className="min-w-0 flex-1 sm:order-1 pr-20 sm:pr-0">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
-                        <IssueHoverCard issueKey={wl.issueKey} jiraBaseUrl={normalizedJiraBaseUrl} settings={settings}>
-                            <a href={`${normalizedJiraBaseUrl}/browse/${wl.issueKey}`} target="_blank" rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1.5 font-semibold text-sm hover:underline shrink-0"
-                                style={{ color: 'var(--color-primary-600)' }}>
-                                {wl.issueKey}
-                                <ExternalLink size={12} className="opacity-50" />
-                            </a>
-                        </IssueHoverCard>
-                        <a
-                            href={`${normalizedJiraBaseUrl}/browse/${wl.issueKey}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="chip text-xs line-clamp-2 sm:truncate hover:underline"
-                            style={{ maxWidth: '100%' }}
-                            title={wl.summary}
+                        <span
+                            className="inline-flex items-center font-semibold text-sm shrink-0"
+                            style={{ color: 'var(--color-primary-600)' }}
                         >
-                            {wl.summary}
-                        </a>
+                            {wl.issueKey}
+                        </span>
+
+                        <IssueHoverCard issueKey={wl.issueKey} jiraBaseUrl={normalizedJiraBaseUrl} settings={settings}>
+                            {normalizedJiraBaseUrl ? (
+                                <a
+                                    href={`${normalizedJiraBaseUrl}/browse/${wl.issueKey}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="chip text-xs line-clamp-2 sm:truncate hover:underline"
+                                    style={{ maxWidth: '100%' }}
+                                    title={wl.summary}
+                                >
+                                    {wl.summary}
+                                </a>
+                            ) : (
+                                <span className="chip text-xs line-clamp-2 sm:truncate" style={{ maxWidth: '100%' }} title={wl.summary}>
+                                    {wl.summary}
+                                </span>
+                            )}
+                        </IssueHoverCard>
                     </div>
                 </div>
             </div>
