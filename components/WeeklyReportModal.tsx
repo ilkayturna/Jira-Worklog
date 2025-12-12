@@ -162,19 +162,20 @@ export const WeeklyReportModal: React.FC<Props> = ({
     };
     
     const exportToExcel = async () => {
-        let XLSX: typeof import('xlsx');
+        let ExcelJS: typeof import('exceljs');
         try {
-            XLSX = await import('xlsx');
+            ExcelJS = await import('exceljs');
         } catch (e) {
-            console.error('Failed to load XLSX module:', e);
+            console.error('Failed to load exceljs module:', e);
             return;
         }
 
-        const wsData: any[][] = [];
-        wsData.push(['', ...DAYS]);
-        
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Haftalık Plan');
+
+        worksheet.addRow(['', ...DAYS]);
+
         const maxPerDay = Math.max(...DAYS.map(day => getItemsByDay(day).length), 1);
-        
         for (let i = 0; i < maxPerDay; i++) {
             const row: string[] = [`Görev ${i + 1}`];
             DAYS.forEach(day => {
@@ -186,14 +187,34 @@ export const WeeklyReportModal: React.FC<Props> = ({
                     row.push('');
                 }
             });
-            wsData.push(row);
+            worksheet.addRow(row);
         }
-        
-        const wb = XLSX.utils.book_new();
-        const ws = XLSX.utils.aoa_to_sheet(wsData);
-        ws['!cols'] = [{ wch: 10 }, { wch: 40 }, { wch: 40 }, { wch: 40 }, { wch: 40 }, { wch: 40 }];
-        XLSX.utils.book_append_sheet(wb, ws, 'Haftalık Plan');
-        XLSX.writeFile(wb, `Haftalik_Plan_${weekDates.start}_${weekDates.end}.xlsx`);
+
+        worksheet.columns = [
+            { width: 10 },
+            { width: 40 },
+            { width: 40 },
+            { width: 40 },
+            { width: 40 },
+            { width: 40 },
+        ];
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([
+            buffer instanceof ArrayBuffer ? buffer : new Uint8Array(buffer as any)
+        ], {
+            type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        });
+
+        const filename = `Haftalik_Plan_${weekDates.start}_${weekDates.end}.xlsx`;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
     };
     
     // Get unique issues from last week sorted by importance (total hours)
