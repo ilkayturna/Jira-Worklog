@@ -21,7 +21,7 @@ import { SUGGESTIONS_KEY, NOTIFICATION_HISTORY_KEY, WORKLOG_HISTORY_KEY } from '
 import { toLocalDateStr, getWeekMonday, getWeekDays } from './utils/date';
 import { computeWordDiff, DiffPart } from './utils/diff';
 import { loadSuggestions, loadWorklogHistories, saveWorklogHistories, saveNotificationHistory, updateSuggestions } from './utils/storage';
-import { triggerHaptic } from './utils/ui';
+import { normalizeJiraBaseUrl, triggerHaptic } from './utils/ui';
 import { getHistoricalContext, generateBatchContext, estimateWorkComplexity, clearAnalysisCache } from './utils/worklog-history-analyzer';
 
 // Diff helper - kelime bazlı karşılaştırma
@@ -92,6 +92,8 @@ export default function App() {
     queue,
     isSyncing
   } = useWorklogs(settings, selectedDate, notify);
+
+    const jiraBaseUrl = useMemo(() => normalizeJiraBaseUrl(settings.jiraUrl), [settings.jiraUrl]);
 
   // Keyboard Shortcuts
   useKeyboardShortcuts([
@@ -1688,7 +1690,7 @@ JSON ÇIKTI (SADECE ARRAY):
                         }
                         onImprove={(id) => handleAIAction(id, 'IMPROVE')}
                         onSpellCheck={(id) => handleAIAction(id, 'SPELL')}
-                        jiraBaseUrl={settings.jiraUrl}
+                        jiraBaseUrl={jiraBaseUrl}
                         worklogHistories={worklogHistories}
                         onHistoryChange={handleWorklogHistoryChange}
                         onDelete={handleDeleteWorklog}

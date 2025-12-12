@@ -3,6 +3,7 @@ import { JiraIssue, AppSettings } from '../types';
 import { fetchAssignedIssues, fetchIssueTransitions, transitionIssue } from '../services/api';
 import { GripVertical, RefreshCw, AlertCircle, X, ExternalLink, ChevronDown, Check, Loader2 } from 'lucide-react';
 import { useIsMobile } from '../hooks/useIsMobile';
+import { normalizeJiraBaseUrl } from '../utils/ui';
 
 interface Transition {
     id: string;
@@ -25,6 +26,8 @@ export const AssignedIssuesDrawer: React.FC<AssignedIssuesDrawerProps> = ({ isOp
     const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
     const isMobile = useIsMobile();
+
+    const jiraBaseUrl = normalizeJiraBaseUrl(settings.jiraUrl);
     
     // Status change state
     const [statusMenuOpen, setStatusMenuOpen] = useState<string | null>(null);
@@ -229,22 +232,58 @@ export const AssignedIssuesDrawer: React.FC<AssignedIssuesDrawerProps> = ({ isOp
                                     />
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 mb-1.5">
-                                            <span 
-                                                className="text-xs font-bold px-2 py-0.5 rounded-md"
-                                                style={{ 
-                                                    background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-primary-600) 100%)',
-                                                    color: 'white'
-                                                }}
-                                            >
-                                                {issue.key}
-                                            </span>
+                                            {jiraBaseUrl ? (
+                                                <a
+                                                    href={`${jiraBaseUrl}/browse/${issue.key}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="hover:underline"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                >
+                                                    <span
+                                                        className="text-xs font-bold px-2 py-0.5 rounded-md"
+                                                        style={{
+                                                            background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-primary-600) 100%)',
+                                                            color: 'white'
+                                                        }}
+                                                    >
+                                                        {issue.key}
+                                                    </span>
+                                                </a>
+                                            ) : (
+                                                <span
+                                                    className="text-xs font-bold px-2 py-0.5 rounded-md"
+                                                    style={{
+                                                        background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-primary-600) 100%)',
+                                                        color: 'white'
+                                                    }}
+                                                >
+                                                    {issue.key}
+                                                </span>
+                                            )}
                                             <span className="text-[10px] truncate" style={{ color: 'var(--color-on-surface-variant)' }}>
                                                 {issue.projectName}
                                             </span>
                                         </div>
-                                        <p className="text-sm font-medium leading-snug line-clamp-2 mb-2" style={{ color: 'var(--color-on-surface)' }}>
-                                            {issue.summary}
-                                        </p>
+                                        {jiraBaseUrl ? (
+                                            <a
+                                                href={`${jiraBaseUrl}/browse/${issue.key}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="hover:underline"
+                                                onClick={(e) => e.stopPropagation()}
+                                                style={{ color: 'var(--color-on-surface)' }}
+                                                title={issue.summary}
+                                            >
+                                                <p className="text-sm font-medium leading-snug line-clamp-2 mb-2">
+                                                    {issue.summary}
+                                                </p>
+                                            </a>
+                                        ) : (
+                                            <p className="text-sm font-medium leading-snug line-clamp-2 mb-2" style={{ color: 'var(--color-on-surface)' }}>
+                                                {issue.summary}
+                                            </p>
+                                        )}
                                         <div className="flex items-center justify-between">
                                             <div className="relative">
                                                 <button 
@@ -311,15 +350,17 @@ export const AssignedIssuesDrawer: React.FC<AssignedIssuesDrawerProps> = ({ isOp
                                                     </div>
                                                 )}
                                             </div>
-                                            <a 
-                                                href={`${settings.jiraUrl}/browse/${issue.key}`}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-black/5"
-                                                onClick={(e) => e.stopPropagation()}
-                                            >
-                                                <ExternalLink size={12} style={{ color: 'var(--color-primary-500)' }} />
-                                            </a>
+                                            {jiraBaseUrl && (
+                                                <a 
+                                                    href={`${jiraBaseUrl}/browse/${issue.key}`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-black/5"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                >
+                                                    <ExternalLink size={12} style={{ color: 'var(--color-primary-500)' }} />
+                                                </a>
+                                            )}
                                         </div>
                                     </div>
                                 </div>

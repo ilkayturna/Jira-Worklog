@@ -4,7 +4,7 @@ import { Clock, Edit3, Wand2, SpellCheck, Check, X, ExternalLink, Undo2, Redo2, 
 import { parseSmartTimeInput } from '../utils/adf';
 import { IssueHoverCard } from './IssueHoverCard';
 import { ContextMenu } from './ui/ContextMenu';
-import { triggerHaptic } from '../utils/ui';
+import { normalizeJiraBaseUrl, triggerHaptic } from '../utils/ui';
 import { useIsMobile } from '../hooks/useIsMobile';
 
 const MAX_HISTORY_SIZE = 20;
@@ -129,6 +129,8 @@ const WorklogRow: React.FC<{
     
     // Mobilde drag & drop devre dışı
     const isMobile = useIsMobile();
+
+    const normalizedJiraBaseUrl = useMemo(() => normalizeJiraBaseUrl(jiraBaseUrl), [jiraBaseUrl]);
 
     // AI-based intensity analysis for color coding
     const intensityInfo = useMemo(() => 
@@ -359,17 +361,24 @@ const WorklogRow: React.FC<{
                 </div>
                 <div className="min-w-0 flex-1 sm:order-1 pr-20 sm:pr-0">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
-                        <IssueHoverCard issueKey={wl.issueKey} jiraBaseUrl={jiraBaseUrl} settings={settings}>
-                            <a href={`${jiraBaseUrl}/browse/${wl.issueKey}`} target="_blank" rel="noopener noreferrer"
+                        <IssueHoverCard issueKey={wl.issueKey} jiraBaseUrl={normalizedJiraBaseUrl} settings={settings}>
+                            <a href={`${normalizedJiraBaseUrl}/browse/${wl.issueKey}`} target="_blank" rel="noopener noreferrer"
                                 className="inline-flex items-center gap-1.5 font-semibold text-sm hover:underline shrink-0"
                                 style={{ color: 'var(--color-primary-600)' }}>
                                 {wl.issueKey}
                                 <ExternalLink size={12} className="opacity-50" />
                             </a>
                         </IssueHoverCard>
-                        <span className="chip text-xs line-clamp-2 sm:truncate" style={{ maxWidth: '100%' }} title={wl.summary}>
+                        <a
+                            href={`${normalizedJiraBaseUrl}/browse/${wl.issueKey}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="chip text-xs line-clamp-2 sm:truncate hover:underline"
+                            style={{ maxWidth: '100%' }}
+                            title={wl.summary}
+                        >
                             {wl.summary}
-                        </span>
+                        </a>
                     </div>
                 </div>
             </div>
@@ -463,7 +472,7 @@ const WorklogRow: React.FC<{
                     actions={[
                         { label: 'Kopyala', icon: <Copy size={14} />, onClick: handleCopy },
                         { label: 'Yarına Taşı', icon: <CalendarDays size={14} />, onClick: handleMoveToTomorrow },
-                        { label: "Jira'da Aç", icon: <LinkIcon size={14} />, onClick: () => window.open(`${jiraBaseUrl}/browse/${wl.issueKey}`, '_blank') },
+                        { label: "Jira'da Aç", icon: <LinkIcon size={14} />, onClick: () => window.open(`${normalizedJiraBaseUrl}/browse/${wl.issueKey}`, '_blank') },
                     ]}
                 />
             )}

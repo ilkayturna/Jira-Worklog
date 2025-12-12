@@ -1,19 +1,20 @@
 import { useState } from 'react';
 import { AppSettings, DEFAULT_SYSTEM_PROMPT } from '../types';
 import { APP_NAME } from '../constants';
+import { normalizeJiraBaseUrl } from '../utils/ui';
 
 const detectJiraUrl = () => {
     const saved = localStorage.getItem(`${APP_NAME}_jiraUrl`);
-    if (saved) return saved;
+    if (saved) return normalizeJiraBaseUrl(saved);
     // Auto-detect if running inside Jira
     if (window.location.hostname.includes('atlassian.net')) {
-        return window.location.origin;
+        return normalizeJiraBaseUrl(window.location.origin);
     }
     return '';
 };
 
 const initialSettings: AppSettings = {
-  jiraUrl: detectJiraUrl(),
+    jiraUrl: detectJiraUrl(),
   jiraEmail: localStorage.getItem(`${APP_NAME}_jiraEmail`) || '',
   jiraToken: localStorage.getItem(`${APP_NAME}_jiraToken`) || '',
   groqApiKey: localStorage.getItem(`${APP_NAME}_groqApiKey`) || '',
@@ -29,13 +30,18 @@ export const useSettings = () => {
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
     const saveSettings = (newSettings: AppSettings) => {
-        setSettings(newSettings);
+        const normalizedSettings: AppSettings = {
+            ...newSettings,
+            jiraUrl: normalizeJiraBaseUrl(newSettings.jiraUrl)
+        };
+
+        setSettings(normalizedSettings);
         // Persist
-        Object.entries(newSettings).forEach(([key, value]) => {
+        Object.entries(normalizedSettings).forEach(([key, value]) => {
             localStorage.setItem(`${APP_NAME}_${key}`, String(value));
         });
         setIsSettingsOpen(false);
-        return newSettings;
+        return normalizedSettings;
     };
 
     const updateTargetDailyHours = (newTarget: number) => {

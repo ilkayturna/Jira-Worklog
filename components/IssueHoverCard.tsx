@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { AppSettings } from '../types';
 import { fetchIssueDetails } from '../services/api';
+import { normalizeJiraBaseUrl } from '../utils/ui';
 
 interface IssueHoverCardProps {
     issueKey: string;
@@ -10,6 +11,7 @@ interface IssueHoverCardProps {
 }
 
 export const IssueHoverCard: React.FC<IssueHoverCardProps> = ({ issueKey, jiraBaseUrl, settings, children }) => {
+    const normalizedJiraBaseUrl = normalizeJiraBaseUrl(jiraBaseUrl);
     const [details, setDetails] = useState<{ summary: string; status: string; assignee: string; description: string; projectName: string } | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [isVisible, setIsVisible] = useState(false);
@@ -91,14 +93,18 @@ export const IssueHoverCard: React.FC<IssueHoverCardProps> = ({ issueKey, jiraBa
                             </div>
                             <div className="pt-2 mt-1 border-t border-gray-100 dark:border-gray-800 flex justify-between items-center text-[10px] text-gray-500">
                                 <span>{details.projectName}</span>
-                                <a 
-                                    href={`${jiraBaseUrl}/browse/${issueKey}`} 
-                                    target="_blank" 
-                                    rel="noreferrer"
-                                    className="hover:underline text-blue-500"
-                                >
-                                    Jira'da Aç →
-                                </a>
+                                {normalizedJiraBaseUrl ? (
+                                    <a 
+                                        href={`${normalizedJiraBaseUrl}/browse/${issueKey}`} 
+                                        target="_blank" 
+                                        rel="noreferrer"
+                                        className="hover:underline text-blue-500"
+                                    >
+                                        Jira'da Aç →
+                                    </a>
+                                ) : (
+                                    <span className="text-gray-400">Jira URL ayarlı değil</span>
+                                )}
                             </div>
                         </div>
                     ) : (
