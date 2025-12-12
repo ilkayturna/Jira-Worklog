@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, memo, useCallback } from 'react';
 import { Worklog, LoadingState, WorklogHistoryEntry, AppSettings } from '../types';
 import { Clock, Edit3, Wand2, SpellCheck, Check, X, ExternalLink, Undo2, Redo2, Trash2, PieChart, Copy, CalendarDays, ExternalLink as LinkIcon, Sparkles, Brain } from 'lucide-react';
 import { parseSmartTimeInput } from '../utils/adf';
@@ -31,7 +31,7 @@ const getHourIndicator = (hours: number) => {
     return { color: 'var(--color-primary-500)', label: 'Kısa' };
 };
 
-const WorklogRow: React.FC<{ 
+const WorklogRow = memo<{ 
     wl: Worklog; 
     index: number;
     onUpdate: (id: string, comment?: string, hours?: number, isUndoRedo?: boolean, newDate?: string) => Promise<void>;
@@ -42,7 +42,7 @@ const WorklogRow: React.FC<{
     onHistoryChange: (entries: WorklogHistoryEntry[], index: number) => void;
     onDelete?: (id: string) => Promise<void>;
     settings: AppSettings;
-}> = ({ wl, index, onUpdate, onImprove, onSpellCheck, jiraBaseUrl, history, onHistoryChange, onDelete, settings }) => {
+}>(({ wl, index, onUpdate, onImprove, onSpellCheck, jiraBaseUrl, history, onHistoryChange, onDelete, settings }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [editComment, setEditComment] = useState(wl.comment);
     const [isProcessing, setIsProcessing] = useState(false);
@@ -342,7 +342,7 @@ const WorklogRow: React.FC<{
             )}
         </article>
     );
-};
+});
 
 export const WorklogList: React.FC<Props & { targetDailyHours?: number }> = ({ 
     worklogs, 
@@ -570,12 +570,35 @@ export const WorklogList: React.FC<Props & { targetDailyHours?: number }> = ({
         );
     }
 
+    // Memoize history change handler
+    const handleHistoryChange = useCallback((worklogId: string) => (entries: WorklogHistoryEntry[], idx: number) => {
+        onHistoryChange(worklogId, entries, idx);
+    }, [onHistoryChange]);
+
     return (
-        <div className="flex flex-col gap-4 stagger-animation">
+        <div 
+            className="flex flex-col gap-4 stagger-animation"
+            role="list"
+            aria-label="Worklog listesi"
+        >
             {worklogs.map((wl, index) => (
-                <WorklogRow key={wl.id} wl={wl} index={index} onUpdate={onUpdate} onImprove={onImprove} onSpellCheck={onSpellCheck}
-                    jiraBaseUrl={jiraBaseUrl} history={worklogHistories.get(wl.id)} onHistoryChange={(entries, idx) => onHistoryChange(wl.id, entries, idx)} onDelete={onDelete} settings={settings} />
+                <WorklogRow 
+                    key={wl.id} 
+                    wl={wl} 
+                    index={index} 
+                    onUpdate={onUpdate} 
+                    onImprove={onImprove} 
+                    onSpellCheck={onSpellCheck}
+                    jiraBaseUrl={jiraBaseUrl} 
+                    history={worklogHistories.get(wl.id)} 
+                    onHistoryChange={handleHistoryChange(wl.id)} 
+                    onDelete={onDelete} 
+                    settings={settings} 
+                />
             ))}
         </div>
     );
 };
+
+// Memoized export for better performance
+export const MemoizedWorklogList = memo(WorklogList);

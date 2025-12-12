@@ -12,6 +12,7 @@ import { WeeklyReportModal } from './components/WeeklyReportModal';
 import { AssignedIssuesDrawer } from './components/AssignedIssuesDrawer';
 import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
+import { InstallPrompt } from './components/InstallPrompt';
 import { formatHours } from './utils/adf';
 import { useSettings } from './hooks/useSettings';
 import { useWorklogs } from './hooks/useWorklogs';
@@ -2208,6 +2209,9 @@ JSON ÇIKTI (SADECE ARRAY):
             settings={settings}
             onDragStart={() => {}}
         />
+
+        {/* PWA Install Prompt */}
+        <InstallPrompt />
     </main>
   );
 }

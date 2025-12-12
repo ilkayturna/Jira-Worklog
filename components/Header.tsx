@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { memo, useCallback } from 'react';
 import { Calendar as CalendarIcon, Plus, FileSpreadsheet, Bell, Sun, Moon, Settings, Layout } from 'lucide-react';
 import { useModifierKey } from '../hooks/useModifierKey';
 
@@ -13,13 +13,18 @@ interface HeaderProps {
     onToggleDrawer: () => void;
 }
 
-const ShortcutBadge = ({ char }: { char: string }) => (
-    <span className="absolute -top-2 -right-2 w-5 h-5 bg-black text-white dark:bg-white dark:text-black rounded-md flex items-center justify-center text-[10px] font-bold shadow-sm animate-in zoom-in duration-200 z-10 border border-white/20">
+const ShortcutBadge = memo(({ char }: { char: string }) => (
+    <span 
+        className="absolute -top-2 -right-2 w-5 h-5 bg-black text-white dark:bg-white dark:text-black rounded-md flex items-center justify-center text-[10px] font-bold shadow-sm animate-in zoom-in duration-200 z-10 border border-white/20"
+        aria-hidden="true"
+    >
         {char}
     </span>
-);
+));
 
-export const Header: React.FC<HeaderProps> = ({
+ShortcutBadge.displayName = 'ShortcutBadge';
+
+export const Header = memo<HeaderProps>(({
     setIsAddWorklogOpen,
     setIsWeeklyReportOpen,
     setIsHistoryOpen,
@@ -33,17 +38,28 @@ export const Header: React.FC<HeaderProps> = ({
     const isMetaPressed = useModifierKey('Meta');
     const showShortcuts = isCtrlPressed || isMetaPressed;
 
+    // Memoized handlers
+    const handleAddWorklog = useCallback(() => setIsAddWorklogOpen(true), [setIsAddWorklogOpen]);
+    const handleWeeklyReport = useCallback(() => setIsWeeklyReportOpen(true), [setIsWeeklyReportOpen]);
+    const handleHistory = useCallback(() => setIsHistoryOpen(true), [setIsHistoryOpen]);
+    const handleSettings = useCallback(() => setIsSettingsOpen(true), [setIsSettingsOpen]);
+
     return (
         <>
-        <header className="apple-header" style={{
-            background: 'linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 100%)',
-            backdropFilter: 'blur(20px) saturate(180%)',
-            WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-            borderBottom: '1px solid rgba(0,0,0,0.06)'
-        }}>
+        <header 
+            className="apple-header" 
+            role="banner"
+            aria-label="Uygulama başlığı"
+            style={{
+                background: 'linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 100%)',
+                backdropFilter: 'blur(20px) saturate(180%)',
+                WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+                borderBottom: '1px solid rgba(0,0,0,0.06)'
+            }}
+        >
             <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-shrink">
                 {/* Modern Logo with glow effect */}
-                <div className="relative flex-shrink-0">
+                <div className="relative flex-shrink-0" aria-hidden="true">
                     <div className="absolute inset-0 rounded-xl sm:rounded-2xl blur-xl opacity-40" style={{ background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-ai-500) 100%)' }} />
                     <div className="relative w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-xl" 
                          style={{ 
@@ -223,4 +239,6 @@ export const Header: React.FC<HeaderProps> = ({
         </nav>
         </>
     );
-};
+});
+
+Header.displayName = 'Header';
