@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { RefreshCw } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { RefreshCw, MoveHorizontal } from 'lucide-react';
 import { AppSettings } from '../types';
 
 interface WeeklyChartProps {
@@ -8,6 +8,7 @@ interface WeeklyChartProps {
     selectedDate: string;
     setSelectedDate: (date: string) => void;
     isLoadingWeek: boolean;
+    onWorklogDrop?: (worklogId: string, newDate: string) => void;
 }
 
 export const WeeklyChart: React.FC<WeeklyChartProps> = ({
@@ -15,8 +16,10 @@ export const WeeklyChart: React.FC<WeeklyChartProps> = ({
     settings,
     selectedDate,
     setSelectedDate,
-    isLoadingWeek
+    isLoadingWeek,
+    onWorklogDrop
 }) => {
+    const [dragOverDate, setDragOverDate] = useState<string | null>(null);
     const maxHours = Math.max(...weeklyHours.map(d => d.hours), settings.targetDailyHours);
     
     // Haftanın tarih aralığını hesapla
@@ -33,6 +36,33 @@ export const WeeklyChart: React.FC<WeeklyChartProps> = ({
       
       return `${formatDate(firstDay.date)} - ${formatDate(lastDay.date)}`;
     }, [weeklyHours]);
+    
+    const handleDragOver = (e: React.DragEvent, date: string) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        setDragOverDate(date);
+    };
+    
+    const handleDragLeave = () => {
+        setDragOverDate(null);
+    };
+    
+    const handleDrop = (e: React.DragEvent, date: string) => {
+        e.preventDefault();
+        setDragOverDate(null);
+        
+        try {
+            const data = e.dataTransfer.getData('application/worklog');
+            if (data && onWorklogDrop) {
+                const { worklogId, currentDate } = JSON.parse(data);
+                if (currentDate !== date) {
+                    onWorklogDrop(worklogId, date);
+                }
+            }
+        } catch (err) {
+            console.error('Drop error:', err);
+        }
+    };
     
     return (
       <section 
@@ -65,14 +95,25 @@ export const WeeklyChart: React.FC<WeeklyChartProps> = ({
             const heightPercent = maxHours > 0 ? (day.hours / maxHours) * 100 : 0;
             const isToday = day.date === selectedDate;
             const metTarget = day.hours >= settings.targetDailyHours;
+            const isDragOver = dragOverDate === day.date;
             
             return (
               <div key={day.date} className="flex flex-col items-center flex-1 gap-1">
                 <div 
-                  className="w-full relative group cursor-pointer"
+                  className={`w-full relative group cursor-pointer transition-all duration-200 ${isDragOver ? 'scale-110' : ''}`}
                   style={{ height: '80px' }}
                   onClick={() => setSelectedDate(day.date)}
+                  onDragOver={(e) => handleDragOver(e, day.date)}
+                  onDragLeave={handleDragLeave}
+                  onDrop={(e) => handleDrop(e, day.date)}
                 >
+                  {/* Drop indicator */}
+                  {isDragOver && (
+                    <div className="absolute inset-0 rounded-lg border-2 border-dashed animate-pulse z-20 flex items-center justify-center"
+                         style={{ borderColor: 'var(--color-primary-500)', backgroundColor: 'rgba(59, 130, 246, 0.1)' }}>
+                      <MoveHorizontal size={16} style={{ color: 'var(--color-primary-500)' }} />
+                    </div>
+                  )}
                   {/* Target line */}
                   <div 
                     className="absolute w-full border-t border-dashed transition-all duration-500 ease-out"
@@ -126,6 +167,10 @@ export const WeeklyChart: React.FC<WeeklyChartProps> = ({
           <div className="flex items-center gap-1.5">
             <div className="w-3 h-0.5 border-t border-dashed" style={{ borderColor: 'var(--color-warning)', width: '12px' }} />
             <span className="text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>{settings.targetDailyHours}h hedef</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <MoveHorizontal size={12} style={{ color: 'var(--color-on-surface-variant)' }} />
+            <span className="text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>Sürükle-bırak</span>
           </div>
         </div>
       </section>

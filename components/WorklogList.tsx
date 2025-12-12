@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Worklog, LoadingState, WorklogHistoryEntry, AppSettings } from '../types';
-import { Clock, Edit3, Wand2, SpellCheck, Check, X, ExternalLink, Undo2, Redo2, Trash2, PieChart, Copy, CalendarDays, ExternalLink as LinkIcon, Sparkles, Brain } from 'lucide-react';
+import { Clock, Edit3, Wand2, SpellCheck, Check, X, ExternalLink, Undo2, Redo2, Trash2, PieChart, Copy, CalendarDays, ExternalLink as LinkIcon, Sparkles, Brain, GripVertical } from 'lucide-react';
 import { parseSmartTimeInput } from '../utils/adf';
 import { IssueHoverCard } from './IssueHoverCard';
 import { ContextMenu } from './ui/ContextMenu';
@@ -22,6 +22,7 @@ interface Props {
   settings: AppSettings;
   isAIProcessing?: boolean;
   aiProcessingMode?: 'IMPROVE' | 'SPELL' | null;
+  selectedDate?: string;
 }
 
 const getHourIndicator = (hours: number) => {
@@ -42,12 +43,14 @@ const WorklogRow: React.FC<{
     onHistoryChange: (entries: WorklogHistoryEntry[], index: number) => void;
     onDelete?: (id: string) => Promise<void>;
     settings: AppSettings;
-}> = ({ wl, index, onUpdate, onImprove, onSpellCheck, jiraBaseUrl, history, onHistoryChange, onDelete, settings }) => {
+    selectedDate?: string;
+}> = ({ wl, index, onUpdate, onImprove, onSpellCheck, jiraBaseUrl, history, onHistoryChange, onDelete, settings, selectedDate }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [editComment, setEditComment] = useState(wl.comment);
     const [isProcessing, setIsProcessing] = useState(false);
     const [timeStr, setTimeStr] = useState(wl.hours.toFixed(2));
     const [isTimeEditing, setIsTimeEditing] = useState(false);
+    const [isDragging, setIsDragging] = useState(false);
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
 
     const hourInfo = getHourIndicator(wl.hours);
@@ -177,20 +180,46 @@ const WorklogRow: React.FC<{
             setIsProcessing(false);
         }
     };
+    
+    // Drag handlers
+    const handleDragStart = (e: React.DragEvent) => {
+        setIsDragging(true);
+        e.dataTransfer.setData('application/worklog', JSON.stringify({
+            worklogId: wl.id,
+            issueKey: wl.issueKey,
+            currentDate: selectedDate
+        }));
+        e.dataTransfer.effectAllowed = 'move';
+        triggerHaptic();
+    };
+    
+    const handleDragEnd = () => {
+        setIsDragging(false);
+    };
 
     return (
         <article 
             onContextMenu={handleContextMenu}
-            className={`group relative transition-all duration-300 ${isProcessing ? 'opacity-60' : ''}`}
+            draggable
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+            className={`group relative transition-all duration-300 ${isProcessing ? 'opacity-60' : ''} ${isDragging ? 'opacity-50 scale-95 cursor-grabbing' : 'cursor-grab'}`}
             style={{ 
                 animationDelay: `${index * 50}ms`,
                 background: 'var(--color-surface)',
                 borderRadius: '20px',
                 padding: '20px',
-                border: '1px solid var(--color-outline-variant)',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.04)',
+                border: isDragging ? '2px dashed var(--color-primary-500)' : '1px solid var(--color-outline-variant)',
+                boxShadow: isDragging ? '0 8px 32px rgba(59, 130, 246, 0.2)' : '0 4px 20px rgba(0,0,0,0.04)',
             }}
         >
+            {/* Drag Handle */}
+            <div 
+                className="absolute left-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-50 hover:!opacity-100 transition-opacity cursor-grab active:cursor-grabbing p-1"
+                title="Sürükleyerek başka güne taşı"
+            >
+                <GripVertical size={16} style={{ color: 'var(--color-on-surface-variant)' }} />
+            </div>
             {/* Gradient accent line at top */}
             <div style={{
                 position: 'absolute',
@@ -357,7 +386,8 @@ export const WorklogList: React.FC<Props & { targetDailyHours?: number }> = ({
     targetDailyHours = 8,
     settings,
     isAIProcessing = false,
-    aiProcessingMode = null
+    aiProcessingMode = null,
+    selectedDate
 }) => {
     // AI Processing Overlay
     if (isAIProcessing) {
@@ -574,7 +604,7 @@ export const WorklogList: React.FC<Props & { targetDailyHours?: number }> = ({
         <div className="flex flex-col gap-4 stagger-animation">
             {worklogs.map((wl, index) => (
                 <WorklogRow key={wl.id} wl={wl} index={index} onUpdate={onUpdate} onImprove={onImprove} onSpellCheck={onSpellCheck}
-                    jiraBaseUrl={jiraBaseUrl} history={worklogHistories.get(wl.id)} onHistoryChange={(entries, idx) => onHistoryChange(wl.id, entries, idx)} onDelete={onDelete} settings={settings} />
+                    jiraBaseUrl={jiraBaseUrl} history={worklogHistories.get(wl.id)} onHistoryChange={(entries, idx) => onHistoryChange(wl.id, entries, idx)} onDelete={onDelete} settings={settings} selectedDate={selectedDate} />
             ))}
         </div>
     );

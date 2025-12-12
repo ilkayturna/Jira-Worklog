@@ -1,7 +1,13 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { JiraIssue, AppSettings } from '../types';
-import { fetchAssignedIssues } from '../services/api';
-import { GripVertical, RefreshCw, AlertCircle, X, ExternalLink } from 'lucide-react';
+import { fetchAssignedIssues, fetchIssueTransitions, transitionIssue } from '../services/api';
+import { GripVertical, RefreshCw, AlertCircle, X, ExternalLink, ChevronDown, Check, Loader2 } from 'lucide-react';
+
+interface Transition {
+    id: string;
+    name: string;
+    to: { name: string };
+}
 
 interface AssignedIssuesDrawerProps {
     isOpen: boolean;
@@ -16,12 +22,27 @@ export const AssignedIssuesDrawer: React.FC<AssignedIssuesDrawerProps> = ({ isOp
     const [error, setError] = useState<string | null>(null);
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
     const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+    
+    // Status change state
+    const [statusMenuOpen, setStatusMenuOpen] = useState<string | null>(null);
+    const [transitions, setTransitions] = useState<Transition[]>([]);
+    const [loadingTransitions, setLoadingTransitions] = useState(false);
+    const [changingStatus, setChangingStatus] = useState<string | null>(null);
 
     useEffect(() => {
         if (isOpen) {
             loadIssues();
         }
     }, [isOpen]);
+    
+    // Close status menu when clicking outside
+    useEffect(() => {
+        const handleClickOutside = () => setStatusMenuOpen(null);
+        if (statusMenuOpen) {
+            document.addEventListener('click', handleClickOutside);
+            return () => document.removeEventListener('click', handleClickOutside);
+        }
+    }, [statusMenuOpen]);
 
     const loadIssues = async () => {
         setIsLoading(true);
@@ -33,6 +54,49 @@ export const AssignedIssuesDrawer: React.FC<AssignedIssuesDrawerProps> = ({ isOp
             setError("Issue'lar yüklenemedi.");
         } finally {
             setIsLoading(false);
+        }
+    };
+    
+    const handleStatusClick = async (e: React.MouseEvent, issueKey: string) => {
+        e.stopPropagation();
+        
+        if (statusMenuOpen === issueKey) {
+            setStatusMenuOpen(null);
+            return;
+        }
+        
+        setStatusMenuOpen(issueKey);
+        setLoadingTransitions(true);
+        
+        try {
+            const trans = await fetchIssueTransitions(issueKey, settings);
+            setTransitions(trans);
+        } catch (err) {
+            console.error('Transitions fetch error:', err);
+            setTransitions([]);
+        } finally {
+            setLoadingTransitions(false);
+        }
+    };
+    
+    const handleTransitionSelect = async (e: React.MouseEvent, issueKey: string, transition: Transition) => {
+        e.stopPropagation();
+        setChangingStatus(issueKey);
+        
+        try {
+            await transitionIssue(issueKey, transition.id, settings);
+            // Update local state
+            setIssues(prev => prev.map(issue => 
+                issue.key === issueKey 
+                    ? { ...issue, status: transition.to.name }
+                    : issue
+            ));
+            setStatusMenuOpen(null);
+        } catch (err) {
+            console.error('Transition error:', err);
+            setError(`Statü değiştirilemedi: ${err instanceof Error ? err.message : 'Bilinmeyen hata'}`);
+        } finally {
+            setChangingStatus(null);
         }
     };
 
@@ -175,23 +239,71 @@ export const AssignedIssuesDrawer: React.FC<AssignedIssuesDrawerProps> = ({ isOp
                                             {issue.summary}
                                         </p>
                                         <div className="flex items-center justify-between">
-                                            <span 
-                                                className="text-[10px] px-2 py-0.5 rounded-full font-medium"
-                                                style={{
-                                                    background: issue.status === 'In Progress' 
-                                                        ? 'rgba(59, 130, 246, 0.15)' 
-                                                        : issue.status === 'Done' 
-                                                        ? 'rgba(16, 185, 129, 0.15)' 
-                                                        : 'rgba(0,0,0,0.06)',
-                                                    color: issue.status === 'In Progress' 
-                                                        ? 'var(--color-primary-600)' 
-                                                        : issue.status === 'Done' 
-                                                        ? 'var(--color-success)' 
-                                                        : 'var(--color-on-surface-variant)'
-                                                }}
-                                            >
-                                                {issue.status}
-                                            </span>
+                                            <div className="relative">
+                                                <button 
+                                                    onClick={(e) => handleStatusClick(e, issue.key)}
+                                                    disabled={changingStatus === issue.key}
+                                                    className="text-[10px] px-2 py-0.5 rounded-full font-medium flex items-center gap-1 cursor-pointer hover:ring-2 hover:ring-primary-300 transition-all disabled:opacity-50"
+                                                    style={{
+                                                        background: issue.status === 'In Progress' 
+                                                            ? 'rgba(59, 130, 246, 0.15)' 
+                                                            : issue.status === 'Done' 
+                                                            ? 'rgba(16, 185, 129, 0.15)' 
+                                                            : 'rgba(0,0,0,0.06)',
+                                                        color: issue.status === 'In Progress' 
+                                                            ? 'var(--color-primary-600)' 
+                                                            : issue.status === 'Done' 
+                                                            ? 'var(--color-success)' 
+                                                            : 'var(--color-on-surface-variant)'
+                                                    }}
+                                                >
+                                                    {changingStatus === issue.key ? (
+                                                        <Loader2 size={10} className="animate-spin" />
+                                                    ) : (
+                                                        <>
+                                                            {issue.status}
+                                                            <ChevronDown size={10} />
+                                                        </>
+                                                    )}
+                                                </button>
+                                                
+                                                {/* Transitions Dropdown */}
+                                                {statusMenuOpen === issue.key && (
+                                                    <div 
+                                                        className="absolute left-0 top-full mt-1 z-50 min-w-[160px] py-1 rounded-lg shadow-xl border"
+                                                        style={{
+                                                            background: 'var(--color-surface)',
+                                                            borderColor: 'var(--color-outline-variant)'
+                                                        }}
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    >
+                                                        {loadingTransitions ? (
+                                                            <div className="px-3 py-2 flex items-center gap-2 text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>
+                                                                <Loader2 size={12} className="animate-spin" />
+                                                                Yükleniyor...
+                                                            </div>
+                                                        ) : transitions.length === 0 ? (
+                                                            <div className="px-3 py-2 text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>
+                                                                Kullanılabilir geçiş yok
+                                                            </div>
+                                                        ) : (
+                                                            transitions.map((transition) => (
+                                                                <button
+                                                                    key={transition.id}
+                                                                    onClick={(e) => handleTransitionSelect(e, issue.key, transition)}
+                                                                    className="w-full px-3 py-2 text-left text-xs hover:bg-black/5 dark:hover:bg-white/5 flex items-center gap-2 transition-colors"
+                                                                    style={{ color: 'var(--color-on-surface)' }}
+                                                                >
+                                                                    <span className="flex-1">{transition.name}</span>
+                                                                    <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: 'var(--color-surface-container)', color: 'var(--color-on-surface-variant)' }}>
+                                                                        → {transition.to.name}
+                                                                    </span>
+                                                                </button>
+                                                            ))
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
                                             <a 
                                                 href={`${settings.jiraUrl}/browse/${issue.key}`}
                                                 target="_blank"

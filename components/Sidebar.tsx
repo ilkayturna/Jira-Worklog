@@ -28,6 +28,7 @@ interface SidebarProps {
     copyPreviousDay: () => void;
     weeklyHours: { date: string; hours: number; dayName: string }[];
     isLoadingWeek: boolean;
+    onWorklogDrop?: (worklogId: string, newDate: string) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -53,7 +54,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     previewBatchAI,
     copyPreviousDay,
     weeklyHours,
-    isLoadingWeek
+    isLoadingWeek,
+    onWorklogDrop
 }) => {
     const [isCalendarOpen, setIsCalendarOpen] = useState(false);
     const [calendarMonth, setCalendarMonth] = useState(() => {
@@ -733,6 +735,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 selectedDate={selectedDate}
                 setSelectedDate={setSelectedDate}
                 isLoadingWeek={isLoadingWeek}
+                onWorklogDrop={onWorklogDrop}
             />
         </aside>
     );

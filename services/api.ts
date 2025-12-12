@@ -1044,6 +1044,52 @@ export const fetchAssignedIssues = async (settings: AppSettings): Promise<JiraIs
     }));
 };
 
+// --- ISSUE TRANSITIONS API ---
+
+// Issue için kullanılabilir geçişleri getir
+export const fetchIssueTransitions = async (issueKey: string, settings: AppSettings): Promise<{ id: string; name: string; to: { name: string } }[]> => {
+    if (!settings.jiraUrl || !settings.jiraEmail || !settings.jiraToken) {
+        throw new Error('Jira ayarları eksik');
+    }
+
+    const targetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/issue/${issueKey}/transitions`;
+    
+    const response = await fetchThroughProxy(targetUrl, 'GET', {
+        'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
+        'Accept': 'application/json'
+    });
+
+    if (!response.ok) {
+        const errorMsg = await parseJiraErrorResponse(response, 'Geçişler alınamadı');
+        throw new Error(errorMsg);
+    }
+
+    const data = await response.json();
+    return data.transitions || [];
+};
+
+// Issue statüsünü değiştir
+export const transitionIssue = async (issueKey: string, transitionId: string, settings: AppSettings): Promise<void> => {
+    if (!settings.jiraUrl || !settings.jiraEmail || !settings.jiraToken) {
+        throw new Error('Jira ayarları eksik');
+    }
+
+    const targetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/issue/${issueKey}/transitions`;
+    
+    const response = await fetchThroughProxy(targetUrl, 'POST', {
+        'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+    }, {
+        transition: { id: transitionId }
+    });
+
+    if (!response.ok) {
+        const errorMsg = await parseJiraErrorResponse(response, 'Statü değiştirilemedi');
+        throw new Error(errorMsg);
+    }
+};
+
 // --- GROQ API (Proxy Üzerinden) ---
 
 export const callGroq = async (prompt: string, settings: AppSettings, maxTokens = 300, temperature = 0.3): Promise<string> => {

@@ -829,6 +829,37 @@ status: devam/test/tamamlandı/beklemede`;
     }
   };
 
+  // Handle worklog drag & drop to change date
+  const handleWorklogDrop = async (worklogId: string, newDate: string) => {
+    const wl = worklogs.find(w => w.id === worklogId);
+    if (!wl) {
+      console.error('❌ handleWorklogDrop: Worklog not found:', worklogId);
+      return;
+    }
+    
+    // Don't move if same date
+    const currentDate = wl.started?.split('T')[0] || selectedDate;
+    if (currentDate === newDate) {
+      return;
+    }
+    
+    notify('Taşınıyor...', `${wl.issueKey} ${newDate} tarihine taşınıyor`, 'info');
+    
+    const success = await editWorklog(wl, undefined, undefined, newDate);
+    
+    if (success) {
+      notify('Taşındı', `${wl.issueKey} worklog'u ${newDate} tarihine taşındı`, 'success');
+      triggerHaptic();
+      // Refresh both days
+      setTimeout(() => {
+        loadData(true);
+        loadWeekData();
+      }, 300);
+    } else {
+      notify('Hata', 'Worklog taşınamadı', 'error');
+    }
+  };
+
   // Delete worklog
   const handleDeleteWorklog = async (id: string) => {
     const wl = worklogs.find(w => w.id === id);
@@ -1617,6 +1648,7 @@ JSON ÇIKTI (SADECE ARRAY):
                 copyPreviousDay={copyPreviousDay}
                 weeklyHours={weeklyHours}
                 isLoadingWeek={isLoadingWeek}
+                onWorklogDrop={handleWorklogDrop}
             />
 
             {/* Right: Worklog List */}
@@ -1653,6 +1685,7 @@ JSON ÇIKTI (SADECE ARRAY):
                         settings={settings}
                         isAIProcessing={isAIProcessing}
                         aiProcessingMode={textChangeMode}
+                        selectedDate={selectedDate}
                     />
                 </div>
             </section>
