@@ -342,7 +342,7 @@ const WorklogRow = memo<{
             )}
         </article>
     );
-};
+});
 
 export const WorklogList: React.FC<Props & { targetDailyHours?: number }> = ({ 
     worklogs, 
