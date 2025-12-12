@@ -104,6 +104,60 @@ export interface JiraIssue {
   status?: string;
   projectName?: string;
   description?: string; // Jira'daki issue açıklaması
+  // Extended Jira fields
+  priority?: string;
+  priorityIconUrl?: string;
+  assignee?: string;
+  reporter?: string;
+  created?: string;
+  updated?: string;
+  labels?: string[];
+  components?: string[];
+  // Sprint & Epic info
+  sprint?: JiraSprint;
+  epic?: JiraEpic;
+  parent?: {
+    key: string;
+    summary: string;
+    issueType?: string;
+  };
+  subtasks?: Array<{
+    key: string;
+    summary: string;
+    status?: string;
+  }>;
+  // Time tracking
+  originalEstimate?: number; // seconds
+  remainingEstimate?: number; // seconds
+  timeSpent?: number; // seconds
+}
+
+// Sprint information
+export interface JiraSprint {
+  id: number;
+  name: string;
+  state: 'active' | 'closed' | 'future';
+  startDate?: string;
+  endDate?: string;
+  goal?: string;
+}
+
+// Epic information
+export interface JiraEpic {
+  key: string;
+  name: string;
+  summary: string;
+  color?: string;
+  status?: string;
+}
+
+// Project information
+export interface JiraProject {
+  id: string;
+  key: string;
+  name: string;
+  avatarUrl?: string;
+  projectTypeKey?: string;
 }
 
 export interface HistoryAction {

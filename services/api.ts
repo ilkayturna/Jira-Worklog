@@ -980,14 +980,25 @@ export const searchIssues = async (query: string, settings: AppSettings): Promis
     }));
 };
 
-// Issue detaylarını çek (description dahil) - Haftalık rapor için
-export const fetchIssueDetails = async (issueKey: string, settings: AppSettings): Promise<{ description: string; summary: string; projectName: string; status?: string; assignee?: string } | null> => {
+// Issue detaylarını çek (Sprint, Epic, Parent dahil) - Genişletilmiş bilgi için
+export const fetchIssueDetails = async (issueKey: string, settings: AppSettings): Promise<JiraIssue | null> => {
     if (!settings.jiraUrl || !settings.jiraEmail || !settings.jiraToken) {
         return null;
     }
 
     try {
-        const targetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/issue/${issueKey}?fields=description,summary,project,status,assignee`;
+        // Extended fields for sprint, epic, parent info
+        const fields = [
+            'description', 'summary', 'project', 'status', 'assignee', 'reporter',
+            'priority', 'labels', 'components', 'created', 'updated',
+            'parent', 'subtasks', 'issuetype',
+            'customfield_10020', // Sprint field (common custom field ID)
+            'customfield_10014', // Epic Link (common custom field ID)
+            'customfield_10011', // Epic Name (common custom field ID)
+            'timeoriginalestimate', 'timeestimate', 'timespent'
+        ].join(',');
+        
+        const targetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/issue/${issueKey}?fields=${fields}&expand=names`;
         
         const response = await fetchThroughProxy(targetUrl, 'GET', {
             'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
@@ -997,12 +1008,79 @@ export const fetchIssueDetails = async (issueKey: string, settings: AppSettings)
         if (!response.ok) return null;
 
         const data = await response.json();
+        const fields_data = data.fields || {};
+        
+        // Parse sprint info (customfield_10020 is common but may vary)
+        let sprint: JiraIssue['sprint'] = undefined;
+        const sprintData = fields_data.customfield_10020;
+        if (Array.isArray(sprintData) && sprintData.length > 0) {
+            const activeSprint = sprintData.find((s: any) => s.state === 'active') || sprintData[0];
+            if (activeSprint) {
+                sprint = {
+                    id: activeSprint.id,
+                    name: activeSprint.name,
+                    state: activeSprint.state,
+                    startDate: activeSprint.startDate,
+                    endDate: activeSprint.endDate,
+                    goal: activeSprint.goal
+                };
+            }
+        }
+
+        // Parse epic info
+        let epic: JiraIssue['epic'] = undefined;
+        const epicKey = fields_data.customfield_10014 || fields_data.parent?.key;
+        const epicName = fields_data.customfield_10011;
+        if (epicKey || epicName) {
+            epic = {
+                key: epicKey || '',
+                name: epicName || '',
+                summary: fields_data.parent?.fields?.summary || epicName || ''
+            };
+        }
+
+        // Parse parent (for subtasks)
+        let parent: JiraIssue['parent'] = undefined;
+        if (fields_data.parent) {
+            parent = {
+                key: fields_data.parent.key,
+                summary: fields_data.parent.fields?.summary || '',
+                issueType: fields_data.parent.fields?.issuetype?.name
+            };
+        }
+
+        // Parse subtasks
+        let subtasks: JiraIssue['subtasks'] = undefined;
+        if (Array.isArray(fields_data.subtasks) && fields_data.subtasks.length > 0) {
+            subtasks = fields_data.subtasks.map((st: any) => ({
+                key: st.key,
+                summary: st.fields?.summary || '',
+                status: st.fields?.status?.name
+            }));
+        }
+
         return {
-            description: parseJiraComment(data.fields?.description) || '',
-            summary: data.fields?.summary || '',
-            projectName: data.fields?.project?.name || '',
-            status: data.fields?.status?.name,
-            assignee: data.fields?.assignee?.displayName
+            key: issueKey,
+            summary: fields_data.summary || '',
+            description: parseJiraComment(fields_data.description) || '',
+            projectName: fields_data.project?.name || '',
+            issueType: fields_data.issuetype?.name,
+            status: fields_data.status?.name,
+            priority: fields_data.priority?.name,
+            priorityIconUrl: fields_data.priority?.iconUrl,
+            assignee: fields_data.assignee?.displayName,
+            reporter: fields_data.reporter?.displayName,
+            created: fields_data.created,
+            updated: fields_data.updated,
+            labels: fields_data.labels || [],
+            components: fields_data.components?.map((c: any) => c.name) || [],
+            sprint,
+            epic,
+            parent,
+            subtasks,
+            originalEstimate: fields_data.timeoriginalestimate,
+            remainingEstimate: fields_data.timeestimate,
+            timeSpent: fields_data.timespent
         };
     } catch (e) {
         console.error('Failed to fetch issue details:', e);
