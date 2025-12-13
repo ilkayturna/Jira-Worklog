@@ -362,7 +362,7 @@ SADECE sayı yaz:`;
                                         Worklog Ekle
                                     </h2>
                                     <p className="text-xs flex items-center gap-1.5" style={{ color: 'var(--color-on-surface-variant)' }}>
-                                        <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                                        <span className="w-1.5 h-1.5 rounded-full bg-green-500 breathing-dot" />
                                         {formatDate(selectedDate)}
                                     </p>
                                 </div>

@@ -2381,6 +2381,49 @@ body.is-mobile-device .btn-icon {
   padding: 8px;
 }
 
+/* Subtle breathing indicator (no scaling) */
+.breathing-dot {
+  position: relative;
+  display: inline-block;
+  animation: breathe-dot-core 2400ms var(--ease-in-out) infinite;
+  will-change: opacity, filter;
+}
+
+.breathing-dot::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 9999px;
+  background: inherit;
+  filter: blur(8px) saturate(140%);
+  opacity: 0;
+  pointer-events: none;
+  animation: breathe-dot-glow 2400ms var(--ease-in-out) infinite;
+  will-change: opacity, filter;
+}
+
+@keyframes breathe-dot-core {
+  0%, 100% {
+    opacity: 0.55;
+    filter: saturate(85%) brightness(0.98);
+  }
+  50% {
+    opacity: 1;
+    filter: saturate(120%) brightness(1.06);
+  }
+}
+
+@keyframes breathe-dot-glow {
+  0%, 100% {
+    opacity: 0;
+    filter: blur(10px) saturate(120%);
+  }
+  50% {
+    opacity: 0.45;
+    filter: blur(8px) saturate(170%);
+  }
+}
+
 /* Desktop always shows full button text */
 body.is-desktop-device .header-btn-text {
   display: inline !important;

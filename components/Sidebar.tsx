@@ -154,7 +154,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 aria-label="Date selection"
             >
                 <h2 className="text-[11px] font-semibold uppercase tracking-wide mb-4 flex items-center gap-2" style={{ color: 'var(--color-on-surface-variant)', letterSpacing: '0.05em' }}>
-                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-ai-500))' }} />
+                    <span className="w-1.5 h-1.5 rounded-full breathing-dot" style={{ background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-ai-500))' }} />
                     Tarih
                 </h2>
                 
@@ -604,7 +604,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 aria-label="Quick actions"
             >
                 <h2 className="text-[11px] font-semibold uppercase tracking-wide flex items-center gap-2" style={{ color: 'var(--color-on-surface-variant)', letterSpacing: '0.05em' }}>
-                    <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'linear-gradient(135deg, var(--color-success), var(--color-primary-500))' }} />
+                    <span className="w-1.5 h-1.5 rounded-full breathing-dot" style={{ background: 'linear-gradient(135deg, var(--color-success), var(--color-primary-500))' }} />
                     İşlemler
                 </h2>
                 

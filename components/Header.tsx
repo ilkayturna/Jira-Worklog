@@ -41,122 +41,151 @@ export const Header: React.FC<HeaderProps> = ({
             WebkitBackdropFilter: 'blur(20px) saturate(180%)',
             borderBottom: '1px solid rgba(0,0,0,0.06)'
         }}>
-            <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-shrink w-full sm:w-auto">
-                {/* Modern Logo with glow effect */}
-                <div className="relative flex-shrink-0">
-                    <div className="absolute inset-0 rounded-xl sm:rounded-2xl blur-xl opacity-40" style={{ background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-ai-500) 100%)' }} />
-                    <div className="relative w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-xl" 
-                         style={{ 
-                             background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-ai-500) 100%)',
-                             boxShadow: '0 8px 32px rgba(59, 130, 246, 0.3)'
-                         }}>
-                        <CalendarIcon className="text-white" size={20} strokeWidth={1.5} />
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-4 min-w-0 flex-shrink w-full sm:w-auto">
+                {/* Title row (mobile centered, desktop left) */}
+                <div className="flex items-center justify-center sm:justify-start gap-2 sm:gap-4 min-w-0 w-full sm:w-auto">
+                    {/* Modern Logo with glow effect */}
+                    <div className="relative flex-shrink-0">
+                        <div className="absolute inset-0 rounded-xl sm:rounded-2xl blur-xl opacity-40" style={{ background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-ai-500) 100%)' }} />
+                        <div className="relative w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center shadow-xl" 
+                             style={{ 
+                                 background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-ai-500) 100%)',
+                                 boxShadow: '0 8px 32px rgba(59, 130, 246, 0.3)'
+                             }}>
+                            <CalendarIcon className="text-white" size={20} strokeWidth={1.5} />
+                        </div>
+                    </div>
+
+                    <div className="min-w-0 text-center sm:text-left">
+                        <h1 className="text-lg sm:text-2xl md:text-[28px] font-bold bg-clip-text text-transparent truncate" 
+                            style={{ 
+                                backgroundImage: 'linear-gradient(135deg, var(--color-on-surface) 0%, var(--color-primary-600) 100%)',
+                                letterSpacing: '-0.03em' 
+                            }}>
+                            Worklog
+                        </h1>
+                        <p className="text-[11px] sm:text-[13px] mt-0.5 items-center gap-1.5 hidden sm:flex" style={{ color: 'var(--color-on-surface-variant)', letterSpacing: '-0.01em' }}>
+                            <span className="w-2 h-2 rounded-full bg-green-500 breathing-dot" />
+                            Jira Cloud ile senkronize
+                        </p>
                     </div>
                 </div>
-                <div className="min-w-0">
-                    <h1 className="text-lg sm:text-2xl md:text-[28px] font-bold bg-clip-text text-transparent truncate" 
-                        style={{ 
-                            backgroundImage: 'linear-gradient(135deg, var(--color-on-surface) 0%, var(--color-primary-600) 100%)',
-                            letterSpacing: '-0.03em' 
-                        }}>
-                        Worklog
-                    </h1>
-                    <p className="text-[11px] sm:text-[13px] mt-0.5 items-center gap-1.5 hidden sm:flex" style={{ color: 'var(--color-on-surface-variant)', letterSpacing: '-0.01em' }}>
-                        <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                        Jira Cloud ile senkronize
-                    </p>
-                </div>
-            </div>
 
-            {/* Mobile compact action strip (keeps premium look, no big boxes) */}
-            <div className="sm:hidden w-full overflow-x-auto overscroll-contain -mx-1 px-1 pb-1" style={{ WebkitOverflowScrolling: 'touch' }}>
-                <div className="flex items-center gap-2">
-                    <button 
-                        onClick={() => setIsAddWorklogOpen(true)}
-                        className="flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-xl transition-all active:scale-95"
-                        style={{ 
-                            background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-ai-500) 100%)',
-                            color: 'white',
-                            boxShadow: '0 4px 14px rgba(59, 130, 246, 0.25)'
-                        }}
-                        aria-label="Add worklog"
-                    >
-                        <Plus size={18} strokeWidth={2.5} />
-                        <span className="text-[10px] font-semibold leading-none">Yeni</span>
-                    </button>
-
-                    <button 
-                        onClick={onToggleDrawer}
-                        className="flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-xl transition-all active:scale-95"
-                        style={{ 
-                            background: 'linear-gradient(135deg, rgba(0,0,0,0.04) 0%, rgba(0,0,0,0.06) 100%)',
-                            border: '1px solid rgba(0,0,0,0.06)'
-                        }}
-                        aria-label="Assigned Issues"
-                        title="Bana Atananlar"
-                    >
-                        <Layout size={18} />
-                        <span className="text-[10px] font-semibold leading-none" style={{ color: 'var(--color-on-surface-variant)' }}>Atanan</span>
-                    </button>
-
-                    <button 
-                        onClick={() => setIsWeeklyReportOpen(true)}
-                        className="flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-xl transition-all active:scale-95"
-                        style={{ 
-                            background: 'linear-gradient(135deg, rgba(0,0,0,0.04) 0%, rgba(0,0,0,0.06) 100%)',
-                            border: '1px solid rgba(0,0,0,0.06)'
-                        }}
-                        aria-label="Weekly report"
-                        title="Haftalık Rapor Oluştur"
-                    >
-                        <FileSpreadsheet size={18} />
-                        <span className="text-[10px] font-semibold leading-none" style={{ color: 'var(--color-on-surface-variant)' }}>Rapor</span>
-                    </button>
-
-                    <button 
-                        onClick={() => setIsHistoryOpen(true)}
-                        className="relative flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-xl transition-all active:scale-95"
-                        style={{ 
-                            background: 'linear-gradient(135deg, rgba(0,0,0,0.04) 0%, rgba(0,0,0,0.06) 100%)',
-                            border: '1px solid rgba(0,0,0,0.06)'
-                        }}
-                        aria-label="Notification history"
-                    >
-                        <Bell size={18} />
-                        {undoableCount > 0 && (
-                            <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold"
-                                  style={{ backgroundColor: 'var(--color-error)', color: 'white' }}>
-                                {undoableCount}
+                {/* Mobile actions: under the title row (do NOT touch bottom nav) */}
+                <div className="sm:hidden mt-1 flex flex-wrap justify-center gap-2">
+                        <button
+                            onClick={() => setIsAddWorklogOpen(true)}
+                            className="flex flex-col items-center gap-1 px-1.5 py-1.5 rounded-xl transition-all active:scale-95"
+                            aria-label="Yeni worklog"
+                        >
+                            <span
+                                className="w-10 h-10 rounded-xl flex items-center justify-center"
+                                style={{
+                                    background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-ai-500) 100%)',
+                                    boxShadow: '0 4px 14px rgba(59, 130, 246, 0.22)'
+                                }}
+                            >
+                                <Plus size={18} strokeWidth={2.5} className="text-white" />
                             </span>
-                        )}
-                        <span className="text-[10px] font-semibold leading-none" style={{ color: 'var(--color-on-surface-variant)' }}>Bildirim</span>
-                    </button>
+                            <span className="text-[10px] font-semibold leading-none" style={{ color: 'var(--color-on-surface-variant)' }}>Yeni</span>
+                        </button>
 
-                    <button 
-                        onClick={toggleTheme}
-                        className="flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-xl transition-all active:scale-95"
-                        style={{ 
-                            background: 'linear-gradient(135deg, rgba(0,0,0,0.04) 0%, rgba(0,0,0,0.06) 100%)',
-                            border: '1px solid rgba(0,0,0,0.06)'
-                        }}
-                        aria-label="Toggle theme"
-                    >
-                        {isDarkTheme ? <Sun size={18}/> : <Moon size={18}/>}
-                        <span className="text-[10px] font-semibold leading-none" style={{ color: 'var(--color-on-surface-variant)' }}>Tema</span>
-                    </button>
+                        <button
+                            onClick={onToggleDrawer}
+                            className="flex flex-col items-center gap-1 px-1.5 py-1.5 rounded-xl transition-all active:scale-95"
+                            aria-label="Bana Atananlar"
+                        >
+                            <span
+                                className="w-10 h-10 rounded-xl flex items-center justify-center"
+                                style={{
+                                    background: 'rgba(0,0,0,0.04)',
+                                    border: '1px solid rgba(0,0,0,0.06)'
+                                }}
+                            >
+                                <Layout size={18} style={{ color: 'var(--color-on-surface-variant)' }} />
+                            </span>
+                            <span className="text-[10px] font-medium leading-none" style={{ color: 'var(--color-on-surface-variant)' }}>Atanan</span>
+                        </button>
 
-                    <button 
-                        onClick={() => setIsSettingsOpen(true)}
-                        className="flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-xl transition-all active:scale-95"
-                        style={{ 
-                            background: 'linear-gradient(135deg, rgba(0,0,0,0.04) 0%, rgba(0,0,0,0.06) 100%)',
-                            border: '1px solid rgba(0,0,0,0.06)'
-                        }}
-                        aria-label="Settings"
-                    >
-                        <Settings size={18} />
-                        <span className="text-[10px] font-semibold leading-none" style={{ color: 'var(--color-on-surface-variant)' }}>Ayar</span>
-                    </button>
+                        <button
+                            onClick={() => setIsWeeklyReportOpen(true)}
+                            className="flex flex-col items-center gap-1 px-1.5 py-1.5 rounded-xl transition-all active:scale-95"
+                            aria-label="Haftalık rapor"
+                        >
+                            <span
+                                className="w-10 h-10 rounded-xl flex items-center justify-center"
+                                style={{
+                                    background: 'rgba(0,0,0,0.04)',
+                                    border: '1px solid rgba(0,0,0,0.06)'
+                                }}
+                            >
+                                <FileSpreadsheet size={18} style={{ color: 'var(--color-on-surface-variant)' }} />
+                            </span>
+                            <span className="text-[10px] font-medium leading-none" style={{ color: 'var(--color-on-surface-variant)' }}>Rapor</span>
+                        </button>
+
+                        <button
+                            onClick={() => setIsHistoryOpen(true)}
+                            className="flex flex-col items-center gap-1 px-1.5 py-1.5 rounded-xl transition-all active:scale-95 relative"
+                            aria-label="Bildirim geçmişi"
+                        >
+                            <span
+                                className="w-10 h-10 rounded-xl flex items-center justify-center relative"
+                                style={{
+                                    background: 'rgba(0,0,0,0.04)',
+                                    border: '1px solid rgba(0,0,0,0.06)'
+                                }}
+                            >
+                                <Bell size={18} style={{ color: 'var(--color-on-surface-variant)' }} />
+                                {undoableCount > 0 && (
+                                    <span
+                                        className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold"
+                                        style={{ backgroundColor: 'var(--color-error)', color: 'white' }}
+                                    >
+                                        {undoableCount}
+                                    </span>
+                                )}
+                            </span>
+                            <span className="text-[10px] font-medium leading-none" style={{ color: 'var(--color-on-surface-variant)' }}>Bildirim</span>
+                        </button>
+
+                        <button
+                            onClick={toggleTheme}
+                            className="flex flex-col items-center gap-1 px-1.5 py-1.5 rounded-xl transition-all active:scale-95"
+                            aria-label="Tema"
+                        >
+                            <span
+                                className="w-10 h-10 rounded-xl flex items-center justify-center"
+                                style={{
+                                    background: 'rgba(0,0,0,0.04)',
+                                    border: '1px solid rgba(0,0,0,0.06)'
+                                }}
+                            >
+                                {isDarkTheme ? (
+                                    <Sun size={18} style={{ color: 'var(--color-on-surface-variant)' }} />
+                                ) : (
+                                    <Moon size={18} style={{ color: 'var(--color-on-surface-variant)' }} />
+                                )}
+                            </span>
+                            <span className="text-[10px] font-medium leading-none" style={{ color: 'var(--color-on-surface-variant)' }}>Tema</span>
+                        </button>
+
+                        <button
+                            onClick={() => setIsSettingsOpen(true)}
+                            className="flex flex-col items-center gap-1 px-1.5 py-1.5 rounded-xl transition-all active:scale-95"
+                            aria-label="Ayarlar"
+                        >
+                            <span
+                                className="w-10 h-10 rounded-xl flex items-center justify-center"
+                                style={{
+                                    background: 'rgba(0,0,0,0.04)',
+                                    border: '1px solid rgba(0,0,0,0.06)'
+                                }}
+                            >
+                                <Settings size={18} style={{ color: 'var(--color-on-surface-variant)' }} />
+                            </span>
+                            <span className="text-[10px] font-medium leading-none" style={{ color: 'var(--color-on-surface-variant)' }}>Ayarlar</span>
+                        </button>
                 </div>
             </div>
 
