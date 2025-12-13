@@ -154,7 +154,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 aria-label="Date selection"
             >
                 <h2 className="text-[11px] font-semibold uppercase tracking-wide mb-4 flex items-center gap-2" style={{ color: 'var(--color-on-surface-variant)', letterSpacing: '0.05em' }}>
-                    <span className="w-1.5 h-1.5 rounded-full breathing-dot" style={{ background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-ai-500))' }} />
+                    <span className="w-1.5 h-1.5 rounded-full breathing-dot" style={{ background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-info))' }} />
                     Tarih
                 </h2>
                 
@@ -620,8 +620,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     
                 {/* Distribution Section */}
                 <div className="pt-4 border-t" style={{ borderColor: 'var(--color-outline-variant)' }}>
-                    <label className="text-[11px] font-semibold uppercase tracking-wide block mb-3" style={{ color: 'var(--color-on-surface-variant)', letterSpacing: '0.05em' }}>
-                        Dağıtım ({settings.targetDailyHours}h)
+                    <label className="text-[11px] font-semibold uppercase tracking-wide block mb-3 flex items-center gap-2" style={{ color: 'var(--color-on-surface-variant)', letterSpacing: '0.05em' }}>
+                        <span className="w-1.5 h-1.5 rounded-full breathing-dot" style={{ background: 'linear-gradient(135deg, var(--color-warning), var(--color-primary-500))' }} />
+                        Saat Dağıtımı ({settings.targetDailyHours}h)
                     </label>
                     
                     {/* Distribution Buttons */}
@@ -659,7 +660,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                                 </>
                             ) : (
                                 <>
-                                    <Brain size={16} /> Akıllı
+                                    <Brain size={16} /> Akıllı Dağıtım
                                 </>
                             )}
                         </button>
