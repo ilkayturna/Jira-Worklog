@@ -45,13 +45,19 @@ export const AssignedIssuesDrawer: React.FC<AssignedIssuesDrawerProps> = ({ isOp
                 const data = await fetchAssignedIssues(settings);
                 setAssignedIssues(data);
             } else {
+                // Debug: Katıldıklarım JQL ve sonuçları logla
+                console.log('[Katıldıklarım] fetchParticipatingIssues çağrılıyor...');
                 const data = await fetchParticipatingIssues(settings);
+                console.log('[Katıldıklarım] API sonucu:', data);
                 // Dedupe by key (JQL can return duplicates across functions in some instances)
                 const unique = Array.from(new Map(data.map(i => [i.key, i])).values());
                 setParticipatingIssues(unique);
+                if (unique.length === 0) {
+                    setError('Katılımcı olduğun açık iş bulunamadı.\n\nJira hesabında izlediğin, raporladığın veya yorum yaptığın işler "Kapalı" değilse burada görünmelidir.\n\nEğer beklediğin işler gelmiyorsa, Jira Cloud/Server sürümünde bazı JQL fonksiyonları (watchedIssues, commentedBy) desteklenmiyor olabilir.');
+                }
             }
         } catch (err) {
-            setError("Issue'lar yüklenemedi.");
+            setError("Katıldıklarım yüklenemedi. Jira bağlantısı veya JQL desteğiyle ilgili bir sorun olabilir.\nDetay: " + (err instanceof Error ? err.message : String(err)));
         } finally {
             setIsLoading(false);
         }
