@@ -35,14 +35,13 @@ export const Header: React.FC<HeaderProps> = ({
 
     return (
         <>
-        <header className="apple-header flex-col sm:flex-row" style={{
+        <header className="apple-header" style={{
             background: 'linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 100%)',
             backdropFilter: 'blur(20px) saturate(180%)',
             WebkitBackdropFilter: 'blur(20px) saturate(180%)',
             borderBottom: '1px solid rgba(0,0,0,0.06)'
         }}>
-            {/* Desktop title (keeps existing layout) */}
-            <div className="hidden sm:flex items-center gap-2 sm:gap-4 min-w-0 flex-shrink">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-shrink">
                 {/* Modern Logo with glow effect */}
                 <div className="relative flex-shrink-0">
                     <div className="absolute inset-0 rounded-xl sm:rounded-2xl blur-xl opacity-40" style={{ background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-ai-500) 100%)' }} />
@@ -66,128 +65,6 @@ export const Header: React.FC<HeaderProps> = ({
                         <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                         Jira Cloud ile senkronize
                     </p>
-                </div>
-            </div>
-
-            {/* Mobile title box + actions below */}
-            <div className="sm:hidden w-full space-y-3">
-                <div
-                    className="w-full rounded-2xl px-4 py-3 flex items-center gap-3 border"
-                    style={{
-                        background: 'var(--color-surface)',
-                        borderColor: 'var(--color-outline-variant)'
-                    }}
-                >
-                    <div className="relative flex-shrink-0">
-                        <div className="absolute inset-0 rounded-xl blur-xl opacity-40" style={{ background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-ai-500) 100%)' }} />
-                        <div
-                            className="relative w-10 h-10 rounded-xl flex items-center justify-center"
-                            style={{
-                                background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-ai-500) 100%)',
-                                boxShadow: '0 8px 24px rgba(59, 130, 246, 0.25)'
-                            }}
-                        >
-                            <CalendarIcon className="text-white" size={18} strokeWidth={1.5} />
-                        </div>
-                    </div>
-                    <div className="min-w-0">
-                        <div
-                            className="text-xl font-bold bg-clip-text text-transparent"
-                            style={{
-                                backgroundImage: 'linear-gradient(135deg, var(--color-on-surface) 0%, var(--color-primary-600) 100%)',
-                                letterSpacing: '-0.03em'
-                            }}
-                        >
-                            Worklog
-                        </div>
-                        <div className="text-[11px] mt-0.5" style={{ color: 'var(--color-on-surface-variant)' }}>
-                            Jira Cloud ile senkronize
-                        </div>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-2">
-                    <button
-                        onClick={onToggleDrawer}
-                        className="rounded-2xl p-3 border transition-all active:scale-95"
-                        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-outline-variant)' }}
-                    >
-                        <div className="flex flex-col items-center gap-1">
-                            <Layout size={18} style={{ color: 'var(--color-on-surface)' }} />
-                            <div className="text-[11px] font-semibold" style={{ color: 'var(--color-on-surface)' }}>Atananlar</div>
-                            <div className="text-[9px] leading-tight text-center line-clamp-2" style={{ color: 'var(--color-on-surface-variant)' }}>İş listesini aç</div>
-                        </div>
-                    </button>
-
-                    <button
-                        onClick={() => setIsWeeklyReportOpen(true)}
-                        className="rounded-2xl p-3 border transition-all active:scale-95"
-                        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-outline-variant)' }}
-                    >
-                        <div className="flex flex-col items-center gap-1">
-                            <FileSpreadsheet size={18} style={{ color: 'var(--color-on-surface)' }} />
-                            <div className="text-[11px] font-semibold" style={{ color: 'var(--color-on-surface)' }}>Rapor</div>
-                            <div className="text-[9px] leading-tight text-center line-clamp-2" style={{ color: 'var(--color-on-surface-variant)' }}>Haftalık çıktı</div>
-                        </div>
-                    </button>
-
-                    <button
-                        onClick={() => setIsHistoryOpen(true)}
-                        className="rounded-2xl p-3 border transition-all active:scale-95 relative"
-                        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-outline-variant)' }}
-                    >
-                        <div className="flex flex-col items-center gap-1">
-                            <Bell size={18} style={{ color: 'var(--color-on-surface)' }} />
-                            {undoableCount > 0 && (
-                                <span className="absolute top-2 right-2 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold"
-                                      style={{ backgroundColor: 'var(--color-error)', color: 'white' }}>
-                                    {undoableCount}
-                                </span>
-                            )}
-                            <div className="text-[11px] font-semibold" style={{ color: 'var(--color-on-surface)' }}>Bildirim</div>
-                            <div className="text-[9px] leading-tight text-center line-clamp-2" style={{ color: 'var(--color-on-surface-variant)' }}>Geçmiş & geri al</div>
-                        </div>
-                    </button>
-
-                    <button
-                        onClick={() => setIsAddWorklogOpen(true)}
-                        className="rounded-2xl p-3 border transition-all active:scale-95"
-                        style={{
-                            background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-ai-500) 100%)',
-                            borderColor: 'transparent',
-                            color: 'white'
-                        }}
-                    >
-                        <div className="flex flex-col items-center gap-1">
-                            <Plus size={18} color="white" strokeWidth={2.5} />
-                            <div className="text-[11px] font-semibold">Yeni</div>
-                            <div className="text-[9px] leading-tight text-center line-clamp-2" style={{ color: 'rgba(255,255,255,0.85)' }}>Worklog ekle</div>
-                        </div>
-                    </button>
-
-                    <button
-                        onClick={toggleTheme}
-                        className="rounded-2xl p-3 border transition-all active:scale-95"
-                        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-outline-variant)' }}
-                    >
-                        <div className="flex flex-col items-center gap-1">
-                            {isDarkTheme ? <Sun size={18} style={{ color: 'var(--color-on-surface)' }} /> : <Moon size={18} style={{ color: 'var(--color-on-surface)' }} />}
-                            <div className="text-[11px] font-semibold" style={{ color: 'var(--color-on-surface)' }}>Tema</div>
-                            <div className="text-[9px] leading-tight text-center line-clamp-2" style={{ color: 'var(--color-on-surface-variant)' }}>Açık/Koyu</div>
-                        </div>
-                    </button>
-
-                    <button
-                        onClick={() => setIsSettingsOpen(true)}
-                        className="rounded-2xl p-3 border transition-all active:scale-95"
-                        style={{ background: 'var(--color-surface)', borderColor: 'var(--color-outline-variant)' }}
-                    >
-                        <div className="flex flex-col items-center gap-1">
-                            <Settings size={18} style={{ color: 'var(--color-on-surface)' }} />
-                            <div className="text-[11px] font-semibold" style={{ color: 'var(--color-on-surface)' }}>Ayarlar</div>
-                            <div className="text-[9px] leading-tight text-center line-clamp-2" style={{ color: 'var(--color-on-surface-variant)' }}>Bağlantılar</div>
-                        </div>
-                    </button>
                 </div>
             </div>
 
