@@ -154,7 +154,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 aria-label="Date selection"
             >
                 <h2 className="text-[11px] font-semibold uppercase tracking-wide mb-4 flex items-center gap-2" style={{ color: 'var(--color-on-surface-variant)', letterSpacing: '0.05em' }}>
-                    <span className="w-1.5 h-1.5 rounded-full breathing-dot" style={{ background: 'linear-gradient(135deg, var(--color-primary-500), var(--color-info))' }} />
+                    <span className="w-1.5 h-1.5 rounded-full breathing-dot" style={{ background: '#FF6B6B' }} />
                     Tarih
                 </h2>
                 
@@ -604,7 +604,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 aria-label="Quick actions"
             >
                 <h2 className="text-[11px] font-semibold uppercase tracking-wide flex items-center gap-2" style={{ color: 'var(--color-on-surface-variant)', letterSpacing: '0.05em' }}>
-                    <span className="w-1.5 h-1.5 rounded-full breathing-dot" style={{ background: 'linear-gradient(135deg, var(--color-success), var(--color-primary-500))' }} />
+                    <span className="w-1.5 h-1.5 rounded-full breathing-dot" style={{ background: '#FFD93D' }} />
                     İşlemler
                 </h2>
                 
@@ -621,7 +621,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 {/* Distribution Section */}
                 <div className="pt-4 border-t" style={{ borderColor: 'var(--color-outline-variant)' }}>
                     <label className="text-[11px] font-semibold uppercase tracking-wide block mb-3 flex items-center gap-2" style={{ color: 'var(--color-on-surface-variant)', letterSpacing: '0.05em' }}>
-                        <span className="w-1.5 h-1.5 rounded-full breathing-dot" style={{ background: 'linear-gradient(135deg, var(--color-warning), var(--color-primary-500))' }} />
+                        <span className="w-1.5 h-1.5 rounded-full breathing-dot" style={{ background: '#6BCB77' }} />
                         Saat Dağıtımı ({settings.targetDailyHours}h)
                     </label>
                     

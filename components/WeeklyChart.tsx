@@ -96,7 +96,7 @@ export const WeeklyChart: React.FC<WeeklyChartProps> = ({
       >
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xs font-semibold uppercase tracking-wider flex items-center gap-2" style={{ color: 'var(--color-on-surface-variant)' }}>
-            <span className="w-1.5 h-1.5 rounded-full breathing-dot" style={{ background: 'linear-gradient(135deg, var(--color-warning), var(--color-error))' }} />
+            <span className="w-1.5 h-1.5 rounded-full breathing-dot" style={{ background: '#4D96FF' }} />
             Haftalık Özet
           </h2>
           <div className="flex items-center gap-2">

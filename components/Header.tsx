@@ -65,7 +65,7 @@ export const Header: React.FC<HeaderProps> = ({
                             Worklog
                         </h1>
                         <p className="text-[11px] sm:text-[13px] mt-0.5 items-center gap-1.5 hidden sm:flex" style={{ color: 'var(--color-on-surface-variant)', letterSpacing: '-0.01em' }}>
-                            <span className="w-2 h-2 rounded-full bg-green-500 breathing-dot" />
+                            <span className="w-2 h-2 rounded-full breathing-dot" style={{ background: '#A259FF' }} />
                             Jira Cloud ile senkronize
                         </p>
                     </div>
