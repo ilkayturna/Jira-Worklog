@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { X, Bell, Undo2, CheckCircle2, AlertCircle, Info, Clock, Trash2, ChevronDown } from 'lucide-react';
 import { NotificationHistoryItem } from '../types';
 
@@ -20,6 +20,15 @@ export const NotificationHistory: React.FC<NotificationHistoryProps> = ({
     onDelete
 }) => {
     const [expandedId, setExpandedId] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        const prev = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.body.style.overflow = prev;
+        };
+    }, [isOpen]);
     
     if (!isOpen) return null;
 
@@ -68,13 +77,13 @@ export const NotificationHistory: React.FC<NotificationHistoryProps> = ({
         <>
             {/* Backdrop */}
             <div 
-                className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm animate-fade-in"
+                className="fixed inset-0 z-[55] bg-black/20 backdrop-blur-sm animate-fade-in"
                 onClick={onClose}
             />
             
             {/* Side Panel - Premium Glassmorphism */}
             <div 
-                className="fixed right-0 top-0 bottom-0 w-full max-w-md z-50 animate-slide-in-right"
+                className="fixed right-0 top-0 bottom-0 w-full max-w-md z-[60] animate-slide-in-right"
                 style={{ animationDuration: '250ms' }}
             >
                 <div className="h-full flex flex-col glass-drawer">
@@ -119,7 +128,7 @@ export const NotificationHistory: React.FC<NotificationHistoryProps> = ({
                     </div>
 
                     {/* Content */}
-                    <div className="flex-1 overflow-y-auto p-4">
+                    <div className="flex-1 overflow-y-auto p-4 pb-24">
                         {notifications.length === 0 ? (
                             <div className="flex flex-col items-center justify-center h-full text-center">
                                 <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4 glass-empty-state">

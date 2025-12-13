@@ -30,7 +30,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-[70] flex items-center justify-center p-4 pb-24 sm:pb-4"
       onClick={onClose}
     >
       {/* Backdrop blur with gradient */}
@@ -44,7 +44,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
       {/* Modal */}
       <div 
         ref={modalRef}
-        className={`relative w-full max-w-lg max-h-[85vh] flex flex-col ${className}`}
+        className={`relative w-full max-w-lg max-h-[calc(100dvh-8rem)] sm:max-h-[85vh] flex flex-col ${className}`}
         onClick={(e) => e.stopPropagation()}
         style={{
           background: 'rgba(255, 255, 255, 0.95)',

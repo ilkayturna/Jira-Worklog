@@ -1,6 +1,6 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { JiraIssue, AppSettings } from '../types';
-import { fetchAssignedIssues, fetchIssueTransitions, transitionIssue } from '../services/api';
+import { fetchAssignedIssues, fetchParticipatingIssues, fetchIssueTransitions, transitionIssue } from '../services/api';
 import { GripVertical, RefreshCw, AlertCircle, X, ChevronDown, Check, Loader2 } from 'lucide-react';
 import { useIsMobile } from '../hooks/useIsMobile';
 import { normalizeJiraBaseUrl } from '../utils/ui';
@@ -19,7 +19,9 @@ interface AssignedIssuesDrawerProps {
 }
 
 export const AssignedIssuesDrawer: React.FC<AssignedIssuesDrawerProps> = ({ isOpen, onClose, settings, onDragStart }) => {
-    const [issues, setIssues] = useState<JiraIssue[]>([]);
+    const [assignedIssues, setAssignedIssues] = useState<JiraIssue[]>([]);
+    const [participatingIssues, setParticipatingIssues] = useState<JiraIssue[]>([]);
+    const [activeTab, setActiveTab] = useState<'assigned' | 'participating'>('assigned');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
@@ -27,7 +29,7 @@ export const AssignedIssuesDrawer: React.FC<AssignedIssuesDrawerProps> = ({ isOp
 
     const isMobile = useIsMobile();
 
-    const jiraBaseUrl = normalizeJiraBaseUrl(settings.jiraUrl);
+    const jiraBaseUrl = useMemo(() => normalizeJiraBaseUrl(settings.jiraUrl), [settings.jiraUrl]);
     
     // Status change state
     const [statusMenuOpen, setStatusMenuOpen] = useState<string | null>(null);
@@ -39,20 +41,44 @@ export const AssignedIssuesDrawer: React.FC<AssignedIssuesDrawerProps> = ({ isOp
         setIsLoading(true);
         setError(null);
         try {
-            const data = await fetchAssignedIssues(settings);
-            setIssues(data);
+            if (activeTab === 'assigned') {
+                const data = await fetchAssignedIssues(settings);
+                setAssignedIssues(data);
+            } else {
+                const data = await fetchParticipatingIssues(settings);
+                // Dedupe by key (JQL can return duplicates across functions in some instances)
+                const unique = Array.from(new Map(data.map(i => [i.key, i])).values());
+                setParticipatingIssues(unique);
+            }
         } catch (err) {
             setError("Issue'lar yüklenemedi.");
         } finally {
             setIsLoading(false);
         }
-    }, [settings]);
+    }, [activeTab, settings]);
 
     useEffect(() => {
         if (isOpen) {
             loadIssues();
         }
     }, [isOpen, loadIssues]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        loadIssues();
+    }, [activeTab, isOpen, loadIssues]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        // Prevent background scroll behind drawer
+        const prev = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.body.style.overflow = prev;
+        };
+    }, [isOpen]);
+
+    const issues = activeTab === 'assigned' ? assignedIssues : participatingIssues;
     
     // Close status menu when clicking outside
     useEffect(() => {
@@ -92,7 +118,7 @@ export const AssignedIssuesDrawer: React.FC<AssignedIssuesDrawerProps> = ({ isOp
         try {
             await transitionIssue(issueKey, transition.id, settings);
             // Update local state
-            setIssues(prev => prev.map(issue => 
+            setAssignedIssues(prev => prev.map(issue => 
                 issue.key === issueKey 
                     ? { ...issue, status: transition.to.name }
                     : issue
@@ -137,12 +163,16 @@ export const AssignedIssuesDrawer: React.FC<AssignedIssuesDrawerProps> = ({ isOp
             const newIssues = [...issues];
             const [draggedItem] = newIssues.splice(draggedIndex, 1);
             newIssues.splice(dropIndex, 0, draggedItem);
-            setIssues(newIssues);
+            if (activeTab === 'assigned') {
+                setAssignedIssues(newIssues);
+            } else {
+                setParticipatingIssues(newIssues);
+            }
         }
         
         setDraggedIndex(null);
         setDragOverIndex(null);
-    }, [draggedIndex, issues]);
+    }, [activeTab, draggedIndex, issues]);
 
     const handleDragEnd = useCallback(() => {
         setDraggedIndex(null);
@@ -154,14 +184,14 @@ export const AssignedIssuesDrawer: React.FC<AssignedIssuesDrawerProps> = ({ isOp
             {/* Backdrop */}
             {isOpen && (
                 <div 
-                    className="fixed inset-0 z-30 bg-black/20 backdrop-blur-sm animate-fade-in"
+                    className="fixed inset-0 z-[55] bg-black/20 backdrop-blur-sm animate-fade-in"
                     onClick={onClose}
                 />
             )}
             
             {/* Drawer */}
             <div 
-                className={`fixed inset-y-0 right-0 w-full max-w-md z-40 transform transition-transform duration-300 ease-out glass-drawer ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
+                className={`fixed inset-y-0 right-0 w-full max-w-md z-[60] transform transition-transform duration-300 ease-out glass-drawer ${isOpen ? 'translate-x-0' : 'translate-x-full'}`}
             >
                 {/* Header */}
                 <div className="px-5 py-4 flex justify-between items-center glass-drawer-header">
@@ -177,7 +207,7 @@ export const AssignedIssuesDrawer: React.FC<AssignedIssuesDrawerProps> = ({ isOp
                         </div>
                         <div>
                             <h3 className="font-bold text-base bg-clip-text text-transparent" style={{ backgroundImage: 'linear-gradient(135deg, var(--color-on-surface) 0%, var(--color-primary-600) 100%)' }}>
-                                Bana Atananlar
+                                {activeTab === 'assigned' ? 'Bana Atananlar' : 'Katıldıklarım'}
                             </h3>
                             <p className="text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>
                                 {issues.length} açık issue
@@ -202,8 +232,37 @@ export const AssignedIssuesDrawer: React.FC<AssignedIssuesDrawerProps> = ({ isOp
                     </div>
                 </div>
 
+                {/* Tabs */}
+                <div className="px-5 pb-3">
+                    <div
+                        className="flex gap-1 p-1 rounded-xl"
+                        style={{ background: 'var(--color-surface-container)', border: '1px solid var(--color-outline-variant)' }}
+                    >
+                        <button
+                            className="flex-1 text-xs font-semibold py-2 rounded-lg transition-all"
+                            onClick={() => setActiveTab('assigned')}
+                            style={{
+                                background: activeTab === 'assigned' ? 'var(--color-surface)' : 'transparent',
+                                color: activeTab === 'assigned' ? 'var(--color-on-surface)' : 'var(--color-on-surface-variant)'
+                            }}
+                        >
+                            Atananlar
+                        </button>
+                        <button
+                            className="flex-1 text-xs font-semibold py-2 rounded-lg transition-all"
+                            onClick={() => setActiveTab('participating')}
+                            style={{
+                                background: activeTab === 'participating' ? 'var(--color-surface)' : 'transparent',
+                                color: activeTab === 'participating' ? 'var(--color-on-surface)' : 'var(--color-on-surface-variant)'
+                            }}
+                        >
+                            Katıldıklarım
+                        </button>
+                    </div>
+                </div>
+
                 {/* Content */}
-                <div className="p-4 overflow-y-auto h-[calc(100vh-72px)] glass-drawer-content">
+                <div className="p-4 overflow-y-auto h-[calc(100dvh-72px)] pb-24 glass-drawer-content">
                     {error && (
                         <div className="p-3 mb-4 rounded-xl text-sm flex items-center gap-2 error-alert">
                             <AlertCircle size={16} /> {error}
@@ -266,35 +325,47 @@ export const AssignedIssuesDrawer: React.FC<AssignedIssuesDrawerProps> = ({ isOp
                                         )}
                                         <div className="flex items-center justify-between">
                                             <div className="relative">
-                                                <button 
-                                                    onClick={(e) => handleStatusClick(e, issue.key)}
-                                                    disabled={changingStatus === issue.key}
-                                                    className="text-[10px] px-2 py-0.5 rounded-full font-medium flex items-center gap-1 cursor-pointer hover:ring-2 hover:ring-primary-300 transition-all disabled:opacity-50"
-                                                    style={{
-                                                        background: issue.status === 'In Progress' 
-                                                            ? 'rgba(59, 130, 246, 0.15)' 
-                                                            : issue.status === 'Done' 
-                                                            ? 'rgba(16, 185, 129, 0.15)' 
-                                                            : 'rgba(0,0,0,0.06)',
-                                                        color: issue.status === 'In Progress' 
-                                                            ? 'var(--color-primary-600)' 
-                                                            : issue.status === 'Done' 
-                                                            ? 'var(--color-success)' 
-                                                            : 'var(--color-on-surface-variant)'
-                                                    }}
-                                                >
-                                                    {changingStatus === issue.key ? (
-                                                        <Loader2 size={10} className="animate-spin" />
-                                                    ) : (
-                                                        <>
-                                                            {issue.status}
-                                                            <ChevronDown size={10} />
-                                                        </>
-                                                    )}
-                                                </button>
+                                                {activeTab === 'assigned' ? (
+                                                    <button 
+                                                        onClick={(e) => handleStatusClick(e, issue.key)}
+                                                        disabled={changingStatus === issue.key}
+                                                        className="text-[10px] px-2 py-0.5 rounded-full font-medium flex items-center gap-1 cursor-pointer hover:ring-2 hover:ring-primary-300 transition-all disabled:opacity-50"
+                                                        style={{
+                                                            background: issue.status === 'In Progress' 
+                                                                ? 'rgba(59, 130, 246, 0.15)' 
+                                                                : issue.status === 'Done' 
+                                                                ? 'rgba(16, 185, 129, 0.15)' 
+                                                                : 'rgba(0,0,0,0.06)',
+                                                            color: issue.status === 'In Progress' 
+                                                                ? 'var(--color-primary-600)' 
+                                                                : issue.status === 'Done' 
+                                                                ? 'var(--color-success)' 
+                                                                : 'var(--color-on-surface-variant)'
+                                                        }}
+                                                    >
+                                                        {changingStatus === issue.key ? (
+                                                            <Loader2 size={10} className="animate-spin" />
+                                                        ) : (
+                                                            <>
+                                                                {issue.status}
+                                                                <ChevronDown size={10} />
+                                                            </>
+                                                        )}
+                                                    </button>
+                                                ) : (
+                                                    <span
+                                                        className="text-[10px] px-2 py-0.5 rounded-full font-medium"
+                                                        style={{
+                                                            background: 'rgba(0,0,0,0.06)',
+                                                            color: 'var(--color-on-surface-variant)'
+                                                        }}
+                                                    >
+                                                        {issue.status}
+                                                    </span>
+                                                )}
                                                 
                                                 {/* Transitions Dropdown */}
-                                                {statusMenuOpen === issue.key && (
+                                                {activeTab === 'assigned' && statusMenuOpen === issue.key && (
                                                     <div 
                                                         className="absolute left-0 top-full mt-1 z-50 min-w-[160px] py-1 rounded-lg shadow-xl border"
                                                         style={{

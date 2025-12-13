@@ -96,20 +96,20 @@ export const Header: React.FC<HeaderProps> = ({
                     <Plus size={18}/>
                 </button>
                 
-                {/* Assigned Issues Drawer (Desktop only) */}
+                {/* Assigned Issues Drawer */}
                 <button 
                     onClick={onToggleDrawer} 
-                    className="desktop-only btn-icon"
+                    className="btn-icon"
                     aria-label="Assigned Issues"
                     title="Bana Atananlar"
                 >
                     <Layout size={18}/>
                 </button>
 
-                {/* Weekly Report (Desktop only) */}
+                {/* Weekly Report */}
                 <button 
                     onClick={() => setIsWeeklyReportOpen(true)} 
-                    className="desktop-only btn-icon"
+                    className="btn-icon"
                     aria-label="Weekly report"
                     title="Haftalık Rapor Oluştur"
                 >
