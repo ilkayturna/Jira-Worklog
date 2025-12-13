@@ -93,6 +93,16 @@ export const AddWorklogModal: React.FC<AddWorklogModalProps> = ({
         };
     }, [isOpen]);
 
+    // Prevent background scroll behind modal (mobile dropdown scroll fix)
+    useEffect(() => {
+        if (!isOpen) return;
+        const prev = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.body.style.overflow = prev;
+        };
+    }, [isOpen]);
+
     // Update time estimation when issue changes
     useEffect(() => {
         if (selectedIssue) {
@@ -304,15 +314,15 @@ SADECE sayı yaz:`;
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-fade-in" onClick={onClose}>
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 pb-24 sm:pb-4 animate-fade-in" onClick={onClose}>
             <div className="absolute inset-0 backdrop-blur-xl" style={{ background: 'linear-gradient(135deg, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.5) 100%)' }} />
             
             <div 
-                className="relative w-full max-w-lg animate-scale-in"
+                className="relative w-full max-w-lg max-h-[calc(100dvh-8rem)] sm:max-h-[85vh] flex flex-col animate-scale-in"
                 onClick={e => e.stopPropagation()}
             >
                 <div 
-                    className="overflow-hidden"
+                    className="overflow-hidden flex flex-col h-full"
                     style={{ 
                         background: 'rgba(255, 255, 255, 0.95)',
                         backdropFilter: 'blur(40px) saturate(200%)',
@@ -371,7 +381,7 @@ SADECE sayı yaz:`;
                     </div>
 
                     {/* Body */}
-                    <form onSubmit={handleSubmit} className="p-6 space-y-5">
+                    <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-5">
                         
                         {/* Issue Search */}
                         <div className="space-y-2">
@@ -380,7 +390,7 @@ SADECE sayı yaz:`;
                                 Issue Seç
                             </label>
                             
-                            <div className="relative">
+                                <div className="relative">
                                 <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2" 
                                         style={{ color: 'var(--color-on-surface-variant)' }} />
                                 <input
@@ -399,6 +409,46 @@ SADECE sayı yaz:`;
                                     <Loader2 size={18} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin" 
                                              style={{ color: 'var(--color-primary-600)' }} />
                                 )}
+
+                                {/* Search Results Dropdown */}
+                                {searchResults.length > 0 && !selectedIssue && (
+                                    <div
+                                        className="absolute left-0 right-0 z-20 mt-1 rounded-xl overflow-hidden border"
+                                        style={{
+                                            backgroundColor: 'var(--color-surface)',
+                                            borderColor: 'var(--color-outline-variant)',
+                                            boxShadow: 'var(--elevation-3)'
+                                        }}
+                                    >
+                                        <div
+                                            className="max-h-60 overflow-y-auto overscroll-contain"
+                                            style={{ WebkitOverflowScrolling: 'touch' }}
+                                        >
+                                            {searchResults.map(issue => (
+                                                <button
+                                                    key={issue.key}
+                                                    type="button"
+                                                    onClick={() => handleSelectIssue(issue)}
+                                                    className="w-full px-4 py-3 text-left hover:bg-black/5 dark:hover:bg-white/5 transition-colors flex items-start gap-3 border-b last:border-b-0"
+                                                    style={{ borderColor: 'var(--color-outline-variant)' }}
+                                                >
+                                                    <span className="text-xs font-bold px-2 py-0.5 rounded shrink-0" 
+                                                          style={{ backgroundColor: 'var(--color-secondary-container)', color: 'var(--color-on-surface)' }}>
+                                                        {issue.key}
+                                                    </span>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-sm font-medium truncate" style={{ color: 'var(--color-on-surface)' }}>
+                                                            {issue.summary}
+                                                        </p>
+                                                        <p className="text-xs mt-0.5" style={{ color: 'var(--color-on-surface-variant)' }}>
+                                                            {issue.projectName} • {issue.status}
+                                                        </p>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             {/* Selected Issue Display */}
@@ -415,38 +465,6 @@ SADECE sayı yaz:`;
                                 </div>
                             )}
 
-                            {/* Search Results Dropdown */}
-                            {searchResults.length > 0 && !selectedIssue && (
-                                <div className="absolute left-0 right-0 z-10 mt-1 rounded-xl overflow-hidden border"
-                                     style={{ 
-                                         backgroundColor: 'var(--color-surface)', 
-                                         borderColor: 'var(--color-outline-variant)',
-                                         boxShadow: 'var(--elevation-3)'
-                                     }}>
-                                    {searchResults.map(issue => (
-                                        <button
-                                            key={issue.key}
-                                            type="button"
-                                            onClick={() => handleSelectIssue(issue)}
-                                            className="w-full px-4 py-3 text-left hover:bg-black/5 dark:hover:bg-white/5 transition-colors flex items-start gap-3 border-b last:border-b-0"
-                                            style={{ borderColor: 'var(--color-outline-variant)' }}
-                                        >
-                                            <span className="text-xs font-bold px-2 py-0.5 rounded shrink-0" 
-                                                  style={{ backgroundColor: 'var(--color-secondary-container)', color: 'var(--color-on-surface)' }}>
-                                                {issue.key}
-                                            </span>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-medium truncate" style={{ color: 'var(--color-on-surface)' }}>
-                                                    {issue.summary}
-                                                </p>
-                                                <p className="text-xs mt-0.5" style={{ color: 'var(--color-on-surface-variant)' }}>
-                                                    {issue.projectName} • {issue.status}
-                                                </p>
-                                            </div>
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
                         </div>
 
                         {/* Smart Suggestions */}
