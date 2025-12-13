@@ -477,7 +477,19 @@ const WorklogRow: React.FC<{
                         )}
 
                         <IssueHoverCard issueKey={wl.issueKey} jiraBaseUrl={normalizedJiraBaseUrl} settings={settings}>
-                            <span className="chip text-xs line-clamp-2 sm:truncate" style={{ maxWidth: '100%' }} title={wl.summary}>
+                            <span
+                                className="chip text-xs min-w-0 flex-1"
+                                style={{
+                                    maxWidth: '100%',
+                                    display: '-webkit-box',
+                                    WebkitLineClamp: 2,
+                                    WebkitBoxOrient: 'vertical',
+                                    overflow: 'hidden',
+                                    whiteSpace: 'normal',
+                                    wordBreak: 'break-word'
+                                }}
+                                title={wl.summary}
+                            >
                                 {wl.summary}
                             </span>
                         </IssueHoverCard>
