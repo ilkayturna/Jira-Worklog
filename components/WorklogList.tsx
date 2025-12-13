@@ -447,7 +447,7 @@ const WorklogRow: React.FC<{
                                 backdropFilter: 'blur(8px)'
                             }}
                         >
-                            <div className="w-2.5 h-2.5 rounded-full animate-pulse" style={{ backgroundColor: intensityInfo.color, boxShadow: `0 0 8px ${withAlpha(intensityInfo.color, 0.9)}` }} />
+                            <div className="w-1.5 h-1.5 rounded-full breathing-dot" style={{ backgroundColor: intensityInfo.color, boxShadow: `0 0 8px ${withAlpha(intensityInfo.color, 0.9)}` }} />
                             <span className="font-bold text-sm" style={{ fontFamily: 'var(--font-mono)', color: intensityInfo.color }}>
                                 {wl.hours.toFixed(2)}h
                             </span>

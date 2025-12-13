@@ -334,6 +334,7 @@ GÖREVLER:
                 </div>
 
                 {/* Main Input Card - Premium Design */}
+                <div className="rounded-3xl p-[1px]" style={{ background: 'var(--gradient-ai-glow)' }}>
                 <div className="glass-modal overflow-hidden rounded-3xl">
                     {/* Gradient accent line */}
                     <div 
@@ -405,9 +406,6 @@ GÖREVLER:
                                         style={{ color: 'var(--color-on-surface)' }}
                                         autoComplete="off"
                                     />
-                                    <p className="text-xs mt-1" style={{ color: 'var(--color-on-surface-variant)' }}>
-                                        Örn: "Logos Kimya satınalma ekranında 2 saat çalıştım"
-                                    </p>
                                 </div>
 
                                 {/* Mic Button */}
@@ -446,25 +444,18 @@ GÖREVLER:
                         )}
                     </div>
 
-                    {/* Keyboard Shortcuts */}
-                    <div className="px-6 py-3 flex items-center justify-between glass-modal-header">
-                        <div className="flex items-center gap-4 text-xs" style={{ color: 'var(--color-on-surface-variant)' }}>
-                            <span className="flex items-center gap-1.5">
-                                <kbd className="px-2 py-1 rounded-lg glass-icon-btn font-mono">Enter</kbd>
-                                <span>İşleme al</span>
-                            </span>
-                            <span className="flex items-center gap-1.5">
-                                <kbd className="px-2 py-1 rounded-lg glass-icon-btn font-mono">ESC</kbd>
-                                <span>Kapat</span>
-                            </span>
-                        </div>
+                    {/* Footer */}
+                    <div className="px-6 py-3 flex items-center justify-end glass-modal-header">
                         <button 
                             onClick={onClose}
                             className="p-2 rounded-xl transition-all hover:scale-105 glass-icon-btn"
+                            title="Kapat"
                         >
                             <X size={18} style={{ color: 'var(--color-on-surface-variant)' }} />
                         </button>
                     </div>
+                </div>
+
                 </div>
 
                 {/* Error Panel */}

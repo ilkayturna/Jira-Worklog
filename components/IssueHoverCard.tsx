@@ -17,7 +17,76 @@ export const IssueHoverCard: React.FC<IssueHoverCardProps> = ({ issueKey, jiraBa
     const [isVisible, setIsVisible] = useState(false);
     const [position, setPosition] = useState({ x: 0, y: 0 });
     const triggerRef = useRef<HTMLDivElement>(null);
-    const timeoutRef = useRef<NodeJS.Timeout>();
+    const cardRef = useRef<HTMLDivElement>(null);
+    const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const hide = () => {
+        if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+            timeoutRef.current = null;
+        }
+        setIsVisible(false);
+    };
+
+    useEffect(() => {
+        return () => {
+            if (timeoutRef.current) {
+                clearTimeout(timeoutRef.current);
+                timeoutRef.current = null;
+            }
+        };
+    }, []);
+
+    // Close on scroll/wheel/touchmove and Esc to prevent stuck tooltips.
+    useEffect(() => {
+        if (!isVisible) return;
+
+        const handleEscape = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') hide();
+        };
+
+        // Capture scroll from any scroll container.
+        const handleAnyScroll = () => hide();
+
+        document.addEventListener('keydown', handleEscape);
+        window.addEventListener('scroll', handleAnyScroll, true);
+        window.addEventListener('wheel', handleAnyScroll, { passive: true });
+        window.addEventListener('touchmove', handleAnyScroll, { passive: true });
+        window.addEventListener('resize', handleAnyScroll);
+
+        return () => {
+            document.removeEventListener('keydown', handleEscape);
+            window.removeEventListener('scroll', handleAnyScroll, true);
+            window.removeEventListener('wheel', handleAnyScroll);
+            window.removeEventListener('touchmove', handleAnyScroll);
+            window.removeEventListener('resize', handleAnyScroll);
+        };
+    }, [isVisible]);
+
+    // Clamp the card into the viewport after it renders.
+    useEffect(() => {
+        if (!isVisible || !cardRef.current) return;
+
+        const rect = cardRef.current.getBoundingClientRect();
+        const viewportWidth = window.innerWidth;
+        const viewportHeight = window.innerHeight;
+        const padding = 8;
+
+        let nextLeft = position.x;
+        let nextTop = position.y;
+
+        if (nextLeft + rect.width > viewportWidth - padding) {
+            nextLeft = Math.max(padding, viewportWidth - rect.width - padding);
+        }
+
+        if (nextTop + rect.height > viewportHeight - padding) {
+            nextTop = Math.max(padding, viewportHeight - rect.height - padding);
+        }
+
+        if (nextLeft !== position.x || nextTop !== position.y) {
+            setPosition({ x: nextLeft, y: nextTop });
+        }
+    }, [isVisible, position.x, position.y]);
 
     const handleMouseEnter = (e: React.MouseEvent) => {
         const rect = triggerRef.current?.getBoundingClientRect();
@@ -25,6 +94,11 @@ export const IssueHoverCard: React.FC<IssueHoverCardProps> = ({ issueKey, jiraBa
             setPosition({ x: rect.left, y: rect.bottom + 5 });
         }
         
+        if (timeoutRef.current) {
+            clearTimeout(timeoutRef.current);
+            timeoutRef.current = null;
+        }
+
         timeoutRef.current = setTimeout(() => {
             setIsVisible(true);
             if (!details) {
@@ -34,8 +108,7 @@ export const IssueHoverCard: React.FC<IssueHoverCardProps> = ({ issueKey, jiraBa
     };
 
     const handleMouseLeave = () => {
-        if (timeoutRef.current) clearTimeout(timeoutRef.current);
-        setIsVisible(false);
+        hide();
     };
 
     const loadDetails = async () => {
@@ -63,6 +136,7 @@ export const IssueHoverCard: React.FC<IssueHoverCardProps> = ({ issueKey, jiraBa
             {children}
             {isVisible && (
                 <div 
+                    ref={cardRef}
                     className="fixed z-50 w-80 p-4 rounded-xl shadow-2xl animate-in fade-in zoom-in-95 duration-200"
                     style={{ 
                         top: position.y, 

@@ -987,13 +987,27 @@ GELİŞTİRİLMİŞ NOT:`;
         } else {
             // SPELL modu: Sadece yazım hatalarını düzelt
             maxTokensForMode = Math.max(wl.comment.length * 2, 500);
-            prompt = `Sen bir yazım denetleyicisisin. Verilen metindeki yazım ve noktalama hatalarını düzelt.
+                        prompt = `Sen Türk Dil Kurumu (TDK) kurallarına göre çalışan bir Türkçe yazım ve noktalama denetleyicisisin.
 
-KURALLAR:
+GÖREV:
+Sadece yazım yanlışlarını ve noktalama/boşluk hatalarını düzelt. Metni yeniden yazma.
+
+KATI KURALLAR:
 - SADECE yazım ve noktalama hatalarını düzelt.
-- Cümle yapısını veya kelimeleri DEĞİŞTİRME (yanlış yazılmış kelimeler hariç).
-- Anlamı AYNEN koru.
-- Sadece düzeltilmiş metni döndür, başka bir şey yazma.
+- Anlamı AYNEN koru; üslup/ton/kelime seçimi değişikliği yapma.
+- Eş anlamlı kelimeye çevirme, cümleleri yeniden kurma, "daha güzel" yazma YASAK.
+- Teknik/özel ifadeleri AYNEN KORU (dokunma, küçük/büyük harf değiştirme, parçalama/birleştirme):
+    - Excel fonksiyon adları ve formül parçaları (örn: DÜŞEYARA, ÇOKEĞER, EĞER, VLOOKUP, SUMIF, vb.)
+    - Büyük harfle yazılmış kısaltmalar/terimler, ürün adları
+    - Jira issue key formatları (örn: ABC-123), URL'ler, e-postalar, dosya yolları, kod benzeri parçalar
+    - Sayılar, sürümler, süreler (örn: 3.10h), parantez içleri ve semboller
+- Bir kelime doğruysa ama sana "garip" geliyorsa DOKUNMA.
+- Satır sonlarını ve paragraf yapısını koru.
+- ÇIKTI: Sadece düzeltilmiş metni döndür (başlık/etiket/alıntı/Markdown yok).
+
+ÖRNEK:
+- "Excelde DÜŞEYARA fonksiyonu" -> "Excel'de DÜŞEYARA fonksiyonu"
+(Not: DÜŞEYARA asla başka kelimeye çevrilmez.)
 
 ORİJİNAL METİN:
 ${wl.comment}
@@ -1108,20 +1122,31 @@ ${JSON.stringify(items, null, 2)}
 ÇIKIŞ JSON FORMATI:
 [{"id": "xxx", "text": "Geliştirilmiş metin..."}]`;
         } else {
-            // SPELL MODE - Sadece yazım hatalarını düzelt
-            prompt = `Sen bir yazım denetleyicisisin. Aşağıdaki metinlerdeki yazım ve noktalama hatalarını düzelt.
+            // SPELL MODE - TDK odaklı: sadece yazım + noktalama, teknik tokenlara dokunma
+            prompt = `Sen Türk Dil Kurumu (TDK) kurallarına göre çalışan bir Türkçe yazım ve noktalama denetleyicisisin.
 
-KURALLAR:
-- SADECE yazım ve noktalama hatalarını düzelt.
-- Cümle yapısını veya kelimeleri DEĞİŞTİRME (yanlış yazılmış kelimeler hariç).
-- Anlamı AYNEN koru.
-- SADECE JSON array döndür, başka bir şey yazma.
+    GÖREV:
+    Aşağıdaki JSON içindeki her "text" alanında SADECE yazım yanlışlarını ve noktalama/boşluk hatalarını düzelt.
 
-GİRİŞ JSON:
-${JSON.stringify(items, null, 2)}
+    KATI KURALLAR:
+    - Metni yeniden yazma; anlam/üslup/kelime seçimi değişikliği yapma.
+    - Eş anlamlı kelimeye çevirme, cümleleri yeniden kurma, içerik ekleme/çıkarma YASAK.
+    - Teknik/özel ifadeleri AYNEN KORU (dokunma, küçük/büyük harf değiştirme, parçalama/birleştirme):
+      - Excel fonksiyon adları ve formül parçaları (örn: DÜŞEYARA, ÇOKEĞER, EĞER, VLOOKUP, SUMIF, vb.)
+      - Jira issue key formatları (örn: ABC-123), URL'ler, e-postalar, dosya yolları, kod benzeri parçalar
+      - Sayılar, sürümler, süreler (örn: 3.10h), parantez içleri ve semboller
+    - Bir kelime doğruysa ama sana "garip" geliyorsa DOKUNMA.
+    - Satır sonlarını/paragraf yapısını koru.
 
-ÇIKIŞ JSON FORMATI:
-[{"id": "xxx", "text": "Düzeltilmiş metin..."}]`;
+    ÇIKTI KURALI:
+    - SADECE JSON array döndür (başka hiçbir açıklama yok).
+    - Sıralamayı koru; sadece text alanını güncelle.
+
+    GİRİŞ JSON:
+    ${JSON.stringify(items, null, 2)}
+
+    ÇIKIŞ JSON FORMATI:
+    [{"id": "xxx", "text": "Düzeltilmiş metin..."}]`;
         }
 
         // Calculate tokens - more generous for IMPROVE mode
@@ -2011,13 +2036,35 @@ JSON ÇIKTI (SADECE ARRAY):
                                         backgroundColor: 'var(--color-surface-variant)',
                                         borderColor: 'var(--color-outline-variant)'
                                     }}>
-                                        <span className="text-xs font-bold px-2 py-0.5 rounded mr-2" 
-                                              style={{ backgroundColor: 'var(--color-primary-container)', color: 'var(--color-primary-600)' }}>
-                                            {item.issueKey}
-                                        </span>
-                                        <span className="text-sm" style={{ color: 'var(--color-on-surface)' }}>
-                                            {item.summary}
-                                        </span>
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div className="min-w-0">
+                                                <span className="text-xs font-bold px-2 py-0.5 rounded mr-2" 
+                                                      style={{ backgroundColor: 'var(--color-primary-container)', color: 'var(--color-primary-600)' }}>
+                                                    {item.issueKey}
+                                                </span>
+                                                <span className="text-sm" style={{ color: 'var(--color-on-surface)' }}>
+                                                    {item.summary}
+                                                </span>
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    setTextChangePreview(prev => {
+                                                        if (!prev) return prev;
+                                                        const next = prev.filter(p => p.worklogId !== item.worklogId);
+                                                        return next.length > 0 ? next : null;
+                                                    });
+                                                }}
+                                                className="shrink-0 p-2 rounded-lg transition-all hover:scale-105"
+                                                style={{
+                                                    backgroundColor: 'var(--color-error-container)',
+                                                    color: 'var(--color-error)'
+                                                }}
+                                                title="Bu worklog'u listeden çıkar"
+                                                aria-label="Bu worklog'u listeden çıkar"
+                                            >
+                                                <X size={16} />
+                                            </button>
+                                        </div>
                                     </div>
                                     
                                     {/* Diff View */}
@@ -2239,6 +2286,21 @@ JSON ÇIKTI (SADECE ARRAY):
       >
         <Sparkles size={20} className="text-white" />
       </button>
+
+            {/* Floating Magic Button - Mobile */}
+            {!isMagicBarOpen && (
+                <button
+                    onClick={() => {
+                        triggerHaptic();
+                        setIsMagicBarOpen(true);
+                    }}
+                    className="mobile-fab"
+                    title="AI Worklog Asistanı"
+                    aria-label="AI Worklog Asistanı"
+                >
+                    <Sparkles size={22} className="text-white" />
+                </button>
+            )}
 
         <MagicCommandBar
             isOpen={isMagicBarOpen}
