@@ -35,13 +35,13 @@ export const Header: React.FC<HeaderProps> = ({
 
     return (
         <>
-        <header className="apple-header" style={{
+        <header className="apple-header flex-col sm:flex-row" style={{
             background: 'linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.7) 100%)',
             backdropFilter: 'blur(20px) saturate(180%)',
             WebkitBackdropFilter: 'blur(20px) saturate(180%)',
             borderBottom: '1px solid rgba(0,0,0,0.06)'
         }}>
-            <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-shrink">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-shrink w-full sm:w-auto">
                 {/* Modern Logo with glow effect */}
                 <div className="relative flex-shrink-0">
                     <div className="absolute inset-0 rounded-xl sm:rounded-2xl blur-xl opacity-40" style={{ background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-ai-500) 100%)' }} />
@@ -65,6 +65,98 @@ export const Header: React.FC<HeaderProps> = ({
                         <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                         Jira Cloud ile senkronize
                     </p>
+                </div>
+            </div>
+
+            {/* Mobile compact action strip (keeps premium look, no big boxes) */}
+            <div className="sm:hidden w-full overflow-x-auto overscroll-contain -mx-1 px-1 pb-1" style={{ WebkitOverflowScrolling: 'touch' }}>
+                <div className="flex items-center gap-2">
+                    <button 
+                        onClick={() => setIsAddWorklogOpen(true)}
+                        className="flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-xl transition-all active:scale-95"
+                        style={{ 
+                            background: 'linear-gradient(135deg, var(--color-primary-500) 0%, var(--color-ai-500) 100%)',
+                            color: 'white',
+                            boxShadow: '0 4px 14px rgba(59, 130, 246, 0.25)'
+                        }}
+                        aria-label="Add worklog"
+                    >
+                        <Plus size={18} strokeWidth={2.5} />
+                        <span className="text-[10px] font-semibold leading-none">Yeni</span>
+                    </button>
+
+                    <button 
+                        onClick={onToggleDrawer}
+                        className="flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-xl transition-all active:scale-95"
+                        style={{ 
+                            background: 'linear-gradient(135deg, rgba(0,0,0,0.04) 0%, rgba(0,0,0,0.06) 100%)',
+                            border: '1px solid rgba(0,0,0,0.06)'
+                        }}
+                        aria-label="Assigned Issues"
+                        title="Bana Atananlar"
+                    >
+                        <Layout size={18} />
+                        <span className="text-[10px] font-semibold leading-none" style={{ color: 'var(--color-on-surface-variant)' }}>Atanan</span>
+                    </button>
+
+                    <button 
+                        onClick={() => setIsWeeklyReportOpen(true)}
+                        className="flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-xl transition-all active:scale-95"
+                        style={{ 
+                            background: 'linear-gradient(135deg, rgba(0,0,0,0.04) 0%, rgba(0,0,0,0.06) 100%)',
+                            border: '1px solid rgba(0,0,0,0.06)'
+                        }}
+                        aria-label="Weekly report"
+                        title="Haftalık Rapor Oluştur"
+                    >
+                        <FileSpreadsheet size={18} />
+                        <span className="text-[10px] font-semibold leading-none" style={{ color: 'var(--color-on-surface-variant)' }}>Rapor</span>
+                    </button>
+
+                    <button 
+                        onClick={() => setIsHistoryOpen(true)}
+                        className="relative flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-xl transition-all active:scale-95"
+                        style={{ 
+                            background: 'linear-gradient(135deg, rgba(0,0,0,0.04) 0%, rgba(0,0,0,0.06) 100%)',
+                            border: '1px solid rgba(0,0,0,0.06)'
+                        }}
+                        aria-label="Notification history"
+                    >
+                        <Bell size={18} />
+                        {undoableCount > 0 && (
+                            <span className="absolute top-1.5 right-1.5 w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold"
+                                  style={{ backgroundColor: 'var(--color-error)', color: 'white' }}>
+                                {undoableCount}
+                            </span>
+                        )}
+                        <span className="text-[10px] font-semibold leading-none" style={{ color: 'var(--color-on-surface-variant)' }}>Bildirim</span>
+                    </button>
+
+                    <button 
+                        onClick={toggleTheme}
+                        className="flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-xl transition-all active:scale-95"
+                        style={{ 
+                            background: 'linear-gradient(135deg, rgba(0,0,0,0.04) 0%, rgba(0,0,0,0.06) 100%)',
+                            border: '1px solid rgba(0,0,0,0.06)'
+                        }}
+                        aria-label="Toggle theme"
+                    >
+                        {isDarkTheme ? <Sun size={18}/> : <Moon size={18}/>}
+                        <span className="text-[10px] font-semibold leading-none" style={{ color: 'var(--color-on-surface-variant)' }}>Tema</span>
+                    </button>
+
+                    <button 
+                        onClick={() => setIsSettingsOpen(true)}
+                        className="flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-xl transition-all active:scale-95"
+                        style={{ 
+                            background: 'linear-gradient(135deg, rgba(0,0,0,0.04) 0%, rgba(0,0,0,0.06) 100%)',
+                            border: '1px solid rgba(0,0,0,0.06)'
+                        }}
+                        aria-label="Settings"
+                    >
+                        <Settings size={18} />
+                        <span className="text-[10px] font-semibold leading-none" style={{ color: 'var(--color-on-surface-variant)' }}>Ayar</span>
+                    </button>
                 </div>
             </div>
 
