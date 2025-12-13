@@ -440,51 +440,46 @@ const WorklogRow: React.FC<{
                             style={{ fontFamily: 'var(--font-mono)', backgroundColor: 'var(--color-surface-container)', border: '2px solid var(--color-primary-500)' }} />
                     ) : (
                         <button onClick={() => setIsTimeEditing(true)}
-                            className="flex items-center gap-2 px-4 py-2 rounded-full transition-all hover:scale-105 hover:shadow-lg group/time"
+                            className="flex items-center gap-2 px-4 py-2 rounded-full transition-all"
                             style={{ 
                                 background: `linear-gradient(135deg, ${withAlpha(intensityInfo.color, 0.12)} 0%, ${withAlpha(intensityInfo.color, 0.06)} 100%)`,
                                 border: `2px solid ${withAlpha(intensityInfo.color, 0.25)}`,
                                 backdropFilter: 'blur(8px)'
                             }}
-                            title={`${intensityInfo.label} yoğunluk`}>
+                        >
                             <div className="w-2.5 h-2.5 rounded-full animate-pulse" style={{ backgroundColor: intensityInfo.color, boxShadow: `0 0 8px ${withAlpha(intensityInfo.color, 0.9)}` }} />
                             <span className="font-bold text-sm" style={{ fontFamily: 'var(--font-mono)', color: intensityInfo.color }}>
                                 {wl.hours.toFixed(2)}h
-                            </span>
-                            {/* Intensity indicator tooltip on hover */}
-                            <span className="hidden group-hover/time:inline-block text-[10px] font-medium px-1.5 py-0.5 rounded-md ml-1"
-                                style={{ backgroundColor: withAlpha(intensityInfo.color, 0.12), color: intensityInfo.color }}>
-                                {intensityInfo.label}
                             </span>
                         </button>
                     )}
                 </div>
                 <div className="min-w-0 flex-1 sm:order-1 pr-20 sm:pr-0">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
-                        <span
-                            className="inline-flex items-center font-semibold text-sm shrink-0"
-                            style={{ color: 'var(--color-primary-600)' }}
-                        >
-                            {wl.issueKey}
-                        </span>
+                        {normalizedJiraBaseUrl ? (
+                            <a
+                                href={`${normalizedJiraBaseUrl}/browse/${wl.issueKey}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center font-semibold text-sm shrink-0 hover:underline"
+                                style={{ color: 'var(--color-primary-600)' }}
+                                title="Jira'da aç"
+                            >
+                                {wl.issueKey}
+                            </a>
+                        ) : (
+                            <span
+                                className="inline-flex items-center font-semibold text-sm shrink-0"
+                                style={{ color: 'var(--color-primary-600)' }}
+                            >
+                                {wl.issueKey}
+                            </span>
+                        )}
 
                         <IssueHoverCard issueKey={wl.issueKey} jiraBaseUrl={normalizedJiraBaseUrl} settings={settings}>
-                            {normalizedJiraBaseUrl ? (
-                                <a
-                                    href={`${normalizedJiraBaseUrl}/browse/${wl.issueKey}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="chip text-xs line-clamp-2 sm:truncate hover:underline"
-                                    style={{ maxWidth: '100%' }}
-                                    title={wl.summary}
-                                >
-                                    {wl.summary}
-                                </a>
-                            ) : (
-                                <span className="chip text-xs line-clamp-2 sm:truncate" style={{ maxWidth: '100%' }} title={wl.summary}>
-                                    {wl.summary}
-                                </span>
-                            )}
+                            <span className="chip text-xs line-clamp-2 sm:truncate" style={{ maxWidth: '100%' }} title={wl.summary}>
+                                {wl.summary}
+                            </span>
                         </IssueHoverCard>
                     </div>
                 </div>

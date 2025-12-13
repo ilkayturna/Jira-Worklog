@@ -1044,6 +1044,47 @@ export const fetchAssignedIssues = async (settings: AppSettings): Promise<JiraIs
     }));
 };
 
+// Katılımcı olduğum issue'ları getir (izlediğim / raporladığım / yorum yaptığım)
+export const fetchParticipatingIssues = async (settings: AppSettings): Promise<JiraIssue[]> => {
+    if (!settings.jiraUrl || !settings.jiraEmail || !settings.jiraToken) {
+        throw new Error('Jira Bilgileri Eksik');
+    }
+
+    // Jira Cloud'da "participants" standart alan değil; pratikte katılım = watched/reporter/commented
+    // Not: commentedBy(currentUser()) fonksiyonu Jira Cloud'da desteklenir.
+    const jql = `(issue in watchedIssues() OR watcher = currentUser() OR reporter = currentUser() OR commentedBy(currentUser())) AND statusCategory != Done ORDER BY updated DESC`;
+    const targetUrl = `${normalizeUrl(settings.jiraUrl)}/rest/api/3/search/jql`;
+
+    const response = await fetchThroughProxy(
+        targetUrl,
+        'POST',
+        {
+            'Authorization': getAuthHeader(settings.jiraEmail, settings.jiraToken),
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        },
+        {
+            jql,
+            fields: ['summary', 'issuetype', 'status', 'project', 'description'],
+            maxResults: 50
+        }
+    );
+
+    if (!response.ok) return [];
+
+    const data = await response.json();
+    const issues = data.issues || [];
+
+    return issues.map((issue: any) => ({
+        key: issue.key,
+        summary: issue.fields?.summary || '',
+        issueType: issue.fields?.issuetype?.name || '',
+        status: issue.fields?.status?.name || '',
+        projectName: issue.fields?.project?.name || '',
+        description: parseJiraComment(issue.fields?.description) || ''
+    }));
+};
+
 // --- ISSUE TRANSITIONS API ---
 
 // Issue için kullanılabilir geçişleri getir
